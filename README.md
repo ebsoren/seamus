@@ -1,13 +1,19 @@
 # seamus
 Engine (non-hw) code for Seamus the Search Engine (W26)
 
-## Build
+
+### Bazel Install
+https://bazel.build/install \
+(simply `brew install bazel` on macOS)
+
+
+### Build
 
 ```bash
 bazel build //...
 ```
 
-## Tests
+### Tests
 
 Run all tests:
 ```bash
@@ -19,8 +25,8 @@ Run a specific test:
 bazel test //tests:vector_test
 ```
 
-## Clean
-Remove all bazel cache for the repo (tests, executables, symlinks, etc...)
+### Clean
+Remove all bazel caches (build server cache, test results, executables, symlinks, etc...)
 ```bash
 bazel clean --expunge
 ```
