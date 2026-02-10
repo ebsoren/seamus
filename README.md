@@ -1,5 +1,7 @@
 # seamus
-Engine (non-hw) code for Seamus the Search Engine (W26)
+Engine (non-hw) code for Seamus the Search Engine \
+University of Michigan - System Design of a Search Engine (W26) \
+🚟🚟🚟🚟🚟🚟🚟🚟🚟🚟🚟🚟🚟🚟🚟🚟🚟🚟🚟🚟🚟🚟🚟🚟🚟🚟🚟🚟🚟🚟
 
 
 ### Bazel Install
