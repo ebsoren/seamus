@@ -1,4 +1,4 @@
-#include "../vector.h"
+#include "../lib/vector.h"
 #include <cassert>
 
 // Test default constructor

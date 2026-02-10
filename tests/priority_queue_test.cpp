@@ -1,6 +1,6 @@
 #include <iostream>
 #include <cassert>
-#include "../priority_queue.h"   // update path if needed
+#include "../lib/priority_queue.h"   // update path if needed
 
 // test 1: default constructor + empty check
 void test_default_empty() {

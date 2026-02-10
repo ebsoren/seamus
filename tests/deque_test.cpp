@@ -1,4 +1,4 @@
-#include "../deque.h"
+#include "../lib/deque.h"
 #include <iostream>
 #include <cassert>
 #include <deque>

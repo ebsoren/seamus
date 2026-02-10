@@ -1,8 +1,7 @@
 #include <iostream>
-#include <vector>
 #include <chrono>
 #include <deque>
-#include "../deque.h"
+#include "../lib/deque.h"
 
 // Function to benchmark push_back
 template <typename Deque>

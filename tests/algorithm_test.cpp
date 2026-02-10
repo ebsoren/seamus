@@ -3,7 +3,7 @@
 #include <array>
 #include <string>
 #include <iostream>
-#include "../algorithm.h"
+#include "../lib/algorithm.h"
 
 void test_empty_range() {
     std::vector<int> v;

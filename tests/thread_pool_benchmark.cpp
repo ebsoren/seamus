@@ -2,7 +2,7 @@
 #include <vector>
 #include <chrono>
 #include <tuple>
-#include "../thread_pool.h"
+#include "../lib/thread_pool.h"
 
 // A simple CPU-intensive function
 long long fib(long long n) {
