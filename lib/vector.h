@@ -119,6 +119,14 @@ public:
     //    elements before having to reallocate
     void reserve(size_t newCapacity) { realloc_(newCapacity); }
 
+    
+    void resize(size_t newCapacity) {
+        reserve(newCapacity);
+        while(vec_size < newCapacity) {
+            push_back(T()); // default construct new element
+        }
+    }
+
 
     // REQUIRES: Nothing
     // MODIFIES: Nothing

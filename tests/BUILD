@@ -35,3 +35,9 @@ cc_test(
     srcs = ["deque_benchmark.cpp"],
     deps = ["//lib:deque"],
 )
+
+cc_test(
+    name = "unordered_map_test",
+    srcs = ["unordered_map_test.cpp"],
+    deps = ["//lib:unordered_map"],
+)

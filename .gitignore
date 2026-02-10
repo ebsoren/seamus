@@ -1,2 +1,6 @@
 .vscode/
 .DS_Store
+bazel-bin/
+bazel-out/
+bazel-testlogs/
+bazel-seamus/
