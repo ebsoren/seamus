@@ -45,3 +45,10 @@ cc_library(
     visibility = ["//visibility:public"],
     deps = [],
 )
+
+cc_library(
+    name = "utils",
+    hdrs = ["utils.h"],
+    visibility = ["//visibility:public"],
+    deps = [],
+)
