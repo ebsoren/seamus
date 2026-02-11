@@ -21,13 +21,27 @@ cc_library(
 cc_library(
     name = "priority_queue",
     hdrs = ["priority_queue.h"],
-    deps = [":vector"],
     visibility = ["//visibility:public"],
+    deps = [":vector"],
 )
 
 cc_library(
     name = "thread_pool",
     hdrs = ["thread_pool.h"],
-    deps = [":vector"],
     visibility = ["//visibility:public"],
+    deps = [":vector"],
+)
+
+cc_library(
+    name = "unordered_map",
+    hdrs = ["unordered_map.h"],
+    visibility = ["//visibility:public"],
+    deps = [],
+)
+
+cc_library(
+    name = "string",
+    hdrs = ["string.h"],
+    visibility = ["//visibility:public"],
+    deps = [],
 )
