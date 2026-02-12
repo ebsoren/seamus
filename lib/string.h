@@ -251,7 +251,6 @@ public:
         }
     }
 
-
 private:
     size_t sz;
     size_t cap;
@@ -287,4 +286,9 @@ std::ostream &operator<<(std::ostream &os, const string &s) {
         os << *it;
     }
     return os;
+}
+
+
+bool stringEq(const string& a, const string& b) {
+    return a == b;
 }

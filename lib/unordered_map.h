@@ -3,7 +3,6 @@
 #include "vector.h"
 #include <cassert>
 #include <iostream>
-#include <vector>
 #include <iomanip>
 #include <cstdint>
 
@@ -54,16 +53,48 @@ template< typename Key, typename Value > class Slot {
         Slot() : state(State::EMPTY) {}
 };
 
+// Default Hash functions and equality functors!
+template<typename T>
+struct DefaultHash {
+    uint64_t operator()(const T& x) const {
+        return (uint64_t)x; // fallback for integers
+    }
+};
+
+template<>
+struct DefaultHash<string> {
+    uint64_t operator()(const string& s) const {
+        uint64_t h = 14695981039346656037ULL;
+        for (size_t i = 0; i < s.size(); ++i) {
+            h ^= (unsigned char)s[i];
+            h *= 1099511628211ULL;
+        }
+        return h;
+    }
+};
+
+template<typename T>
+struct DefaultEq {
+    bool operator()(const T& a, const T& b) const {
+        return a == b;
+    }
+};
+
 // TODO: Could add a round-robin method for probing to help w time complexity
-template< typename Key, typename Value > class unordered_map {
+template<
+    typename Key,
+    typename Value,
+    typename Hash = DefaultHash<Key>,
+    typename Eq   = DefaultEq<Key>
+> class unordered_map {
 private:
 
     vector<Slot<Key, Value>> vec_map;
     uint64_t map_capacity;
     
 
-    uint64_t ( *hash )( const Key );
-    bool ( *compareEqual )( const Key, const Key );
+    Hash hash;
+    Eq compareEqual;
     uint64_t uniqueKeys;
     uint64_t collision_counter;
     double loading_factor;
@@ -74,8 +105,8 @@ private:
 
 public:
     // INITIAL SIZE NEEDS TO BE A POWER OF 2!!!
-    unordered_map(size_t initialSize, uint64_t (*h)(const Key), bool (*eq)(const Key, const Key), double loading_factor_init = 0.65)
-            : vec_map(initialSize), map_capacity(initialSize), hash(h), compareEqual(eq), uniqueKeys(0), collision_counter(0), loading_factor(loading_factor_init) { }
+    unordered_map(size_t initialSize = 2048, double loading_factor_init = 0.65)
+            : vec_map(initialSize), map_capacity(initialSize), uniqueKeys(0), collision_counter(0), loading_factor(loading_factor_init) { }
 
     Slot< Key, Value >* find( const Key& k, const Value initialValue ) {
         // Search for the key k and return a pointer to the
@@ -228,5 +259,5 @@ public:
         }
         map_capacity = new_cap;
         vec_map = new_slots;
-    }
+    } // new size must be a power of 2!!
 };

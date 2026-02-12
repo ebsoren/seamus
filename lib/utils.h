@@ -41,3 +41,25 @@ void stem_word(string& word) {
             }
     }
 }
+
+double double_pow(double base, int exp) {
+    double result = 1.0;
+
+    bool neg = (exp < 0);
+    if (neg) exp = -exp;
+
+    while (exp > 0)
+    {
+        if (exp & 1)
+            result *= base;
+
+        base *= base;
+        exp >>= 1;
+    }
+
+    if(neg == true) {
+        return 1.0 / result;
+    } else {
+        return result;
+    }
+}

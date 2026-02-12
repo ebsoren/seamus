@@ -7,18 +7,24 @@
 #include "lib/unordered_map.h"
 #include "lib/priority_queue.h"
 #include "Frontier.h"
+#include "utils.h"
 
-static const unordered_map<string, double> tldWeight = {
-    {"gov", 1.2},
-    {"edu", 1.2},
-    {"mil", 1.2},
-    {"com", 1.0},
-    {"org", 1.0},
-    {"net", 1.0},
-    {"info", 0.8},
-    {"biz", 0.8},
-    {"tk", 0.8}
-};
+unordered_map<string,double> makeTldWeight() {
+    unordered_map<string, double> m(32);
+
+    m.insert("gov",1.2);
+    m.insert("edu",1.2);
+    m.insert("mil",1.2);
+    m.insert("com",1.0);
+    m.insert("org",1.0);
+    m.insert("net",1.0);
+    m.insert("info",0.8);
+    m.insert("biz",0.8);
+    m.insert("tk",0.8);
+
+    return m;
+}
+static const auto tldWeight = makeTldWeight(); // factory function to avoid having to implement initializer lists lol
 
 bool is_digit(char c) {
     return c >= '0' && c <= '9';
@@ -76,7 +82,7 @@ double calcPriorityScore(const string& url, int seed_list_dist) {
     // points for closer to seed list
 
     const double e = 2.718281828459;
-    double factor_3 = e ** (-0.8 * seed_list_dist); // TODO: create pow operator
+    double factor_3 = double_pow(e, -0.05 * seed_list_dist);  // NOTE: may need to tune the constant here
 
     // points for shortness of domain title
 
@@ -121,15 +127,25 @@ struct UncrawledComp {
     }
 };
 
+uint64_t frontierHash(const string& s) {
+    uint64_t hash = 14695981039346656037ULL; // FNV offset basis
+
+    for (size_t i = 0; i < s.size(); ++i) {
+        hash ^= (unsigned char)s[i];
+        hash *= 1099511628211ULL; // FNV prime
+    }
+
+    return hash;
+}
+
 
 class Frontier {
 private:
     priority_queue<UncrawledItem, vector<UncrawledItem>, UncrawledComp> pq;
     unordered_map<string, uint32_t> curr_urls;
 public:
-    Frontier() { 
-        // must initialize map here with inital size, hash function etc. 
-    }
+    Frontier(size_t initial_map_size = 2048, double initial_loading_factor = 0.65) 
+        : curr_urls(initial_map_size, initial_loading_factor) { }
 
     void push(const UncrawledItem &u) {
         uint32_t& count = curr_urls[u.url];
