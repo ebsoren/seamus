@@ -3,6 +3,7 @@
 //
 #pragma once
 
+#include <sys/stat.h>
 #include "string.h"
 
 
@@ -62,4 +63,9 @@ double double_pow(double base, int exp) {
     } else {
         return result;
     }
+}
+
+bool file_exists(const string &fname) {
+    struct stat buff;
+    return stat(fname.cstr(), &buff) == 0;
 }

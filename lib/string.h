@@ -54,7 +54,6 @@ public:
             return;
         }
 
-
         char *it = data;
         size_t loc = 0;
 
@@ -249,6 +248,12 @@ public:
         if (cap > sz + 1) {
             alloc_(sz + 1);
         }
+    }
+
+    static string to_string(uint32_t num) {
+        char buff[32];
+        sprintf(buff, "%u", num);
+        return string(buff);
     }
 
 private:
