@@ -29,26 +29,32 @@ cc_library(
     name = "thread_pool",
     hdrs = ["thread_pool.h"],
     visibility = ["//visibility:public"],
-    deps = [":vector", ":deque"],
+    deps = [
+        ":deque",
+        ":vector",
+    ],
 )
 
 cc_library(
     name = "unordered_map",
     hdrs = ["unordered_map.h"],
     visibility = ["//visibility:public"],
-    deps = [":vector", ":string"],
-)
-
-cc_library(
-    name = "string",
-    hdrs = ["string.h"],
-    visibility = ["//visibility:public"],
-    deps = [],
+    deps = [
+        ":string",
+        ":vector",
+    ],
 )
 
 cc_library(
     name = "utils",
     hdrs = ["utils.h"],
+    visibility = ["//visibility:public"],
+    deps = [],
+)
+
+cc_library(
+    name = "string",
+    hdrs = ["string.h"],
     visibility = ["//visibility:public"],
     deps = [],
 )

@@ -41,3 +41,11 @@ cc_test(
     srcs = ["unordered_map_test.cpp"],
     deps = ["//lib:unordered_map"],
 )
+
+cc_test(
+    name = "string_test",
+    srcs = ["string_test.cpp"],
+    copts = ["-fsanitize=address"],
+    linkopts = ["-fsanitize=address"],
+    deps = ["//lib:string"],
+)
