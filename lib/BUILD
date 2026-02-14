@@ -29,21 +29,20 @@ cc_library(
     name = "thread_pool",
     hdrs = ["thread_pool.h"],
     visibility = ["//visibility:public"],
-    deps = [":vector", ":deque"],
+    deps = [
+        ":deque",
+        ":vector",
+    ],
 )
 
 cc_library(
     name = "unordered_map",
     hdrs = ["unordered_map.h"],
     visibility = ["//visibility:public"],
-    deps = [":vector", ":string"],
-)
-
-cc_library(
-    name = "string",
-    hdrs = ["string.h"],
-    visibility = ["//visibility:public"],
-    deps = [],
+    deps = [
+        ":string",
+        ":vector",
+    ],
 )
 
 cc_library(
@@ -54,22 +53,8 @@ cc_library(
 )
 
 cc_library(
-    name = "rpc_common",
-    hdrs = ["rpc_common.h"],
-    visibility = ["//visibility:public"],
-    deps = [":vector", ":string"],
-)
-
-cc_library(
-    name = "rpc_listener",
-    hdrs = ["rpc_listener.h"],
+    name = "string",
+    hdrs = ["string.h"],
     visibility = ["//visibility:public"],
     deps = [],
-)
-
-cc_library(
-    name = "rpc_urlstore",
-   hdrs = ["rpc_urlstore.h"],
-   visibility = ["//visibility:public"],
-   deps = [":vector", ":string"],
 )
