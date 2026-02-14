@@ -5,7 +5,7 @@
 #include <unistd.h>
 #include <cstdint>
 #include <cstddef>
-#include "str.h"
+#include "string.h"
 
 
 // Send a buffer to an end host over TCP
