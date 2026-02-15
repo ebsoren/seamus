@@ -57,3 +57,9 @@ cc_test(
     linkopts = ["-fsanitize=address"],
     deps = ["//lib:string"],
 )
+
+cc_test(
+    name = "string_benchmark",
+    srcs = ["string_benchmark.cpp"],
+    deps = ["//lib:string"],
+)

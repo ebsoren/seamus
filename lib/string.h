@@ -104,20 +104,23 @@ private:
 
     // FOR INTERNAL USE ONLY
     // TO INITIALIZE AN EMPTY STRING WITH GIVEN LENGTH
-    string(size_t len, UninitializedTag) : state{} {
+    string(size_t len, UninitializedTag) : state{}  {
         if (len <= MAX_SHORT_LENGTH) {
             // Short String
             state.s.flag_and_size = static_cast<unsigned char>(len << 1 | SHORT_FLAG);
         } else {
             // Long String
             state.l.flag_and_size = ((len<< 1) | LONG_FLAG); // Set flag to zero
-            state.l.data = new char[len+1];
+            state.l.data = static_cast<char*>(::operator new(len + 1));
             state.l.data[len] = '\0';
         }
     }
 
 public:
     explicit string (const char *c_str) : string{c_str, strlen(c_str)} {}
+
+    template<size_t N>
+    explicit string(const char (&c_str)[N]) : string{c_str, N - 1} {}
 
 
     explicit string(const char* c_str, size_t len) : string{len, UninitializedTag{}} {
@@ -135,7 +138,8 @@ public:
 
     ~string() {
         if (!is_short()) {
-            delete[] state.l.data;
+            size_t actual_allocation_size = size() + 1;
+            ::operator delete(state.l.data, actual_allocation_size);
         }
     }
 
@@ -190,7 +194,7 @@ public:
 
     [[nodiscard]] size_t size() const {
         //Remove flag bit
-        if (is_short()) {
+        if (is_short()) [[likely]]{
             return static_cast<size_t>(state.s.flag_and_size >> 1);
         }
         return state.l.flag_and_size >> 1;
@@ -199,7 +203,7 @@ public:
 
     const char& operator[](const size_t i) const {
         assert(i < size());
-        if (is_short()) {
+        if (is_short()) [[likely]]{
             return state.s.data[i];
         }
         return state.l.data[i];
@@ -214,7 +218,7 @@ public:
         assert(pos <= size());
         assert(pos + len <= size());
 
-        if (is_short()) {
+        if (is_short()) [[likely]]{
             return {state.s.data + pos, len};
         }
         return {state.l.data + pos, len};
@@ -277,7 +281,7 @@ public:
         const size_t len = size();
         if (len != other.size())  return false;
 
-        if (is_short()) {
+        if (is_short()) [[likely]]{
             return memcmp(&state, &other.state, 16) == 0;
         } else {
             if (state.l.data == other.state.l.data) return true;
