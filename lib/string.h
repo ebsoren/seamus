@@ -85,7 +85,7 @@ private:
     static constexpr unsigned char LONG_FLAG  = 0;
     static constexpr unsigned char FLAG_MASK  = 1;
 
-    union {
+    union State {
         struct {
             size_t flag_and_size; // LSB must be zero, used as flag
             char* data;
@@ -94,25 +94,24 @@ private:
             unsigned char flag_and_size; // least significant bit = flag, upper 7 = str size
             char data[MAX_SHORT_LENGTH + 1]; // 14 bits short string length + 1 null terminator
         } s;
-    };
+    } state;
 
     // To determine short or long state
     [[nodiscard]] bool is_short() const {
-        return s.flag_and_size & FLAG_MASK;
+        return state.s.flag_and_size & FLAG_MASK;
     }
 
     // Moves the contents of another string to this
     void move_from(string&& other) noexcept {
         if (other.is_short()) {
-            s.flag_and_size = other.s.flag_and_size;
-            memcpy(s.data, other.s.data, MAX_SHORT_LENGTH + 1);
+            this->state = other.state;
         } else {
-            l.flag_and_size = other.l.flag_and_size;
-            l.data = other.l.data;
+            state.l.flag_and_size = other.state.l.flag_and_size;
+            state.l.data = other.state.l.data;
         }
         // Mark as empty short string so destructor isn't ran
-        other.s.flag_and_size = SHORT_FLAG;
-        other.s.data[0] = '\0';
+        other.state = {};
+        other.state.s.flag_and_size = SHORT_FLAG;
     }
 
 
@@ -120,39 +119,37 @@ private:
 
     // FOR INTERNAL USE ONLY
     // TO INITIALIZE AN EMPTY STRING WITH GIVEN LENGTH
-    string(size_t len, UninitializedTag) /* NOLINT */ {
+    string(size_t len, UninitializedTag) : state{} {
         if (len <= MAX_SHORT_LENGTH) {
             // Short String
-            memset(s.data,0,MAX_SHORT_LENGTH + 1);
-            s.flag_and_size = static_cast<unsigned char>(len << 1 | SHORT_FLAG);
-            s.data[len] = '\0';
+            state.s.flag_and_size = static_cast<unsigned char>(len << 1 | SHORT_FLAG);
         } else {
             // Long String
-            l.flag_and_size = ((len<< 1) | LONG_FLAG); // Set flag to zero
-            l.data = new char[len+1];
-            l.data[len] = '\0';
+            state.l.flag_and_size = ((len<< 1) | LONG_FLAG); // Set flag to zero
+            state.l.data = new char[len+1];
+            state.l.data[len] = '\0';
         }
     }
 
 public:
-    explicit string (const char *c_str) : string(c_str, c_str ? strlen(c_str) : 0) {}
+    explicit string (const char *c_str) : string{c_str, strlen(c_str)} {}
 
 
-    explicit string(const char* c_str, size_t len) : string(len, UninitializedTag{}) {
+    explicit string(const char* c_str, size_t len) : string{len, UninitializedTag{}} {
         assert(c_str != nullptr);
         if (len <= MAX_SHORT_LENGTH) {
             // Short string
-            memcpy(s.data, c_str, len);
+            memcpy(state.s.data, c_str, len);
         } else {
             // Long string
-            memcpy(l.data, c_str, len);
+            memcpy(state.l.data, c_str, len);
         }
     }
 
 
     ~string() {
         if (!is_short()) {
-            delete[] l.data;
+            delete[] state.l.data;
         }
     }
 
@@ -169,11 +166,11 @@ public:
 
     explicit string (uint32_t n) /* NOLINT */ {
         // At most 4 Billion = 10 digits => short string
-        memset(s.data,0,MAX_SHORT_LENGTH + 1);
+        memset(state.s.data,0,MAX_SHORT_LENGTH + 1);
         if (n == 0) {
-            s.data[0] = '0';
-            s.data[1] = '\0';
-            s.flag_and_size = static_cast<unsigned char>((1 << 1) | SHORT_FLAG); // Len 1, Flag 1
+            state.s.data[0] = '0';
+            state.s.data[1] = '\0';
+            state.s.flag_and_size = static_cast<unsigned char>((1 << 1) | SHORT_FLAG); // Len 1, Flag 1
             return;
         }
 
@@ -187,16 +184,16 @@ public:
         }
 
         const int len = 10-i;
-        memcpy(s.data,tmp+i, len + 1);
+        memcpy(state.s.data,tmp+i, len + 1);
 
-        s.flag_and_size = static_cast<unsigned char>((len << 1) | SHORT_FLAG);
+        state.s.flag_and_size = static_cast<unsigned char>((len << 1) | SHORT_FLAG);
     }
 
 
     string& operator=(string&& other) noexcept {
         if (this != &other) {
             if (!is_short()) {
-                delete[] l.data;
+                delete[] state.l.data;
             }
 
             move_from(static_cast<string&&>(other));
@@ -208,18 +205,23 @@ public:
     [[nodiscard]] size_t size() const {
         //Remove flag bit
         if (is_short()) {
-            return static_cast<size_t>(s.flag_and_size >> 1);
+            return static_cast<size_t>(state.s.flag_and_size >> 1);
         }
-        return l.flag_and_size >> 1;
+        return state.l.flag_and_size >> 1;
     }
 
 
     const char& operator[](const size_t i) const {
         assert(i < size());
         if (is_short()) {
-            return s.data[i];
+            return state.s.data[i];
         }
-        return l.data[i];
+        return state.l.data[i];
+    }
+
+// TODO refactor code to use data instead of separate cases long and short
+    [[nodiscard]] const char* data() const noexcept {
+        return is_short() ? state.s.data : state.l.data;
     }
 
 
@@ -228,9 +230,9 @@ public:
         assert(pos + len <= size());
 
         if (is_short()) {
-            return {s.data + pos, len};
+            return {state.s.data + pos, len};
         }
-        return {l.data + pos, len};
+        return {state.l.data + pos, len};
     }
 
 
@@ -249,10 +251,11 @@ public:
             size_t total_len = (get_len(args) + ...) + delim_len * (num_args - 1);
 
             string out{total_len, UninitializedTag{}};
-            char* out_data = out.is_short() ? out.s.data : out.l.data;
+            char* out_data = out.is_short() ? out.state.s.data : out.state.l.data;
 
             size_t pos = 0;
             bool is_first = true;
+
             auto append = [&pos, &out_data, &delimit, &is_first](const auto& arg) -> void {
                 if (not is_first) {
                     memcpy(&out_data[pos], delimit, delim_len);
@@ -280,12 +283,10 @@ public:
         if (len != other.size())  return false;
 
         if (is_short()) {
-            return memcmp(s.data, other.s.data, len) == 0;
+            return memcmp(&state, &other.state, 16) == 0;
         } else {
-            if (l.data == other.l.data) {
-                return true;
-            }
-            return memcmp(l.data, other.l.data, len) == 0;
+            if (state.l.data == other.state.l.data) return true;
+            return memcmp(state.l.data, other.state.l.data, len) == 0;
         }
     }
 
@@ -298,12 +299,12 @@ public:
         if (lhs.size() != rhs_len) return false;
 
         if (lhs.is_short()) {
-            return memcmp(lhs.s.data, rhs, rhs_len) == 0;
+            return memcmp(lhs.state.s.data, rhs, rhs_len) == 0;
         } else {
-            if (lhs.l.data == rhs) {
+            if (lhs.state.l.data == rhs) {
                 return true;
             }
-            return memcmp(lhs.l.data, rhs, rhs_len) == 0;
+            return memcmp(lhs.state.l.data, rhs, rhs_len) == 0;
         }
     }
 
@@ -314,9 +315,9 @@ public:
 
     friend std::ostream& operator<<(std::ostream& os, const string& str) {
         if (str.is_short()) {
-            return os.write(str.s.data, static_cast<long>(str.size()));
+            return os.write(str.state.s.data, static_cast<long>(str.size()));
         }
-        return os.write(str.l.data, static_cast<std::streamsize>(str.size()));
+        return os.write(str.state.l.data, static_cast<std::streamsize>(str.size()));
     }
 
     friend bool operator==(const string& lhs, const string_view& rhs);
@@ -333,12 +334,12 @@ inline bool operator==(const string& lhs, const string_view& rhs) {
     if (lhs.size() != rhs.size()) return false;
 
     if (lhs.is_short()) {
-        if (rhs.data == lhs.s.data) return true;
-        return memcmp(lhs.s.data, rhs.data, lhs.size()) == 0;
+        if (rhs.data == lhs.state.s.data) return true;
+        return memcmp(lhs.state.s.data, rhs.data, lhs.size()) == 0;
     }
 
-    if (rhs.data == lhs.l.data) return true;
-    return memcmp(lhs.l.data, rhs.data, lhs.size()) == 0;
+    if (rhs.data == lhs.state.l.data) return true;
+    return memcmp(lhs.state.l.data, rhs.data, lhs.size()) == 0;
 }
 
 
