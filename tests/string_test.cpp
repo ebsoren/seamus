@@ -252,6 +252,49 @@ void test_ostream() {
 }
 
 
+void test_join() {
+    std::cout << "Testing Variadic Join..." << std::endl;
+
+    string s_a("apple");
+    string s_b("banana");
+    string_view sv_c("cherry", 6);
+
+    // 1. Mixed Types and Standard Join
+    string res_mixed = string::join(", ", s_a, s_b, sv_c);
+    assert(res_mixed == "apple, banana, cherry");
+    assert(res_mixed.size() == 21);
+
+    // 2. Zero Arguments (Should return empty string)
+    string res_zero = string::join("::");
+    assert(res_zero == "");
+    assert(res_zero.size() == 0);
+
+    // 3. One Argument (Should return exactly the argument, no delimiter)
+    string res_one = string::join("::", s_a);
+    assert(res_one == "apple");
+    assert(res_one.size() == 5);
+
+    // 4. Empty Delimiter
+    string res_no_delim = string::join("", s_a, s_b);
+    assert(res_no_delim == "applebanana");
+    assert(res_no_delim.size() == 11);
+
+    // 5. Empty Strings as Arguments (Testing the `arg.size() > 0` guard)
+    string empty_str("");
+    string res_empty_args = string::join("-", s_a, empty_str, s_b);
+    assert(res_empty_args == "apple--banana");
+
+    // 6. SSO vs Heap Boundaries
+    // 6 chars + 1 char delim + 7 chars = 14 chars (Max SSO length)
+    string res_sso = string::join("-", string("123456"), string("1234567"));
+    assert(res_sso.size() == 14);
+
+    // 7 chars + 1 char delim + 7 chars = 15 chars (Forces Heap Allocation)
+    string res_heap = string::join("-", string("1234567"), string("1234567"));
+    assert(res_heap.size() == 15);
+}
+
+
 int main() {
     try {
         test_constructors();
@@ -268,6 +311,7 @@ int main() {
         test_heterogeneous_equality();
         test_advanced_move_assignments();
         test_ostream();
+        test_join();
 
         std::cout << "\n--------------------------" << std::endl;
         std::cout << "ALL TESTS PASSED SUCCESSFULLY" << std::endl;

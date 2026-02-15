@@ -31,7 +31,7 @@ public:
         return len;
     }
 
-    char operator[](const size_t i) const {
+    const char& operator[](const size_t i) const {
         assert(i < len);
         return data[i];
     }
@@ -81,6 +81,10 @@ public:
     static constexpr size_t MAX_SHORT_LENGTH = 14;
 
 private:
+    static constexpr unsigned char SHORT_FLAG = 1;
+    static constexpr unsigned char LONG_FLAG  = 0;
+    static constexpr unsigned char FLAG_MASK  = 1;
+
     union {
         struct {
             size_t flag_and_size; // LSB must be zero, used as flag
@@ -94,7 +98,7 @@ private:
 
     // To determine short or long state
     [[nodiscard]] bool is_short() const {
-        return s.flag_and_size & 1;
+        return s.flag_and_size & FLAG_MASK;
     }
 
     // Moves the contents of another string to this
@@ -107,30 +111,41 @@ private:
             l.data = other.l.data;
         }
         // Mark as empty short string so destructor isn't ran
-        other.s.flag_and_size = 1;
+        other.s.flag_and_size = SHORT_FLAG;
         other.s.data[0] = '\0';
     }
 
+
+    struct UninitializedTag {};
+
+    // FOR INTERNAL USE ONLY
+    // TO INITIALIZE AN EMPTY STRING WITH GIVEN LENGTH
+    string(size_t len, UninitializedTag) /* NOLINT */ {
+        if (len <= MAX_SHORT_LENGTH) {
+            // Short String
+            memset(s.data,0,MAX_SHORT_LENGTH + 1);
+            s.flag_and_size = static_cast<unsigned char>(len << 1 | SHORT_FLAG);
+            s.data[len] = '\0';
+        } else {
+            // Long String
+            l.flag_and_size = ((len<< 1) | LONG_FLAG); // Set flag to zero
+            l.data = new char[len+1];
+            l.data[len] = '\0';
+        }
+    }
 
 public:
     explicit string (const char *c_str) : string(c_str, c_str ? strlen(c_str) : 0) {}
 
 
-    explicit string(const char* c_str, size_t len) /* NOLINT */ {
+    explicit string(const char* c_str, size_t len) : string(len, UninitializedTag{}) {
         assert(c_str != nullptr);
         if (len <= MAX_SHORT_LENGTH) {
             // Short string
-
-            memset(s.data,0,MAX_SHORT_LENGTH + 1);
-            s.flag_and_size = static_cast<unsigned char>(len << 1 | 1);
             memcpy(s.data, c_str, len);
-            s.data[len] = '\0';
         } else {
             // Long string
-            l.flag_and_size = ((len<< 1) | 0); // Set flag to zero
-            l.data = new char[len+1];
             memcpy(l.data, c_str, len);
-            l.data[len] = '\0';
         }
     }
 
@@ -158,7 +173,7 @@ public:
         if (n == 0) {
             s.data[0] = '0';
             s.data[1] = '\0';
-            s.flag_and_size = static_cast<unsigned char>((1 << 1) | 1); // Len 1, Flag 1
+            s.flag_and_size = static_cast<unsigned char>((1 << 1) | SHORT_FLAG); // Len 1, Flag 1
             return;
         }
 
@@ -174,7 +189,7 @@ public:
         const int len = 10-i;
         memcpy(s.data,tmp+i, len + 1);
 
-        s.flag_and_size = static_cast<unsigned char>((len << 1) | 1);
+        s.flag_and_size = static_cast<unsigned char>((len << 1) | SHORT_FLAG);
     }
 
 
@@ -199,7 +214,7 @@ public:
     }
 
 
-    char operator[](const size_t i) const {
+    const char& operator[](const size_t i) const {
         assert(i < size());
         if (is_short()) {
             return s.data[i];
@@ -216,6 +231,45 @@ public:
             return {s.data + pos, len};
         }
         return {l.data + pos, len};
+    }
+
+
+    template <size_t N, typename... Args>
+    static string join(const char (&delimit)[N], const Args&... args) {
+        constexpr size_t delim_len = N - 1;
+        constexpr size_t num_args = sizeof...(Args);
+
+        if constexpr (num_args == 0) {
+            return string("");
+        } else {
+            auto get_len = [](const auto& arg) -> size_t {
+                return arg.size() ;
+            };
+
+            size_t total_len = (get_len(args) + ...) + delim_len * (num_args - 1);
+
+            string out{total_len, UninitializedTag{}};
+            char* out_data = out.is_short() ? out.s.data : out.l.data;
+
+            size_t pos = 0;
+            bool is_first = true;
+            auto append = [&pos, &out_data, &delimit, &is_first](const auto& arg) -> void {
+                if (not is_first) {
+                    memcpy(&out_data[pos], delimit, delim_len);
+                    pos += delim_len;
+                } else {
+                    is_first = false;
+                }
+                if (arg.size() > 0) {
+                    memcpy(&out_data[pos], &arg[0], arg.size());
+                    pos += arg.size();
+                }
+            };
+
+            (append(args), ...);
+
+            return out;
+        }
     }
 
 
