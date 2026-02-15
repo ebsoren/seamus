@@ -260,9 +260,9 @@ void test_join() {
     string_view sv_c("cherry", 6);
 
     // 1. Mixed Types and Standard Join
-    string res_mixed = string::join(", ", s_a, s_b, sv_c);
-    assert(res_mixed == "apple, banana, cherry");
-    assert(res_mixed.size() == 21);
+    string res_mixed = string::join(", ", s_a, s_b, sv_c, "grape");
+    assert(res_mixed == "apple, banana, cherry, grape");
+    assert(res_mixed.size() == 28);
 
     // 2. Zero Arguments (Should return empty string)
     string res_zero = string::join("::");
