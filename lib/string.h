@@ -145,6 +145,9 @@ public:
     // No copying
     string& operator=(const string& other) = delete;
 
+    // No nullptrs
+    explicit string(std::nullptr_t) = delete;
+
     string(string&& other) noexcept /* NOLINT */ {
         move_from(static_cast<string&&>(other));
     }
@@ -242,7 +245,7 @@ public:
             size_t total_len = (get_len(args) + ...) + delim_len * (num_args - 1);
 
             string out{total_len, UninitializedTag{}};
-            auto out_data = const_cast<char*>(out.data());
+            char* out_data = out.is_short() ? out.state.s.data : out.state.l.data;
 
             size_t pos = 0;
             bool is_first = true;
