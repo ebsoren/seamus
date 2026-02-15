@@ -8,9 +8,57 @@
 #include <cstring>
 #include <cassert>
 #include <cstdint>
+#include <ostream>
+
+class string;
+
+class string_view {
+private:
+    const char* data;
+    size_t len;
+
+public:
+    string_view(const char* source, size_t len) : data{source}, len{len} {}
+
+    [[nodiscard]] string to_string() const;
+
+    [[nodiscard]] string_view substr(size_t start, size_t length) const {
+        assert(start+length<=len);
+        return string_view{data + start, length};
+    }
+
+    [[nodiscard]] size_t size() const {
+        return len;
+    }
+
+    char operator[](const size_t i) const {
+        assert(i < len);
+        return data[i];
+    }
+
+    bool operator==(const string_view &other) const {
+        if (&other == this) return true;
+
+        if (len != other.size())  return false;
+
+        if (data==other.data) return true;
+
+        return memcmp(data, other.data, len) == 0;
+    }
+
+
+    friend bool operator==(const string& lhs, const string_view& rhs);
+    friend bool operator==(const string_view& lhs, const string& rhs);
+
+
+    friend std::ostream& operator<<(std::ostream& os, const string_view& str) {
+        return os.write(str.data, static_cast<long>(str.len));
+    }
+};
 
 
 class string {
+    friend class string_view;
 
 public:
     static constexpr size_t MAX_SHORT_LENGTH = 14;
@@ -19,7 +67,7 @@ private:
     union {
         struct {
             size_t flag_and_size; // LSB must be zero, used as flag
-            const char* data;
+            char* data;
         } l;
         struct {
             unsigned char flag_and_size; // least significant bit = flag, upper 7 = str size
@@ -48,27 +96,27 @@ private:
 
 
 public:
-    explicit string (const char *c_str) : l{0, nullptr}{
-        if (not c_str) {
-            s.flag_and_size = 1; // Length 0, Flag 1
-            s.data[0] = '\0';
-            return;
-        }
+    explicit string (const char *c_str) : string(c_str, c_str ? std::strlen(c_str) : 0) {}
 
-        size_t len = strlen(c_str);
 
+    explicit string(const char* c_str, size_t len) /* NOLINT */ {
+        assert(c_str != nullptr);
         if (len <= MAX_SHORT_LENGTH) {
             // Short string
-            s.flag_and_size = static_cast<unsigned char>(len << 1 | 1);
-            memcpy(s.data, c_str, len+1);
 
+            memset(s.data,0,MAX_SHORT_LENGTH + 1);
+            s.flag_and_size = static_cast<unsigned char>(len << 1 | 1);
+            memcpy(s.data, c_str, len);
+            s.data[len] = '\0';
         } else {
+            // Long string
             l.flag_and_size = ((len<< 1) | 0); // Set flag to zero
-            auto buffer = new char[len+1];
-            memcpy(buffer, c_str, len+1);
-            l.data = buffer;
+            l.data = new char[len+1];
+            memcpy(l.data, c_str, len);
+            l.data[len] = '\0';
         }
     }
+
 
     ~string() {
         if (!is_short()) {
@@ -82,23 +130,14 @@ public:
     // No copying
     string& operator=(const string& other) = delete;
 
-    string(string&& other) noexcept : l{0, nullptr}{
+    string(string&& other) noexcept /* NOLINT */ {
         move_from(static_cast<string&&>(other));
     }
 
-    string& operator=(string&& other) noexcept {
-        if (this != &other) {
-            if (!is_short()) {
-                delete[] l.data;
-            }
 
-            move_from(static_cast<string&&>(other));
-        }
-        return *this;
-    }
-
-    explicit string (uint32_t n) : l{0, nullptr}{
+    explicit string (uint32_t n) /* NOLINT */ {
         // At most 4 Billion = 10 digits => short string
+        memset(s.data,0,MAX_SHORT_LENGTH + 1);
         if (n == 0) {
             s.data[0] = '0';
             s.data[1] = '\0';
@@ -122,6 +161,18 @@ public:
     }
 
 
+    string& operator=(string&& other) noexcept {
+        if (this != &other) {
+            if (!is_short()) {
+                delete[] l.data;
+            }
+
+            move_from(static_cast<string&&>(other));
+        }
+        return *this;
+    }
+
+
     [[nodiscard]] size_t size() const {
         //Remove flag bit
         if (is_short()) {
@@ -140,11 +191,22 @@ public:
     }
 
 
+    [[nodiscard]] string_view str_view(const size_t pos, const size_t len) const {
+        assert(pos <= size());
+        assert(pos + len <= size());
+
+        if (is_short()) {
+            return {s.data + pos, len};
+        }
+        return {l.data + pos, len};
+    }
+
+
     bool operator==(const string &other) const {
+        if (&other == this) return true;
+
         const size_t len = size();
         if (len != other.size())  return false;
-
-        if (&other == this) return true;
 
         if (is_short()) {
             return memcmp(s.data, other.s.data, len) == 0;
@@ -155,4 +217,38 @@ public:
             return memcmp(l.data, other.l.data, len) == 0;
         }
     }
+
+
+    friend std::ostream& operator<<(std::ostream& os, const string& str) {
+        if (str.is_short()) {
+            return os.write(str.s.data, static_cast<long>(str.size()));
+        }
+        return os.write(str.l.data, static_cast<std::streamsize>(str.size()));
+    }
+
+    friend bool operator==(const string& lhs, const string_view& rhs);
+    friend bool operator==(const string_view& lhs, const string& rhs);
 };
+
+
+inline string string_view::to_string() const {
+    return string(data, len);
+}
+
+
+inline bool operator==(const string& lhs, const string_view& rhs) {
+    if (lhs.size() != rhs.size()) return false;
+
+    if (lhs.is_short()) {
+        if (rhs.data == lhs.s.data) return true;
+        return memcmp(lhs.s.data, rhs.data, lhs.size()) == 0;
+    }
+
+    if (rhs.data == lhs.l.data) return true;
+    return memcmp(lhs.l.data, rhs.data, lhs.size()) == 0;
+}
+
+
+inline bool operator==(const string_view& lhs, const string& rhs) {
+    return rhs == lhs;
+}
