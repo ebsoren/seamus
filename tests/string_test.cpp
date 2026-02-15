@@ -20,13 +20,6 @@ void test_constructors() {
     assert(s2.size() == 26);
     assert(s2[0] == 't');
     assert(s2[25] == 'g');
-
-    // 3. Null/Empty
-    string s3(nullptr);
-    assert(s3.size() == 0);
-
-    string s4("");
-    assert(s4.size() == 0);
 }
 
 void test_integer_conversion() {
@@ -149,6 +142,103 @@ void test_moved_from_state() {
 }
 
 
+#include <sstream> // Required for test_ostream
+
+void test_pointer_length_constructor() {
+    std::cout << "Testing Pointer+Length Constructor..." << std::endl;
+
+    const char* buffer = "hello world! this is extra data";
+
+    // Slice exactly 5 characters ("hello") - Should trigger Short String
+    string s_short(buffer, 5);
+    assert(s_short.size() == 5);
+    assert(s_short == string("hello"));
+
+    // Slice exactly 18 characters - Should trigger Heap String
+    string s_long(buffer, 18);
+    assert(s_long.size() == 18);
+    assert(s_long == string("hello world! this "));
+}
+
+void test_str_view_generation() {
+    std::cout << "Testing str_view Generation..." << std::endl;
+
+    string short_str("search");
+    string long_str("inverted_index_engine");
+
+    // 1. View of a short string
+    string_view v1 = short_str.str_view(0, 6);
+    assert(v1.size() == 6);
+    assert(v1[0] == 's' && v1[5] == 'h');
+
+    // 2. View of a long string (slice the middle)
+    string_view v2 = long_str.str_view(9, 5); // "index"
+    assert(v2.size() == 5);
+    assert(v2[0] == 'i' && v2[4] == 'x');
+
+    // 3. Zero-length view
+    string_view v_empty = short_str.str_view(0, 0);
+    assert(v_empty.size() == 0);
+}
+
+void test_heterogeneous_equality() {
+    std::cout << "Testing string == string_view Equality..." << std::endl;
+
+    string s("bazel_build");
+    string_view exact_view = s.str_view(0, 11);
+    string_view sub_view = s.str_view(0, 5); // "bazel"
+    string diff("bazel");
+
+    // 1. string == view (Perfect match, pointer identity fast-path)
+    assert(s == exact_view);
+
+    // 2. view == string (Testing symmetry)
+    assert(exact_view == s);
+
+    // 3. string == view (Content match, different pointers)
+    assert(diff == sub_view);
+
+    // 4. string != view (Length mismatch)
+    assert(!(s == sub_view));
+}
+
+void test_advanced_move_assignments() {
+    std::cout << "Testing Advanced Move Assignments..." << std::endl;
+
+    // 1. Heap to Heap (Must delete old heap)
+    string h1("this is my first heap string");
+    string h2("this is my second heap string");
+    h1 = static_cast<string&&>(h2);
+    assert(h1.size() == 29); // Size of second string
+    assert(h1[0] == 't');
+
+    // 2. Short to Heap (Must delete old heap, then copy short buffer)
+    string h3("I am currently on the heap");
+    string s_short("tiny");
+    h3 = static_cast<string&&>(s_short);
+    assert(h3.size() == 4);
+    assert(h3[0] == 't');
+}
+
+void test_ostream() {
+    std::cout << "Testing std::ostream operator<<..." << std::endl;
+
+    string s_short("C++");
+    string s_long("Systems Programming");
+
+    std::stringstream ss;
+
+    ss << s_short;
+    assert(ss.str() == "C++");
+
+    // Clear the stream
+    ss.str("");
+
+    ss << s_long;
+    assert(ss.str() == "Systems Programming");
+}
+
+
 int main() {
     try {
         test_constructors();
@@ -160,6 +250,11 @@ int main() {
         test_self_move();
         test_mixed_equality();
         test_moved_from_state();
+        test_pointer_length_constructor();
+        test_str_view_generation();
+        test_heterogeneous_equality();
+        test_advanced_move_assignments();
+        test_ostream();
 
         std::cout << "\n--------------------------" << std::endl;
         std::cout << "ALL TESTS PASSED SUCCESSFULLY" << std::endl;

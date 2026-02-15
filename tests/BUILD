@@ -49,3 +49,11 @@ cc_test(
     linkopts = ["-fsanitize=address"],
     deps = ["//lib:string"],
 )
+
+cc_test(
+    name = "string_view_test",
+    srcs = ["string_view_test.cpp"],
+    copts = ["-fsanitize=address"],
+    linkopts = ["-fsanitize=address"],
+    deps = ["//lib:string"],
+)
