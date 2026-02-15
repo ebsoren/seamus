@@ -5,26 +5,24 @@
 #pragma once
 
 #include <algorithm>
-#include <cstring>
 #include <cassert>
-#include <cstdint>
 #include <ostream>
 
 class string;
 
 class string_view {
 private:
-    const char* data;
+    const char* data_;
     size_t len;
 
 public:
-    string_view(const char* source, size_t len) : data{source}, len{len} {}
+    string_view(const char* source, size_t len) : data_{source}, len{len} {}
 
     [[nodiscard]] string to_string() const;
 
     [[nodiscard]] string_view substr(size_t start, size_t length) const {
         assert(start+length<=len);
-        return string_view{data + start, length};
+        return string_view{data_ + start, length};
     }
 
     [[nodiscard]] size_t size() const {
@@ -33,7 +31,7 @@ public:
 
     const char& operator[](const size_t i) const {
         assert(i < len);
-        return data[i];
+        return data_[i];
     }
 
     bool operator==(const string_view &other) const {
@@ -41,42 +39,34 @@ public:
 
         if (len != other.size())  return false;
 
-        if (data==other.data) return true;
+        if (data_==other.data_) return true;
 
-        return memcmp(data, other.data, len) == 0;
+        return memcmp(data_, other.data_, len) == 0;
     }
 
-
-    friend bool operator==(const string& lhs, const string_view& rhs);
-    friend bool operator==(const string_view& lhs, const string& rhs);
-
+    [[nodiscard]] const char* data() const noexcept {
+        return data_;
+    }
 
     friend bool operator==(const string_view& lhs, const char* rhs) {
         if (rhs == nullptr) return false;
 
-        size_t rhs_len = strlen(rhs);
+        const size_t rhs_len = strlen(rhs);
 
         if (lhs.size() != rhs_len) return false;
 
-        if (lhs.data == rhs) return true;
+        if (lhs.data() == rhs) return true;
 
-        return memcmp(lhs.data, rhs, rhs_len) == 0;
+        return memcmp(lhs.data(), rhs, rhs_len) == 0;
     }
 
     friend bool operator==(const char* lhs, const string_view& rhs) {
         return rhs == lhs;
     }
-
-
-    friend std::ostream& operator<<(std::ostream& os, const string_view& str) {
-        return os.write(str.data, static_cast<long>(str.len));
-    }
 };
 
 
 class string {
-    friend class string_view;
-
 public:
     static constexpr size_t MAX_SHORT_LENGTH = 14;
 
@@ -103,13 +93,8 @@ private:
 
     // Moves the contents of another string to this
     void move_from(string&& other) noexcept {
-        if (other.is_short()) {
-            this->state = other.state;
-        } else {
-            state.l.flag_and_size = other.state.l.flag_and_size;
-            state.l.data = other.state.l.data;
-        }
-        // Mark as empty short string so destructor isn't ran
+        this->state = other.state;
+        // Mark other as empty short string so destructor isn't ran
         other.state = {};
         other.state.s.flag_and_size = SHORT_FLAG;
     }
@@ -143,6 +128,7 @@ public:
         } else {
             // Long string
             memcpy(state.l.data, c_str, len);
+            state.l.data[len] = '\0';
         }
     }
 
@@ -164,12 +150,10 @@ public:
     }
 
 
-    explicit string (uint32_t n) /* NOLINT */ {
+    explicit string(uint32_t n) : state{} {
         // At most 4 Billion = 10 digits => short string
-        memset(state.s.data,0,MAX_SHORT_LENGTH + 1);
         if (n == 0) {
             state.s.data[0] = '0';
-            state.s.data[1] = '\0';
             state.s.flag_and_size = static_cast<unsigned char>((1 << 1) | SHORT_FLAG); // Len 1, Flag 1
             return;
         }
@@ -185,7 +169,6 @@ public:
 
         const int len = 10-i;
         memcpy(state.s.data,tmp+i, len + 1);
-
         state.s.flag_and_size = static_cast<unsigned char>((len << 1) | SHORT_FLAG);
     }
 
@@ -219,7 +202,6 @@ public:
         return state.l.data[i];
     }
 
-// TODO refactor code to use data instead of separate cases long and short
     [[nodiscard]] const char* data() const noexcept {
         return is_short() ? state.s.data : state.l.data;
     }
@@ -235,7 +217,20 @@ public:
         return {state.l.data + pos, len};
     }
 
+private:
+    // Overloads to resolve size for different types in join()
+    static size_t get_len(const string& str) { return str.size(); }
+    static size_t get_len(const string_view& str) { return str.size(); }
+    template <size_t N>
+    static size_t get_len(const char (&)[N]) { return N - 1; }
 
+    // Overloads to resolve the data pointer
+    static const char* get_ptr(const string& str) { return str.data(); }
+    static const char* get_ptr(const string_view& str) { return str.data(); }
+    template <size_t N>
+    static const char* get_ptr(const char (&str)[N]) { return str; }
+
+public:
     template <size_t N, typename... Args>
     static string join(const char (&delimit)[N], const Args&... args) {
         constexpr size_t delim_len = N - 1;
@@ -244,14 +239,10 @@ public:
         if constexpr (num_args == 0) {
             return string("");
         } else {
-            auto get_len = [](const auto& arg) -> size_t {
-                return arg.size() ;
-            };
-
             size_t total_len = (get_len(args) + ...) + delim_len * (num_args - 1);
 
             string out{total_len, UninitializedTag{}};
-            char* out_data = out.is_short() ? out.state.s.data : out.state.l.data;
+            auto out_data = const_cast<char*>(out.data());
 
             size_t pos = 0;
             bool is_first = true;
@@ -263,12 +254,13 @@ public:
                 } else {
                     is_first = false;
                 }
-                if (arg.size() > 0) {
-                    memcpy(&out_data[pos], &arg[0], arg.size());
-                    pos += arg.size();
+
+                size_t arg_len = get_len(arg);
+                if (arg_len > 0) {
+                    memcpy(out_data + pos, get_ptr(arg), arg_len);
+                    pos += arg_len;
                 }
             };
-
             (append(args), ...);
 
             return out;
@@ -311,35 +303,29 @@ public:
     friend bool operator==(const char* lhs, const string& rhs) {
         return rhs == lhs;
     }
-
-
-    friend std::ostream& operator<<(std::ostream& os, const string& str) {
-        if (str.is_short()) {
-            return os.write(str.state.s.data, static_cast<long>(str.size()));
-        }
-        return os.write(str.state.l.data, static_cast<std::streamsize>(str.size()));
-    }
-
-    friend bool operator==(const string& lhs, const string_view& rhs);
-    friend bool operator==(const string_view& lhs, const string& rhs);
 };
 
 
+inline std::ostream& operator<<(std::ostream& os, const string_view& str) {
+    return os.write(str.data(), static_cast<std::streamsize>(str.size()));
+}
+
+inline std::ostream& operator<<(std::ostream& os, const string& str) {
+    return os.write(str.data(), static_cast<std::streamsize>(str.size()));
+}
+
+
+
 inline string string_view::to_string() const {
-    return string(data, len);
+    return string(data(), len);
 }
 
 
 inline bool operator==(const string& lhs, const string_view& rhs) {
     if (lhs.size() != rhs.size()) return false;
 
-    if (lhs.is_short()) {
-        if (rhs.data == lhs.state.s.data) return true;
-        return memcmp(lhs.state.s.data, rhs.data, lhs.size()) == 0;
-    }
-
-    if (rhs.data == lhs.state.l.data) return true;
-    return memcmp(lhs.state.l.data, rhs.data, lhs.size()) == 0;
+    if (rhs.data() == lhs.data()) return true;
+    return memcmp(lhs.data(), rhs.data(), lhs.size()) == 0;
 }
 
 
