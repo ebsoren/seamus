@@ -51,15 +51,28 @@ void test_equality() {
     string c("orange");
     string d("apples"); // different length
 
+    // 1. String vs String
     assert(a == b);      // Value equality
     assert(a == a);      // Identity (Fast path)
     assert(!(a == c));   // Different content
     assert(!(a == d));   // Different length (Fast path)
 
-    // Long string equality
+    // 2. Long string equality
     string long1("this is a long string that lives on the heap");
     string long2("this is a long string that lives on the heap");
     assert(long1 == long2);
+
+    // 3. String vs C-String Literal (The new operators!)
+    string s_lit("literal_test");
+    assert(s_lit == "literal_test");       // string == const char*
+    assert("literal_test" == s_lit);       // const char* == string (Symmetry)
+    assert(!(s_lit == "literal"));         // Length mismatch (too short)
+    assert(!(s_lit == "literal_test_no")); // Length mismatch (too long)
+    assert(!(s_lit == "literal_best"));    // Content mismatch
+
+    // Nullptr safety checks
+    assert(!(s_lit == nullptr));
+    assert(!(nullptr == s_lit));
 }
 
 void test_move_semantics() {
