@@ -51,6 +51,23 @@ public:
     friend bool operator==(const string_view& lhs, const string& rhs);
 
 
+    friend bool operator==(const string_view& lhs, const char* rhs) {
+        if (rhs == nullptr) return false;
+
+        size_t rhs_len = strlen(rhs);
+
+        if (lhs.size() != rhs_len) return false;
+
+        if (lhs.data == rhs) return true;
+
+        return memcmp(lhs.data, rhs, rhs_len) == 0;
+    }
+
+    friend bool operator==(const char* lhs, const string_view& rhs) {
+        return rhs == lhs;
+    }
+
+
     friend std::ostream& operator<<(std::ostream& os, const string_view& str) {
         return os.write(str.data, static_cast<long>(str.len));
     }
@@ -84,7 +101,7 @@ private:
     void move_from(string&& other) noexcept {
         if (other.is_short()) {
             s.flag_and_size = other.s.flag_and_size;
-            std::memcpy(s.data, other.s.data, MAX_SHORT_LENGTH + 1);
+            memcpy(s.data, other.s.data, MAX_SHORT_LENGTH + 1);
         } else {
             l.flag_and_size = other.l.flag_and_size;
             l.data = other.l.data;
@@ -96,7 +113,7 @@ private:
 
 
 public:
-    explicit string (const char *c_str) : string(c_str, c_str ? std::strlen(c_str) : 0) {}
+    explicit string (const char *c_str) : string(c_str, c_str ? strlen(c_str) : 0) {}
 
 
     explicit string(const char* c_str, size_t len) /* NOLINT */ {
@@ -216,6 +233,28 @@ public:
             }
             return memcmp(l.data, other.l.data, len) == 0;
         }
+    }
+
+
+    friend bool operator==(const string& lhs, const char* rhs) {
+        if (rhs == nullptr) return false; // Safety first
+
+        size_t rhs_len = strlen(rhs);
+
+        if (lhs.size() != rhs_len) return false;
+
+        if (lhs.is_short()) {
+            return memcmp(lhs.s.data, rhs, rhs_len) == 0;
+        } else {
+            if (lhs.l.data == rhs) {
+                return true;
+            }
+            return memcmp(lhs.l.data, rhs, rhs_len) == 0;
+        }
+    }
+
+    friend bool operator==(const char* lhs, const string& rhs) {
+        return rhs == lhs;
     }
 
 

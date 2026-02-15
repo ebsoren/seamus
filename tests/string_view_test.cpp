@@ -82,17 +82,23 @@ void test_view_equality() {
     string_view v3(raw3, 6);
     string_view v4(raw4, 5);
 
-    // 1. Identity (Same pointer, same length)
-    assert(v1 == v1);
+    // 1. Identity and View vs View
+    assert(v1 == v1);          // Identity (Same pointer, same length)
+    assert(v1 == v2);          // Content match (Different pointer, same content)
+    assert(!(v1 == v3));       // Length mismatch (Fast path failure)
+    assert(!(v1 == v4));       // Content mismatch
 
-    // 2. Content match (Different pointer, same content)
-    assert(v1 == v2);
+    // 2. View vs C-String Literal (The new operators!)
+    string_view sv_lit("view_literal", 12);
+    assert(sv_lit == "view_literal");       // view == const char*
+    assert("view_literal" == sv_lit);       // const char* == view (Symmetry)
+    assert(!(sv_lit == "view_lit"));        // Length mismatch (too short)
+    assert(!(sv_lit == "view_literal_"));   // Length mismatch (too long)
+    assert(!(sv_lit == "view_boteral"));    // Content mismatch
 
-    // 3. Length mismatch (Fast path failure)
-    assert(!(v1 == v3));
-
-    // 4. Content mismatch
-    assert(!(v1 == v4));
+    // Nullptr safety checks
+    assert(!(sv_lit == nullptr));
+    assert(!(nullptr == sv_lit));
 }
 
 void test_to_string_conversion() {
