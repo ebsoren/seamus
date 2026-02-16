@@ -43,7 +43,7 @@ uint64_t frontierHash(const string& s) { }
 
 class Frontier {
 private:
-    priority_queue<UncrawledItem, vector<UncrawledItem>, uncrawledComp> pq;
+    priority_queue<UncrawledItem, vector<UncrawledItem>, UncrawledComp> pq;
     unordered_map<string, uint32_t> curr_urls;
     uint16_t worker_id;
 public:
