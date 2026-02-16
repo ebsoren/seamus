@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cassert>
 #include <ostream>
+#include <cstring>
 
 class string;
 
@@ -183,7 +184,7 @@ public:
     string& operator=(string&& other) noexcept {
         if (this != &other) {
             if (!is_short()) {
-                delete[] state.l.data;
+                ::operator delete(state.l.data);
             }
 
             move_from(static_cast<string&&>(other));
