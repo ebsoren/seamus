@@ -1,6 +1,7 @@
 #include "Index.h"
 
 #include "lib/algorithm.h"
+#include "lib/utf8.h"
 #include "lib/utils.h"
 
 void init_index() {
@@ -41,10 +42,13 @@ void IndexChunk::persist() {
     // Calculate dictionary lookup table values (bytes from start of dict to first word of each letter)
     // And posting list sizes/locations
     uint64_t posting_list_locations[alphabetized_entries.size()];
+    uint64_t posting_list_size = 0;
+
     uint64_t dict_offsets[26];
     dict_offsets[0] = 0;
-    char curr_char = 'a';
     uint64_t curr_offset = 0;
+    char curr_char = 'a';
+
     for (int i = 0; i < alphabetized_entries.size(); i++) {
         // First word starting with this letter -- add its offset to the dict lookup table
         if (alphabetized_entries[i][0] > curr_char) {
@@ -55,7 +59,31 @@ void IndexChunk::persist() {
         // One byte per char, 6 bytes for posting list offset, 1 byte each for space and new line
         curr_offset += alphabetized_entries[i].size() + 6 + 2; 
 
-        // TODO: Add posting list size to posting list locations
+        // Mark where the byte offset where current word's posting list begins
+        posting_list_locations[i] = posting_list_size;
+
+        // Header for each posting list: 64 bits each for # posts & # docs, plus 2 separating characters
+        posting_list_size += 6 + 6 + 2;
+
+        // TODO: Index from doc ID → number of bytes to skip (starting at top of index) to get to that doc ID’s first appearance. 
+        // For each entry: <ID (32 bits)> <byte offset from start of index (64 bits)\n
+
+        // Used to calculate the offset (instead of absolute value)
+        uint32_t last_doc = 0;
+        uint32_t last_loc = 0;
+
+        for (post p : index[alphabetized_entries[i]].posts) {
+            // Utf8 encoding size of doc & loc offset, plus two separating characters
+            posting_list_size += SizeOfUtf8(p.doc - last_doc) + SizeOfUtf8(p.loc - last_loc) + 2;
+
+            // Update offsets
+            if (p.doc > last_doc) {
+                last_doc = p.doc;
+                last_loc = 0;
+            } else {
+                last_loc = p.loc;
+            }
+        }
     }
 
     // Write dictionary lookup table
