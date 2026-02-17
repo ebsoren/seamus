@@ -59,6 +59,12 @@ cc_test(
 )
 
 cc_test(
+    name = "utils_test",
+    srcs = ["utils_test.cpp"],
+    deps = ["//lib:utils"],
+)
+
+cc_test(
     name = "string_benchmark",
     srcs = ["string_benchmark.cpp"],
     deps = ["//lib:string"],

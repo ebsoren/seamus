@@ -128,6 +128,44 @@ void test_view_ostream() {
     assert(ss.str() == "print_this_view");
 }
 
+
+void test_view_ends_with() {
+    std::cout << "Testing string_view::ends_with..." << std::endl;
+
+    const char* raw_text = "system_architecture_diagram.png";
+    string_view target(raw_text, 31);
+
+    // Test arguments
+    string_view view_ext(".png", 4);
+    string str_ext(".png");
+    string_view view_wrong(".jpg", 4);
+    string str_wrong(".jpg");
+
+    // 1. string_view ends_with string_view
+    assert(target.ends_with(view_ext) == true);
+    assert(target.ends_with(view_wrong) == false);
+
+    // 2. string_view ends_with string
+    assert(target.ends_with(str_ext) == true);
+    assert(target.ends_with(str_wrong) == false);
+
+    // 3. Sub-view slicing logic
+    // Slice out "system_architecture"
+    string_view sub_view = target.substr(0, 19);
+
+    assert(sub_view.ends_with(string("architecture")) == true);
+    assert(sub_view.ends_with(string_view("architecture", 12)) == true);
+    assert(sub_view.ends_with(string(".png")) == false); // Sliced off!
+
+    // 4. Oversized targets
+    assert(target.ends_with(string("super_system_architecture_diagram.png")) == false);
+
+    // 5. Empty suffix
+    assert(target.ends_with(string("")) == true);
+    assert(target.ends_with(string_view("", 0)) == true);
+}
+
+
 int main() {
     try {
         test_view_constructors();
@@ -136,6 +174,7 @@ int main() {
         test_view_equality();
         test_to_string_conversion();
         test_view_ostream();
+        test_view_ends_with();
 
         std::cout << "\n-------------------------------------" << std::endl;
         std::cout << "STRING_VIEW TESTS PASSED SUCCESSFULLY" << std::endl;

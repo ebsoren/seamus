@@ -64,6 +64,27 @@ public:
     friend bool operator==(const char* lhs, const string_view& rhs) {
         return rhs == lhs;
     }
+
+    [[nodiscard]] bool ends_with(const auto& other) const {
+
+        size_t other_len = other.size();
+
+        if (size() < other_len) return false;
+
+        return memcmp(other.data(), data()+(size()-other_len), other_len) == 0;
+    }
+
+
+    template <size_t N>
+    [[nodiscard]] bool ends_with(const char (&suffix)[N]) const {
+        constexpr size_t suffix_len = N - 1; // Subtract null terminator
+
+        if constexpr (suffix_len == 0) return true;
+        if (size() < suffix_len) return false;
+
+        // &(*this)[offset] safely gets the pointer for both string and view
+        return std::memcmp(&(*this)[size() - suffix_len], suffix, suffix_len) == 0;
+    }
 };
 
 
@@ -224,6 +245,7 @@ public:
         }
         return {state.l.data + pos, len};
     }
+
 
 private:
     // Overloads to resolve size for different types in join()
