@@ -24,8 +24,13 @@ private:
 public:
     UrlStore() {};
     void persist();
+
+    // to read urlStore from disk after a crash, each worker thread will read from its corresponding files and update it's urlstore object accordingly
     static void readFromFile(UrlStore& url_store, const int worker_number);
 
     bool addUrl(const string& url, const vector<string>& anchor_texts, const uint16_t seed_distance, const uint16_t eot, const uint16_t eod, const uint32_t num_encountered);
     bool updateUrl(const string& url, const vector<string>& anchor_texts, const uint32_t num_encountered);
 };
+
+// TODO: This needs to be defined globally on bootup (defining here for now)
+const uint32_t WORKER_NUMBER = 0;
