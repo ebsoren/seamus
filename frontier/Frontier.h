@@ -32,7 +32,7 @@ struct CrawledItem {
     uint16_t seed_list_dist;
     uint32_t times_seen;
 
-    CrawledItem(const string &init_url, uint16_t init_seed_list_dist, uint16_t times_seen_init) : url(init_url), seed_list_dist(init_seed_list_dist), 
+    CrawledItem(const string &init_url, uint16_t init_seed_list_dist, uint16_t times_seen_init) : url(init_url), seed_list_dist(init_seed_list_dist),
         times_seen(times_seen_init) { }
 };
 
