@@ -61,6 +61,40 @@ int main() {
     }
     std::cout << "Values verified after rehash\n";
 
+    // =============================
+    // Iterator Tests
+    // =============================
+    std::cout << "Testing iterator...\n";
+
+    int count = 0;
+    long long sum_keys = 0;
+    long long sum_values = 0;
+
+    for (auto it = map.begin(); it != map.end(); ++it) {
+        count++;
+        sum_keys += *it;
+        sum_values += &it;
+    }
+
+    assert(count == map.size());
+
+    // Expected sums
+    long long expected_key_sum = 0;
+    long long expected_value_sum = 0;
+
+    for (int i = 1; i <= 20; ++i) {
+        expected_key_sum += i;
+        if (i == 1) expected_value_sum += 101;
+        else if (i == 4) expected_value_sum += 400;
+        else if (i == 5) expected_value_sum += 500;
+        else expected_value_sum += i * 100;
+    }
+
+    assert(sum_keys == expected_key_sum);
+    assert(sum_values == expected_value_sum);
+
+    std::cout << "Iterator traversal test passed\n";
+
     std::cout << "All tests passed!\n";
     return 0;
 }

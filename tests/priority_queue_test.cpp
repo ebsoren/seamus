@@ -77,6 +77,27 @@ int main() {
     test_custom_comparator();
     test_range_constructor();
 
+    std::cout << "Testing priority_queue iterator...\n";
+
+    priority_queue<int> pq;
+    pq.push(7);
+    pq.push(2);
+    pq.push(9);
+    pq.push(4);
+
+    int count = 0;
+    long long sum = 0;
+
+    for (auto it = pq.begin(); it != pq.end(); ++it) {
+        count++;
+        sum += *it;
+    }
+
+    assert(count == pq.size());
+    assert(sum == 7 + 2 + 9 + 4);
+
+    std::cout << "Iterator traversal test passed\n";
+
     std::cout << "all tests passed!\n";
     return 0;
 }
