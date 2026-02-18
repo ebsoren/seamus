@@ -13,8 +13,8 @@ cc_test(
 )
 
 cc_test(
-    name = "algorithm_test",
-    srcs = ["algorithm_test.cpp"],
+    name = "binary_search_test",
+    srcs = ["binary_search_test.cpp"],
     deps = ["//lib:algorithm"],
 )
 

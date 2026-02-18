@@ -1,13 +1,14 @@
 #include "Index.h"
 
 #include "lib/algorithm.h"
+#include "lib/string.h"
 #include "lib/utf8.h"
 #include "lib/utils.h"
 
 void init_index() {
     // Find the latest chunk ID
     if (chunk == 0) {
-        while (file_exists("index_chunk_" + string::to_string(WORKER_NUMBER) + "_" + string::to_string(chunk) + ".txt")) chunk++;
+        while (file_exists(string::join("index_chunk_", string(WORKER_NUMBER), "_", string(chunk), ".txt"))) chunk++;
     }
 
     IndexChunk index;
@@ -15,13 +16,14 @@ void init_index() {
 
 void IndexChunk::persist() {
     // Create a file (if it already exists, fail -- don't want to overwrite)
-    FILE* fd = fopen("index_chunk_" + string::to_string(WORKER_NUMBER) + "_" + string::to_string(chunk) + ".txt", "wx");
+    string path = string::join("index_chunk_", string(WORKER_NUMBER), "_", string(chunk), ".txt");
+    FILE* fd = fopen(path.data(), "wx");
 
     if (fd == nullptr) perror("Error opening index chunk file for writing.");
 
     // 4 bytes for each uint32_t ID, one byte for each char in string, one byte for each new line char
     uint64_t urls_bytes = urls.size() * 4;
-    for (string s : urls) urls_bytes += s.size() + 1;
+    for (int i = 0; i < urls.size(); i++) urls_bytes += urls[i].size() + 1;
 
     // Write the size of the ID->URL mapping
     // <64b SIZE>\n
@@ -143,14 +145,13 @@ void IndexChunk::persist() {
 
     // Loop through all words
     for (uint32_t i = 0; i < N; i++) {
-        string word = alphabetized_entries[i];
-        uint64_t size = index[word].posts.size(); // Needs to be an lvalue for fwrite
+        uint64_t size = index[alphabetized_entries[i]].posts.size(); // Needs to be an lvalue for fwrite
 
         // Write the number of occurrences and documents
         // <64b NUM POSTS> <64b NUM DOCS>\n
         fwrite(&size, sizeof(uint64_t), 1, fd);
         fwrite(" ", sizeof(char), 1, fd);
-        fwrite(&index[word].n_docs, sizeof(uint64_t), 1, fd);
+        fwrite(&index[alphabetized_entries[i]].n_docs, sizeof(uint64_t), 1, fd);
         fwrite("\n", sizeof(char), 1, fd);
 
         // Write the internal index
@@ -175,7 +176,7 @@ void IndexChunk::persist() {
 
         // For each word occurrence: <varlen DOC ID/OFFSET><varlen LOC ID/OFFSET>
         // Because we're doing UTF 8, no delimiters
-        for (post p : index[word].posts) {
+        for (post p : index[alphabetized_entries[i]].posts) {
             Utf8* doc_end = WriteUtf8(doc_buff, p.doc - last_doc, doc_buff + 6);
             Utf8* loc_end = WriteUtf8(loc_buff, p.loc - last_loc, loc_buff + 6);
 
