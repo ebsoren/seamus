@@ -199,9 +199,13 @@ void IndexChunk::persist() {
 }
 
 vector<string> IndexChunk::sort_entries() {
-    vector<string> res(index.size());
+    vector<string> res;
+    res.reserve(index.size());
 
     // TODO: Have to copy all the keys into res
+    for (auto it = index.begin(); it != index.end(); ++it) {
+        res.push_back(*it);
+    }
 
     radix_sort(res);
     return res;

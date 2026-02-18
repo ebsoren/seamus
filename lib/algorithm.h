@@ -38,14 +38,10 @@ void radix_sort(vector<string> &vec, size_t l, size_t h, size_t idx) {
 
         if (c < p) {
             // If character is less than pivot, swap it to the low end of the vector
-            string temp = std::move(vec[lt]);
-            vec[lt++] = std::move(vec[i]);
-            vec[i++] = std::move(temp);
+            swap(vec[lt++], vec[i++]);
         } else if (c > p) {
             // If greater, swap to the high end
-            string temp = std::move(vec[gt]);
-            vec[gt--] = std::move(vec[i]);
-            vec[i] = std::move(temp);
+            swap(vec[gt--], vec[i]);
         } else {
             // If character is the same, just continue to next character
             i++;

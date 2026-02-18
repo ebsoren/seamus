@@ -76,3 +76,25 @@ bool file_exists(const string &fname) {
 inline char charAt(const string &str, size_t i) {
     return i >= str.size() ? '\0' : str[i];
 }
+
+// Move and swap utilities
+template <typename T>
+struct remove_reference {typedef T type;};
+
+template <typename T>
+struct remove_reference<T&> {typedef T type;};
+
+template <typename T> 
+struct remove_reference<T&&> {typedef T type;};
+
+template<typename T>
+constexpr inline remove_reference<T>::type&& move(T &&t) {
+    return static_cast<remove_reference<T>::type &&>(t);
+}
+
+template <typename T>
+void swap(T &lhs, T &rhs) {
+    T tmp(move(rhs));
+    rhs = move(lhs);
+    lhs = move(tmp);
+}
