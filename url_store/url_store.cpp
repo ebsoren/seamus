@@ -6,10 +6,12 @@ const UrlData* UrlStore::findUrlData(const string& url) const {
     return slot ? &slot->value : nullptr;
 }
 
+
 UrlData* UrlStore::findUrlData(const string& url) {
     Slot<string, UrlData>* slot = url_data.find(url);
     return slot ? &slot->value : nullptr;
 }
+
 
 uint32_t UrlStore::findAnchorId(const string& anchor_text) {
     for (size_t i = 0; i < anchor_to_id.size(); i++) {
@@ -20,6 +22,7 @@ uint32_t UrlStore::findAnchorId(const string& anchor_text) {
     anchor_to_id.push_back(anchor_text);
     return anchor_to_id.size() - 1;
 }
+
 
 bool UrlStore::addUrl(const string& url, const vector<string>& anchor_texts, const uint16_t seed_distance, const uint16_t eot, const uint16_t eod, const uint32_t num_encountered) {
     // if url already exists, return false
@@ -40,6 +43,7 @@ bool UrlStore::addUrl(const string& url, const vector<string>& anchor_texts, con
     url_data[url] = new_url_data;
     return true;
 }
+
 
 bool UrlStore::updateUrl(const string& url, const vector<string>& anchor_texts, const uint32_t num_encountered) {
     UrlData* url_data_ptr = findUrlData(url);
@@ -103,6 +107,7 @@ void UrlStore::persist() {
         }
     }
 }
+
 
 void UrlStore::readFromFile(UrlStore& url_store, const int worker_number) {
     // given a urlstore object and worker number, read from corresponding file and update urlstore object accordingly

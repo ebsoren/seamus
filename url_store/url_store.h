@@ -2,15 +2,18 @@
 #include "../lib/vector.h"
 #include "../lib/string.h"
 
+
 struct AnchorData {
     uint32_t anchor_id;
     uint32_t freq;
 };
 
+
 struct UserAnchorData {
     const string* anchor_text;
     uint32_t freq;
 };
+
 
 // TODO: decide if vector is better than hashmap for anchor_freqs (cache locality vs. O(1) average lookup)
 struct UrlData {
@@ -21,6 +24,7 @@ struct UrlData {
     uint16_t eod;                                        // End of description
 };
 
+
 class UrlStore {
 private:
     unordered_map<string, UrlData> url_data;
@@ -28,6 +32,7 @@ private:
 
     const UrlData* findUrlData(const string& url) const;
     UrlData* findUrlData(const string& url);
+
 
 public:
     UrlStore() {};
@@ -40,6 +45,7 @@ public:
     bool updateUrl(const string& url, const vector<string>& anchor_texts, const uint32_t num_encountered);
 
     uint32_t findAnchorId(const string& anchor_text);
+
 
     vector<UserAnchorData> getUrlAnchorInfo(const string& url) {
         const UrlData* it = findUrlData(url);
@@ -55,28 +61,32 @@ public:
         return user_anchor_data;
     }
 
+
     uint32_t getUrlNumEncountered(const string& url) {
         const UrlData* it = findUrlData(url);
         if (it == nullptr) return 0;
         return it->num_encountered;
     }
 
+
     uint16_t getUrlSeedDistance(const string& url) {
         const UrlData* it = findUrlData(url);
         return it ? it->seed_distance : UINT16_MAX;
     }
+
 
     bool inTitle(const string& url, uint16_t word_pos) {
         const UrlData* it = findUrlData(url);
         return it ? word_pos < it->eot : false;
     }
 
+
     bool inDescription(const string& url, uint16_t word_pos) {
         const UrlData* it = findUrlData(url);
         return it ? it->eot <= word_pos && word_pos < it->eod : false;
     }
-
 };
+
 
 // TODO: This needs to be defined globally on bootup (defining here for now)
 const uint32_t WORKER_NUMBER = 0;
