@@ -62,3 +62,24 @@ cc_library(
     visibility = ["//visibility:public"],
     deps = [],
 )
+
+cc_library(
+    name = "rpc_common",
+    hdrs = ["rpc_common.h"],
+    visibility = ["//visibility:public"],
+    deps = [":string"],
+)
+
+cc_library(
+    name = "rpc_urlstore",
+    hdrs = ["rpc_urlstore.h"],
+    visibility = ["//visibility:public"],
+    deps = [":string", ":vector", ":rpc_common"],
+)
+
+cc_library(
+    name = "rpc_listener",
+    hdrs = ["rpc_listener.h"],
+    visibility = ["//visibility:public"],
+    deps = [":thread_pool"],
+)

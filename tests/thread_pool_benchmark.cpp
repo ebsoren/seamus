@@ -1,7 +1,6 @@
 #include <iostream>
 #include <vector>
 #include <chrono>
-#include <tuple>
 #include "../lib/thread_pool.h"
 
 // A simple CPU-intensive function
@@ -18,9 +17,9 @@ void benchmark_thread_pool(size_t num_threads, int num_tasks, int fib_n) {
     auto start = std::chrono::high_resolution_clock::now();
 
     {
-        ThreadPool<long long(*)(long long)> pool(fib, num_threads);
+        ThreadPool pool(num_threads);
         for (int i = 0; i < num_tasks; ++i) {
-            pool.enqueue_task(std::make_tuple(fib_n));
+            pool.enqueue_task([fib_n]{ fib(fib_n); });
         }
     } // ThreadPool destructor is called here, which waits for all tasks to complete.
 

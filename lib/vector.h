@@ -1,6 +1,8 @@
 #pragma once
 #include <cassert>
 #include <cstddef>                          // For size_t
+#include <new>                              // For placement new
+#include <utility>                          // For std::move
 
 template<typename T>
 class vector {
@@ -22,7 +24,8 @@ public:
     // MODIFIES: Destroys *this
     // EFFECTS: Performs any neccessary clean up operations
     ~vector() {
-        if (alloc_capacity > 0) delete[] alloc_region;
+        for (size_t i = 0; i < vec_size; ++i) alloc_region[i].~T();
+        if (alloc_capacity > 0) ::operator delete(alloc_region);
     }
 
 
@@ -32,22 +35,28 @@ public:
     // EFFECTS: Constructs a vector with size num_elements,
     //    all default constructed
     vector(size_t num_elements) {
-        alloc_region = new T[num_elements];
+        alloc_region = static_cast<T*>(::operator new(num_elements * sizeof(T)));
         alloc_capacity = num_elements;
-        vec_size = num_elements;
+        vec_size = 0;
+        for (size_t i = 0; i < num_elements; ++i) {
+            new (alloc_region + i) T();
+            ++vec_size;
+        }
     }
 
 
     // Fill Constructor
     // REQUIRES: Capacity > 0
-    // MODIFIES: *this
+    // MODIFIES *this
     // EFFECTS: Creates a vector with size num_elements, all assigned to val
     vector(size_t num_elements, const T &val) {
-        alloc_region = new T[num_elements];
+        alloc_region = static_cast<T*>(::operator new(num_elements * sizeof(T)));
         alloc_capacity = num_elements;
-        vec_size = num_elements;
-
-        for (size_t i = 0; i < vec_size; ++i) *(alloc_region + i) = val;
+        vec_size = 0;
+        for (size_t i = 0; i < num_elements; ++i) {
+            new (alloc_region + i) T(val);
+            ++vec_size;
+        }
     }
 
 
@@ -56,11 +65,13 @@ public:
     // MODIFIES: *this
     // EFFECTS: Creates a clone of the vector other
     vector(const vector<T> &other) {
-        alloc_region = new T[other.capacity()];
+        alloc_region = static_cast<T*>(::operator new(other.capacity() * sizeof(T)));
         alloc_capacity = other.capacity();
-        vec_size = other.size();
-
-        for (size_t i = 0; i < vec_size; ++i) *(alloc_region + i) = other[i];
+        vec_size = 0;
+        for (size_t i = 0; i < other.size(); ++i) {
+            new (alloc_region + i) T(other[i]);
+            ++vec_size;
+        }
     }
 
 
@@ -68,7 +79,7 @@ public:
     // REQUIRES: Nothing
     // MODIFIES: *this
     // EFFECTS: Duplicates the state of other to *this
-    vector operator=(const vector<T> &other) {
+    vector& operator=(const vector<T> &other) {
         if (this == &other) return *this;
 
         while (vec_size > 0) pop_back();
@@ -97,9 +108,10 @@ public:
     // REQUIRES: Nothing
     // MODIFIES: *this, leaves otherin a default constructed state
     // EFFECTS: Takes the data from other in constant time
-    vector operator=(vector<T> &&other) {
+    vector& operator=(vector<T> &&other) {
         if (this == &other) return *this;
-        delete[] alloc_region;
+        for (size_t i = 0; i < vec_size; ++i) alloc_region[i].~T();
+        if (alloc_capacity > 0) ::operator delete(alloc_region);
 
         alloc_region = other.alloc_region;
         alloc_capacity = other.alloc_capacity;
@@ -192,7 +204,23 @@ public:
             realloc_(new_alloc_capacity);
         }
 
-        *(alloc_region + vec_size) = x;
+        new (alloc_region + vec_size) T(x);
+        vec_size++;
+    }
+
+
+    // REQUIRES: Nothing
+    // MODIFIES: this, size( ), capacity( )
+    // EFFECTS: Appends the element x to the vector by move, allocating
+    //    additional space if neccesary
+    void push_back(T &&x) {
+        if (vec_size == alloc_capacity) {
+            size_t new_alloc_capacity = 1;
+            if (vec_size > 0) new_alloc_capacity = vec_size * REALLOC_FACTOR;
+            realloc_(new_alloc_capacity);
+        }
+
+        new (alloc_region + vec_size) T(std::move(x));
         vec_size++;
     }
 
@@ -203,6 +231,7 @@ public:
     //    leaving capacity unchanged
     void pop_back() {
         assert(vec_size > 0);
+        alloc_region[vec_size - 1].~T();
         vec_size--;
     }
 
@@ -243,12 +272,13 @@ private:
 
     // Reallocates `alloc_region` to a specified size and transfers elements into the new region
     void realloc_(size_t new_alloc_capacity) {
-        T* new_alloc_region = new T[new_alloc_capacity];
+        T* new_alloc_region = static_cast<T*>(::operator new(new_alloc_capacity * sizeof(T)));
         for (size_t i = 0; i < vec_size; ++i) {
-            *(new_alloc_region + i) = *(alloc_region + i);
+            new (new_alloc_region + i) T(std::move(alloc_region[i]));
+            alloc_region[i].~T();
         }
 
-        delete[] alloc_region;
+        if (alloc_capacity > 0) ::operator delete(alloc_region);
         alloc_region = new_alloc_region;
         alloc_capacity = new_alloc_capacity;
     }

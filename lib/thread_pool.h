@@ -1,30 +1,17 @@
-// Simple thread pool -- each class instance represents a pool of workers for the same func(args)
+// Simple thread pool -- workers pull and execute std::function<void()> tasks from a shared queue
 
-#include "vector.h"
 #include "deque.h"
 #include <condition_variable>
-#include <cstdlib>
+#include <functional>
 #include <mutex>
 #include <thread>
 
 
-// Primary template (unused -- for compiler)
-template <typename F>
-class ThreadPool;
-
-
-// Specified template -- ThreadPool instance applies to the same R(*)(Args...)
-template <typename R, typename... Args>
-class ThreadPool<R(*)(Args...)> {
+class ThreadPool {
 public:
 
-    // Typedefs
-    using Func = R(*)(Args...);
-    using TaskArgs = std::tuple<Args...>;
-
-
-    // Construct thread pool with 'n' threads and set the target function for this instance
-    ThreadPool(Func func, size_t n) : f(func), n_threads(n), exit(false) {
+    // Construct thread pool with 'n' worker threads
+    ThreadPool(size_t n) : n_threads(n), exit(false) {
         threads = new std::thread[n_threads];
 
         for (size_t i = 0; i < n_threads; ++i) {
@@ -40,18 +27,20 @@ public:
             exit = true;
         }
         cv.notify_all();
-        
+
         for (size_t i = 0; i < n_threads; ++i) {
             if (threads[i].joinable()) threads[i].join();
         }
+
+        delete[] threads;
     }
 
 
-    // Enqueue a task
-    void enqueue_task(TaskArgs task) {
+    // Enqueue a task -- caller binds any arguments into the callable before passing
+    void enqueue_task(std::function<void()> task) {
         {
-            std::unique_lock<std::mutex> lock(m);
-            tasks.push_back(task);
+            std::lock_guard<std::mutex> lock(m);
+            tasks.push_back(std::move(task));
         }
         cv.notify_one();
     }
@@ -59,31 +48,26 @@ public:
 
     // View the size of the task queue
     size_t task_queue_size() {
-        m.lock();
-        size_t res = tasks.size();
-        m.unlock();
-
-        return res;
+        std::lock_guard<std::mutex> lock(m);
+        return tasks.size();
     }
 
 
 private:
 
-    Func f;                         // The function every task in this pool runs
-    std::mutex m;                   // Guard for task queue
-    std::condition_variable cv;     // CV for threads
-    size_t n_threads;               // Number of threads in the pool
-    std::thread* threads;           // Underlying region of threads in the pool 
-    deque<TaskArgs> tasks;          // Task queue
-    bool exit;                      // Termination signal for worker threads
+    std::mutex m;                           // Guard for task queue
+    std::condition_variable cv;             // CV for worker threads
+    size_t n_threads;                       // Number of threads in the pool
+    std::thread* threads;                   // Underlying region of threads in the pool
+    deque<std::function<void()>> tasks;     // Task queue
+    bool exit;                              // Termination signal for worker threads
 
 
     // Loop for worker threads
     void worker_loop() {
         while (true) {
-            TaskArgs task;
+            std::function<void()> task;
 
-            // Grab the task in a locked scope, wait for exit signal or for tasks to not be empty
             {
                 std::unique_lock<std::mutex> lock(m);
                 cv.wait(lock, [&]{ return exit || !tasks.empty(); });
@@ -95,7 +79,7 @@ private:
             }
 
             // Execute task outside lock
-            std::apply([this](auto&&... args) { f(std::forward<decltype(args)>(args)...); }, task);
+            task();
         }
     }
 };

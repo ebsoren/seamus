@@ -6,13 +6,14 @@
 #include <cstdint>
 #include <cstddef>
 #include <functional>
+#include "thread_pool.h"
 
 
 class RPCListener {
 public:
 
     // Constructor: creates and binds a listening socket on the given port
-    RPCListener(uint16_t port) : listen_fd(-1) {
+    RPCListener(uint16_t port, size_t n_threads) : listen_fd(-1), pool(n_threads) {
         listen_fd = socket(AF_INET, SOCK_STREAM, 0);
         if (listen_fd < 0) return;
 
@@ -53,8 +54,8 @@ public:
             int client_fd = accept(listen_fd, (struct sockaddr*)&client_addr, &client_len);
             if (client_fd < 0) continue;
 
-            // TODO(hershey): multithread this via thread pool mechanism?
-            handler(client_fd);
+            // Enqueue ephemeral socket handler as a task to the thread pool
+            pool.enqueue_task([handler, client_fd]{ handler(client_fd); });
         }
     }
 
@@ -65,4 +66,5 @@ public:
 
 private:
     int listen_fd;
+    ThreadPool pool;
 };
