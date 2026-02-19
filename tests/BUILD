@@ -13,6 +13,19 @@ cc_test(
 )
 
 cc_test(
+    name = "frontier_test",
+    srcs = ["frontier_test.cpp"],
+    deps = [
+        "//lib:vector",
+        "//lib:string",
+        "//lib:unordered_map",
+        "//lib:priority_queue",
+        "//lib:utils",
+        "//frontier:Frontier",
+    ],
+)
+
+cc_test(
     name = "binary_search_test",
     srcs = ["binary_search_test.cpp"],
     deps = ["//lib:algorithm"],
