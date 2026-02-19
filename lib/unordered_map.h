@@ -308,24 +308,20 @@ public:
             return *this;
         }
 
-        Key operator*() {
-            auto& slot = map->vec_map[index];
-            return slot.key;
+        const Slot<Key, Value>& operator*() {
+            return map->vec_map[index];
         }
 
-        const Key& operator*() const {
-            auto& slot = map->vec_map[index];
-            return slot.key;
+        const Slot<Key, Value>& operator*() const {
+            return map->vec_map[index];
         }
 
-        Value operator&() {
-            auto& slot = map->vec_map[index];
-            return slot.value;
+        Slot<Key, Value>* operator->() {
+            return &map->vec_map[index];
         }
 
-        const Value& operator&() const {
-            auto& slot = map->vec_map[index];
-            return slot.value;
+        const Slot<Key, Value>* operator->() const {
+            return &map->vec_map[index];
         }
 
         bool operator!=(const Iterator& other) const {
