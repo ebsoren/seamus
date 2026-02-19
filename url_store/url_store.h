@@ -1,6 +1,6 @@
-#include "lib/unordered_map.h"
-#include "lib/vector.h"
-#include "lib/string.h"
+#include "../lib/unordered_map.h"
+#include "../lib/vector.h"
+#include "../lib/string.h"
 
 struct AnchorData {
     uint32_t anchor_id;
