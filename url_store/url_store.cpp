@@ -1,6 +1,20 @@
 #include "url_store.h"
-#include "lib/string.h"
+#include <optional>
 
+
+UrlStore::UrlStore() {
+    rpc_listener = new RPCListener(PORT, NUM_THREADS);
+    // TODO(hershey): spawn listener loop in a detached thread here   
+}
+
+UrlStore::~UrlStore() {
+    delete rpc_listener;
+}
+
+void UrlStore::client_handler(int fd) {
+    std::optional<URLStoreUpdateRequest> req = recv_urlstore_update(fd);
+    // TODO(hershey): finish the RPC wrapper logic
+}
 
 const UrlData* UrlStore::findUrlData(const string& url) const {
     const Slot<string, UrlData>* slot = url_data.find(url);
