@@ -1,6 +1,9 @@
 #include "../lib/unordered_map.h"
 #include "../lib/vector.h"
 #include "../lib/string.h"
+#include "../lib/rpc_listener.h"
+#include "../lib/rpc_urlstore.h"
+#include <cstdint>
 
 
 struct AnchorData {
@@ -33,9 +36,13 @@ private:
     const UrlData* findUrlData(const string& url) const;
     UrlData* findUrlData(const string& url);
 
+    RPCListener* rpc_listener;      // Listener for client requests
+    void client_handler(int fd);    // Detached handler for client requests
+
 
 public:
-    UrlStore() {};
+    UrlStore();
+    ~UrlStore();
     void persist();
 
     // to read urlStore from disk after a crash, each worker thread will read from its corresponding files and update it's urlstore object accordingly
@@ -90,3 +97,5 @@ public:
 
 // TODO: This needs to be defined globally on bootup (defining here for now)
 const uint32_t WORKER_NUMBER = 0;
+const uint32_t NUM_THREADS = 8;
+const uint32_t PORT = 9000;
