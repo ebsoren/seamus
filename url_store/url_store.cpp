@@ -1,18 +1,30 @@
 #include "url_store.h"
-#include "lib/string.h"
+#include <optional>
 
+
+UrlStore::UrlStore() {
+    rpc_listener = new RPCListener(PORT, NUM_THREADS);
+    // TODO(hershey): spawn listener loop in a detached thread here   
+}
+
+UrlStore::~UrlStore() {
+    delete rpc_listener;
+}
+
+void UrlStore::client_handler(int fd) {
+    std::optional<URLStoreUpdateRequest> req = recv_urlstore_update(fd);
+    // TODO(hershey): finish the RPC wrapper logic
+}
 
 const UrlData* UrlStore::findUrlData(const string& url) const {
     const Slot<string, UrlData>* slot = url_data.find(url);
     return slot ? &slot->value : nullptr;
 }
 
-
 UrlData* UrlStore::findUrlData(const string& url) {
     Slot<string, UrlData>* slot = url_data.find(url);
     return slot ? &slot->value : nullptr;
 }
-
 
 uint32_t UrlStore::findAnchorId(const string& anchor_text) {
     for (size_t i = 0; i < anchor_to_id.size(); i++) {
@@ -87,7 +99,8 @@ For each URL:
 void UrlStore::persist() {
     // given the current data and worker this urlstore is assigned to
     // persist to provided file
-    FILE* fd = fopen("urlstore_" + string::to_string(WORKER_NUMBER) + ".txt", "wx");
+    string fileName = string::join("urlstore_", string(WORKER_NUMBER), ".txt");
+    FILE* fd = fopen(fileName.data(), "wx");
 
     if (fd == nullptr) perror("Error opening urlstore file for writing.");
 
@@ -100,6 +113,7 @@ void UrlStore::persist() {
     
     for (const auto& slot : url_data) {
         const string& url = slot.key;
+        if (url.size() > MAX_URL_LEN) continue; // skip urls that exceed max length
         const UrlData& data = slot.value;
         fprintf(fd, "%lu", url.size());
         fwrite(&url, sizeof(char), url.size(), fd);
@@ -114,26 +128,30 @@ void UrlStore::persist() {
 
 void UrlStore::readFromFile(UrlStore& url_store, const int worker_number) {
     // given a urlstore object and worker number, read from corresponding file and update urlstore object accordingly
-    FILE* fd = fopen("urlstore_" + string::to_string(worker_number) + ".txt", "r");
+    string fileName = string::join("urlstore_", string(worker_number), ".txt");
+    FILE* fd = fopen(fileName.data(), "r");
 
     if (fd == nullptr) perror("Error opening urlstore file for reading.");
 
     uint32_t num_anchor_texts;
     char dummy;
     fread(&num_anchor_texts, sizeof(uint32_t), 1, fd);
+    char anchor_text_buff[MAX_ANCHOR_TEXT_LEN];
     for (uint32_t i = 0; i < num_anchor_texts; i++) {
         uint32_t anchor_text_len;
         fread(&anchor_text_len, sizeof(uint32_t), 1, fd);
-        string anchor_text(anchor_text_len, '\0'); // TODO: revisit after friday
-        fread(&anchor_text[0], sizeof(char), anchor_text_len, fd);
+        fread(&anchor_text_buff, sizeof(char), anchor_text_len, fd);
+        string anchor_text(anchor_text_buff, anchor_text_len);
+
         url_store.anchor_to_id.push_back(anchor_text);
         fread(&dummy, sizeof(char), 1, fd); // consume newline
     }
 
     uint32_t url_len;
+    char url_buff[MAX_URL_LEN];
     while (fread(&url_len, sizeof(uint32_t), 1, fd)) {
-        string url(url_len, '\0'); // TODO: revisit after friday
-        fread(&url[0], sizeof(char), url_len, fd);
+        fread(&url_buff, sizeof(char), url_len, fd);
+        string url(url_buff, url_len);
         url_store.url_data[url] = UrlData();
 
         uint32_t num_encountered, num_anchor_freqs;

@@ -82,3 +82,9 @@ cc_test(
     srcs = ["string_benchmark.cpp"],
     deps = ["//lib:string"],
 )
+
+cc_test(
+    name = "rpc_test",
+    srcs = ["rpc_test.cpp"],
+    deps = ["//lib:rpc_common", "//lib:rpc_listener", "//lib:rpc_urlstore", "//lib:vector"],
+)
