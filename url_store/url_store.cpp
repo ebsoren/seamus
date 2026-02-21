@@ -107,6 +107,9 @@ void UrlStore::persist() {
     fprintf(fd, "%u", anchor_to_id.size());
     for (const string& anchor_text : anchor_to_id) {
         fprintf(fd, "%lu", anchor_text.size());
+        if (anchor_text.size() > MAX_ANCHOR_TEXT_LEN) {
+            fprintf(stderr, "Warning: Anchor text '%s' exceeds max length and will be truncated.\n", anchor_text.data());
+        }
         fwrite(&anchor_text, sizeof(char), anchor_text.size(), fd);
         fwrite("\n", sizeof(char), 1, fd);
     }
@@ -123,8 +126,9 @@ void UrlStore::persist() {
             fprintf(fd, "%u %u\n", anchor_freq.anchor_id, anchor_freq.freq);
         }
     }
-}
 
+    fclose(fd);
+}
 
 void UrlStore::readFromFile(UrlStore& url_store, const int worker_number) {
     // given a urlstore object and worker number, read from corresponding file and update urlstore object accordingly
