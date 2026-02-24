@@ -22,7 +22,8 @@ struct UserAnchorData {
 struct UrlData {
     vector<AnchorData> anchor_freqs;                     // anchor text id to frequency since its last update (potentially size >1)
     uint32_t num_encountered;                            // Number of additional times this URL has been
-    uint16_t seed_distance;                              // Distance from seed list (never needs to be updated, so it is not included in the RPC)
+    uint16_t seed_distance;                              // Distance from seed list
+    uint16_t domain_dist;                                // Domain distance from seed list TODO(charlie): implement this feature
     uint16_t eot;                                        // End of title
     uint16_t eod;                                        // End of description
 };
