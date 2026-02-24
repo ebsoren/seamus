@@ -11,6 +11,10 @@
 #include "../lib/utils.h"
 #include "Frontier.h"
 
+// TODO: Add this to lib instead so it is NOT an executable
+// TODO: Create 5 queue buckets with given cutoffs instead of a PQ
+// TODO: Store each bucket in a separate document and when we pull back, just take from the higest bucket with data present 
+// TODO: Our goal is to clear out our top 3-4 buckets. Keep track of when we clear out the buckets to see the effectiveness 
 
 unordered_map<string,double> makeTldWeight() {
     unordered_map<string, double> m(32);
@@ -23,7 +27,6 @@ unordered_map<string,double> makeTldWeight() {
     m.insert(string("net"),1.0);
     m.insert(string("info"),0.8);
     m.insert(string("biz"),0.8);
-    m.insert(string("tk"),0.8);
 
     return m;
 }
@@ -125,8 +128,8 @@ bool UncrawledComp::operator()(const UncrawledItem& u1, const UncrawledItem& u2)
 }
 
 
-Frontier::Frontier(uint16_t worker_id_init, size_t initial_map_size = 2048, double initial_loading_factor = 0.65) 
-    : curr_urls(initial_map_size, initial_loading_factor), worker_id(worker_id_init) { }
+// Frontier::Frontier(uint16_t worker_id_init, size_t initial_map_size = 2048, double initial_loading_factor = 0.65) 
+//     : curr_urls(initial_map_size, initial_loading_factor), worker_id(worker_id_init) { }
 
 void Frontier::push(const UncrawledItem &u) {
     uint32_t& count = curr_urls[u.url];
@@ -172,7 +175,7 @@ void Frontier::persist() {
 
     if (fd == nullptr) perror("Error opening frontier file for writing.");
 
-    // <url_len (32 bits)><url (variable)><priority score (16 bits)><distance from seed list (16 bits)><times seen (32 bits)>
+    // <url_len (32 bits)><url (variable)><distance from seed list (16 bits)><times seen (32 bits)>
     uint64_t total_bytes = 0;
     for (auto it = pq.begin(); it != pq.end(); ++it) {
         total_bytes += (*it).url.size() + 10;

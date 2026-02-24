@@ -204,7 +204,7 @@ vector<string> IndexChunk::sort_entries() {
 
     // TODO: Have to copy all the keys into res
     for (auto it = index.begin(); it != index.end(); ++it) {
-        res.push_back(*it);
+        res.push_back(it->key);
     }
 
     radix_sort(res);
