@@ -50,7 +50,7 @@ template< typename Key, typename Value > class Slot {
         Slot( const Key &k, const Value v ) : key(k), value(v) {
             state = State::FILLED;
         }
-        Slot() : state(State::EMPTY) {}
+        Slot() : key(), state(State::EMPTY) {}
 };
 
 // Default Hash functions and equality functors!

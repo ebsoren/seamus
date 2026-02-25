@@ -19,6 +19,10 @@ private:
 public:
     string_view(const char* source, size_t len) : data_{source}, len{len} {}
 
+    [[nodiscard]] const char* data() const noexcept {
+        return data_;
+    }
+
     [[nodiscard]] string to_string() const;
 
     [[nodiscard]] string_view substr(size_t start, size_t length) const {
@@ -43,10 +47,6 @@ public:
         if (data_==other.data_) return true;
 
         return memcmp(data_, other.data_, len) == 0;
-    }
-
-    [[nodiscard]] const char* data() const noexcept {
-        return data_;
     }
 
     friend bool operator==(const string_view& lhs, const char* rhs) {
@@ -361,4 +361,13 @@ inline bool operator==(const string& lhs, const string_view& rhs) {
 
 inline bool operator==(const string_view& lhs, const string& rhs) {
     return rhs == lhs;
+}
+
+
+char* write_to(char* buffer, auto str) {
+    assert(buffer != nullptr);
+    assert(str != nullptr);
+    memcpy(buffer, str.data(), str.size());
+    buffer[str.size()] = '\0';
+    return buffer+str.size()+1;
 }

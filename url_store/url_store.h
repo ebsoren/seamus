@@ -1,6 +1,9 @@
 #include "../lib/unordered_map.h"
 #include "../lib/vector.h"
 #include "../lib/string.h"
+#include "../lib/rpc_listener.h"
+#include "../lib/rpc_urlstore.h"
+#include <cstdint>
 
 
 struct AnchorData {
@@ -19,7 +22,8 @@ struct UserAnchorData {
 struct UrlData {
     vector<AnchorData> anchor_freqs;                     // anchor text id to frequency since its last update (potentially size >1)
     uint32_t num_encountered;                            // Number of additional times this URL has been
-    uint16_t seed_distance;                              // Distance from seed list (never needs to be updated, so it is not included in the RPC)
+    uint16_t seed_distance;                              // Distance from seed list
+    uint16_t domain_dist;                                // Domain distance from seed list TODO(charlie): implement this feature
     uint16_t eot;                                        // End of title
     uint16_t eod;                                        // End of description
 };
@@ -33,9 +37,13 @@ private:
     const UrlData* findUrlData(const string& url) const;
     UrlData* findUrlData(const string& url);
 
+    RPCListener* rpc_listener;      // Listener for client requests
+    void client_handler(int fd);    // Detached handler for client requests
+
 
 public:
-    UrlStore() {};
+    UrlStore();
+    ~UrlStore();
     void persist();
 
     // to read urlStore from disk after a crash, each worker thread will read from its corresponding files and update it's urlstore object accordingly
@@ -90,3 +98,8 @@ public:
 
 // TODO: This needs to be defined globally on bootup (defining here for now)
 const uint32_t WORKER_NUMBER = 0;
+const uint32_t NUM_THREADS = 8;
+const uint32_t PORT = 9000;
+
+const uint32_t MAX_URL_LEN = 4096; // 4 KB max url length
+const uint32_t MAX_ANCHOR_TEXT_LEN = 512; // 0.5 KB max anchor text length

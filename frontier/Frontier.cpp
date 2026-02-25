@@ -11,19 +11,22 @@
 #include "../lib/utils.h"
 #include "Frontier.h"
 
+// TODO: Add this to lib instead so it is NOT an executable
+// TODO: Create 5 queue buckets with given cutoffs instead of a PQ
+// TODO: Store each bucket in a separate document and when we pull back, just take from the higest bucket with data present 
+// TODO: Our goal is to clear out our top 3-4 buckets. Keep track of when we clear out the buckets to see the effectiveness 
 
 unordered_map<string,double> makeTldWeight() {
     unordered_map<string, double> m(32);
 
-    m.insert("gov",1.2);
-    m.insert("edu",1.2);
-    m.insert("mil",1.2);
-    m.insert("com",1.0);
-    m.insert("org",1.0);
-    m.insert("net",1.0);
-    m.insert("info",0.8);
-    m.insert("biz",0.8);
-    m.insert("tk",0.8);
+    m.insert(string("gov"),1.2);
+    m.insert(string("edu"),1.2);
+    m.insert(string("mil"),1.2);
+    m.insert(string("org"),1.1);
+    m.insert(string("com"),1.0);
+    m.insert(string("net"),1.0);
+    m.insert(string("info"),0.8);
+    m.insert(string("biz"),0.8);
 
     return m;
 }
@@ -41,9 +44,11 @@ double max(double i, double j) {
     }
 }
 
-double calcPriorityScore(const string& url, int seed_list_dist) {
+double calcPriorityScore(const string& u, int seed_list_dist) {
     // points for http or https however https > http
     double factor_1;
+
+    string_view url = u.str_view(0, u.size());
 
     if(url.substr(0,4) == "http") {
         if(url[4] == 's') {
@@ -58,27 +63,30 @@ double calcPriorityScore(const string& url, int seed_list_dist) {
     // points for certain desirable domains
 
     size_t start_pos = (factor_1 == 0.6) ? 7 : 8;
-    size_t end_pos_domain = url.size();
 
     int subdomain_count = 0;
     int digit_count_domain = 0;
     double domain_size = 0.0;
-    string extension = "";
+    string extension = string("");
+    size_t start = 0;
+    size_t len_ext = 0;
     for(int i = start_pos; i < url.size(); i++) {
         if(url[i] == '/' || url[i] == '?' || url[i] == '#' || url[i] == ':') {
-            end_pos_domain = i;
+            len_ext += 1;
             break;
         } else if(url[i] == '.') {
             subdomain_count++;
-            extension = "";
+            extension = string("");
+            start = i+1;
         } else {
-            extension = extension + url[i];
+            len_ext += 1;
             if(is_digit(url[i])) {
                 digit_count_domain++;
             }
         }
         domain_size += 1.0;
     }
+    string extension = (url.substr(start, len_ext)).to_string();
     auto slot = tldWeight.find(extension);
     double factor_2 = (slot == nullptr) ? 0.6 : slot->value; 
 
@@ -107,14 +115,12 @@ double calcPriorityScore(const string& url, int seed_list_dist) {
 }
 
 
-UncrawledItem::UncrawledItem(const string &init_url, uint16_t init_seed_list_dist) : url(init_url), seed_list_dist(init_seed_list_dist),
-    priority_score(calcPriorityScore(init_url, init_seed_list_dist)) { }
+// UncrawledItem::UncrawledItem(string init_url, uint16_t init_seed_list_dist) : url(static_cast<string&&>(init_url)), seed_list_dist(init_seed_list_dist),
+//     priority_score(calcPriorityScore(init_url, init_seed_list_dist)) { }
 
 
-
-CrawledItem::CrawledItem(const string &init_url, uint16_t init_seed_list_dist, uint16_t times_seen_init) : url(init_url), seed_list_dist(init_seed_list_dist),
-    times_seen(times_seen_init) { }
-
+// CrawledItem::CrawledItem(string init_url, uint16_t init_seed_list_dist, uint16_t times_seen_init) : url(static_cast<string&&>(init_url)), seed_list_dist(init_seed_list_dist),
+//     times_seen(times_seen_init) { }
 
 
 bool UncrawledComp::operator()(const UncrawledItem& u1, const UncrawledItem& u2) const {
@@ -122,8 +128,8 @@ bool UncrawledComp::operator()(const UncrawledItem& u1, const UncrawledItem& u2)
 }
 
 
-Frontier::Frontier(uint16_t worker_id_init, size_t initial_map_size = 2048, double initial_loading_factor = 0.65) 
-    : curr_urls(initial_map_size, initial_loading_factor), worker_id(worker_id_init) { }
+// Frontier::Frontier(uint16_t worker_id_init, size_t initial_map_size = 2048, double initial_loading_factor = 0.65) 
+//     : curr_urls(initial_map_size, initial_loading_factor), worker_id(worker_id_init) { }
 
 void Frontier::push(const UncrawledItem &u) {
     uint32_t& count = curr_urls[u.url];
@@ -133,19 +139,29 @@ void Frontier::push(const UncrawledItem &u) {
     }
 }
 
-void Frontier::push(const string &url, int seed_list_dist) {
+void Frontier::push(string &url, int seed_list_dist) {
     uint32_t& count = curr_urls[url];
     
     if (count++ == 0) {
-        pq.push(UncrawledItem(url, seed_list_dist));
+        pq.push(UncrawledItem(static_cast<string&&>(url), seed_list_dist));
     }
+}
+
+void Frontier::pop() {
+    if(pq.size() != 0) {
+        pq.pop();
+    } 
 }
 
 CrawledItem Frontier::front() {
     assert(!pq.empty());
 
-    const UncrawledItem &front = pq.front();
-    return CrawledItem(front.url, front.seed_list_dist, curr_urls[front.url]);
+    UncrawledItem front =
+    static_cast<UncrawledItem&&>(
+        const_cast<UncrawledItem&>(pq.front())
+    );
+
+    return CrawledItem(static_cast<string&&>(front.url), front.seed_list_dist, curr_urls[front.url]);
 }
 
 size_t Frontier::size() {
@@ -159,7 +175,7 @@ void Frontier::persist() {
 
     if (fd == nullptr) perror("Error opening frontier file for writing.");
 
-    // <url_len (32 bits)><url (variable)><priority score (16 bits)><distance from seed list (16 bits)><times seen (32 bits)>
+    // <url_len (32 bits)><url (variable)><distance from seed list (16 bits)><times seen (32 bits)>
     uint64_t total_bytes = 0;
     for (auto it = pq.begin(); it != pq.end(); ++it) {
         total_bytes += (*it).url.size() + 10;

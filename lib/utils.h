@@ -7,7 +7,7 @@
 #include "string.h"
 
 
-string_view stem_word(string_view word) {
+inline string_view stem_word(string_view word) {
     bool double_check = false;
     if (word.ends_with("ing") and word.size() >= 6) {
         word = word.substr(0, word.size() - 3);
@@ -44,7 +44,7 @@ string_view stem_word(string_view word) {
     return word;
 }
 
-double double_pow(double base, int exp) {
+inline double double_pow(double base, int exp) {
     double result = 1.0;
 
     bool neg = (exp < 0);
@@ -66,7 +66,7 @@ double double_pow(double base, int exp) {
     }
 }
 
-bool file_exists(const string &fname) {
+inline bool file_exists(const string &fname) {
     struct stat buff;
     return stat(fname.data(), &buff) == 0;
 }
@@ -93,7 +93,7 @@ constexpr inline remove_reference<T>::type&& move(T &&t) {
 }
 
 template <typename T>
-void swap(T &lhs, T &rhs) {
+void swap(T &lhs, T &rhs) noexcept {
     T tmp(move(rhs));
     rhs = move(lhs);
     lhs = move(tmp);
