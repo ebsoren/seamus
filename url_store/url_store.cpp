@@ -1,19 +1,22 @@
 #include "url_store.h"
+#include "../lib/rpc_urlstore.h"
 #include <optional>
 
 
 UrlStore::UrlStore() {
+    // Spawn listener loop
     rpc_listener = new RPCListener(PORT, NUM_THREADS);
-    // TODO(hershey): spawn listener loop in a detached thread here
+    rpc_listener->listener_loop([this](int fd) { client_handler(fd); });
 }
 
 UrlStore::~UrlStore() {
     delete rpc_listener;
 }
 
+// Handles a BatchURLStoreUpdateRequest given an ephemeral socket fd  
 void UrlStore::client_handler(int fd) {
-    std::optional<URLStoreUpdateRequest> req = recv_urlstore_update(fd);
-    // TODO(hershey): finish the RPC wrapper logic
+    std::optional<BatchURLStoreUpdateRequest> req = recv_batch_urlstore_update(fd);
+    // todo: call internal method 
 }
 
 const UrlData* UrlStore::findUrlData(const string& url) const {
