@@ -4,12 +4,15 @@
 
 
 UrlStore::UrlStore() {
-    // Spawn listener loop
     rpc_listener = new RPCListener(PORT, NUM_THREADS);
-    rpc_listener->listener_loop([this](int fd) { client_handler(fd); });
+    listener_thread = std::thread([this]() {
+        rpc_listener->listener_loop([this](int fd) { client_handler(fd); });
+    });
 }
 
 UrlStore::~UrlStore() {
+    rpc_listener->stop();
+    if (listener_thread.joinable()) listener_thread.join();
     delete rpc_listener;
 }
 

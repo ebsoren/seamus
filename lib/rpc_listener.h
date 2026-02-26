@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <cstddef>
 #include <functional>
+#include <atomic>
 #include "thread_pool.h"
 
 
@@ -38,16 +39,16 @@ public:
     }
 
 
-    // Destructor: close the listening socket
+    // Destructor: stop the listener and close the listening socket
     ~RPCListener() {
-        if (listen_fd >= 0) close(listen_fd);
+        stop();
     }
 
 
-    // Listener loop: blocks forever, calling handler with each new client fd.
+    // Listener loop: blocks until stop() is called, calling handler with each new client fd.
     // The handler is responsible for reading/writing to the fd and closing it when done.
     void listener_loop(std::function<void(int)> handler) {
-        while (true) {
+        while (!stopped) {
             struct sockaddr_in client_addr{};
             socklen_t client_len = sizeof(client_addr);
 
@@ -60,11 +61,22 @@ public:
     }
 
 
+    // Stop the listener loop by closing the listen fd so accept() returns -1
+    void stop() {
+        stopped = true;
+        if (listen_fd >= 0) {
+            close(listen_fd);
+            listen_fd = -1;
+        }
+    }
+
+
     // Interface: check for listen socket validity before calling the accept loop
     bool valid() const { return listen_fd >= 0; }
 
 
 private:
     int listen_fd;
+    std::atomic<bool> stopped = false;
     ThreadPool pool;
 };

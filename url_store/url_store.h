@@ -4,6 +4,7 @@
 #include "../lib/rpc_listener.h"
 #include "../lib/rpc_urlstore.h"
 #include <cstdint>
+#include <thread>
 
 
 struct AnchorData {
@@ -38,6 +39,7 @@ private:
     UrlData* findUrlData(const string& url);
 
     RPCListener* rpc_listener;      // Listener for client requests
+    std::thread listener_thread;    // Thread running the listener loop
     void client_handler(int fd);    // Detached handler for client requests
 
 
