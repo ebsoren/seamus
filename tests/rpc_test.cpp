@@ -384,6 +384,126 @@ void test_stop_after_messages() {
     printf("PASS\n");
 }
 
+// Test: serialize and deserialize a BatchURLStoreDataResponse over a real socket.
+void test_batch_urlstore_data_response_roundtrip() {
+    print_header("test_batch_urlstore_data_response_roundtrip");
+
+    RPCListener* listener = new RPCListener(9109, 1);
+    assert(listener->valid());
+
+    std::mutex mtx;
+    std::condition_variable cv;
+    bool received = false;
+    std::optional<BatchURLStoreDataResponse> result;
+
+    std::thread t([listener, &mtx, &cv, &received, &result]() {
+        listener->listener_loop([&mtx, &cv, &received, &result](int fd) {
+            auto batch = recv_batch_urlstore_data_response(fd);
+            close(fd);
+            if (batch) {
+                std::lock_guard<std::mutex> lock(mtx);
+                result = std::move(batch);
+                received = true;
+                cv.notify_one();
+            }
+        });
+    });
+    t.detach();
+
+    BatchURLStoreDataResponse batch;
+    UrlData d1{};
+    d1.anchor_freqs.push_back(AnchorData{10, 3});
+    d1.anchor_freqs.push_back(AnchorData{20, 7});
+    d1.num_encountered = 42;
+    d1.seed_distance = 2;
+    d1.domain_dist = 1;
+    d1.eot = 50;
+    d1.eod = 120;
+
+    UrlData d2{};
+    d2.anchor_freqs.push_back(AnchorData{99, 1});
+    d2.num_encountered = 5;
+    d2.seed_distance = 0;
+    d2.domain_dist = 0;
+    d2.eot = 30;
+    d2.eod = 80;
+
+    batch.resps.push_back(std::move(d1));
+    batch.resps.push_back(std::move(d2));
+
+    string host("127.0.0.1");
+    assert(send_batch_urlstore_data_response(host, 9109, batch));
+
+    std::unique_lock<std::mutex> lock(mtx);
+    cv.wait(lock, [&] { return received; });
+
+    assert(result.has_value());
+    assert(result->resps.size() == 2);
+
+    // First UrlData
+    assert(result->resps[0].anchor_freqs.size() == 2);
+    assert(result->resps[0].anchor_freqs[0].anchor_id == 10);
+    assert(result->resps[0].anchor_freqs[0].freq == 3);
+    assert(result->resps[0].anchor_freqs[1].anchor_id == 20);
+    assert(result->resps[0].anchor_freqs[1].freq == 7);
+    assert(result->resps[0].num_encountered == 42);
+    assert(result->resps[0].seed_distance == 2);
+    assert(result->resps[0].domain_dist == 1);
+    assert(result->resps[0].eot == 50);
+    assert(result->resps[0].eod == 120);
+
+    // Second UrlData
+    assert(result->resps[1].anchor_freqs.size() == 1);
+    assert(result->resps[1].anchor_freqs[0].anchor_id == 99);
+    assert(result->resps[1].anchor_freqs[0].freq == 1);
+    assert(result->resps[1].num_encountered == 5);
+    assert(result->resps[1].seed_distance == 0);
+    assert(result->resps[1].domain_dist == 0);
+    assert(result->resps[1].eot == 30);
+    assert(result->resps[1].eod == 80);
+
+    printf("PASS\n");
+}
+
+// Test: serialize and deserialize an empty BatchURLStoreDataResponse.
+void test_batch_urlstore_data_response_empty() {
+    print_header("test_batch_urlstore_data_response_empty");
+
+    RPCListener* listener = new RPCListener(9110, 1);
+    assert(listener->valid());
+
+    std::mutex mtx;
+    std::condition_variable cv;
+    bool received = false;
+    std::optional<BatchURLStoreDataResponse> result;
+
+    std::thread t([listener, &mtx, &cv, &received, &result]() {
+        listener->listener_loop([&mtx, &cv, &received, &result](int fd) {
+            auto batch = recv_batch_urlstore_data_response(fd);
+            close(fd);
+            if (batch) {
+                std::lock_guard<std::mutex> lock(mtx);
+                result = std::move(batch);
+                received = true;
+                cv.notify_one();
+            }
+        });
+    });
+    t.detach();
+
+    BatchURLStoreDataResponse batch;
+    string host("127.0.0.1");
+    assert(send_batch_urlstore_data_response(host, 9110, batch));
+
+    std::unique_lock<std::mutex> lock(mtx);
+    cv.wait(lock, [&] { return received; });
+
+    assert(result.has_value());
+    assert(result->resps.size() == 0);
+
+    printf("PASS\n");
+}
+
 int main() {
     printf("\n===== RUNNING RPC TESTS =====\n\n");
     test_single_message();
@@ -395,5 +515,7 @@ int main() {
     test_stop_after_messages();
     test_batch_urlstore_data_request_roundtrip();
     test_batch_urlstore_data_request_empty();
+    test_batch_urlstore_data_response_roundtrip();
+    test_batch_urlstore_data_response_empty();
     printf("\n===== ALL RPC TESTS PASSED =====\n");
 }

@@ -67,6 +67,15 @@ inline bool recv_u32(int fd, uint32_t& out) {
 }
 
 
+// Read a network byte order uint16_t from fd into out
+inline bool recv_u16(int fd, uint16_t& out) {
+    uint16_t net;
+    if (!recv_exact(fd, &net, sizeof(uint16_t))) return false;
+    out = ntohs(net);
+    return true;
+}
+
+
 // Read a length-prefixed string from fd
 inline std::optional<string> recv_string(int fd) {
     uint32_t len;
