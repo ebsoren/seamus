@@ -77,6 +77,33 @@ inline char charAt(const string &str, size_t i) {
     return i >= str.size() ? '\0' : str[i];
 }
 
+// Extracts just the domain from a URL
+// e.g. "https://www.example.com/path/page" -> "example.com"
+inline string extract_domain(const string& url) {
+    const char* p = url.data();
+    size_t len = url.size();
+
+    // Strip http:// or https://
+    if (len >= 8 && memcmp(p, "https://", 8) == 0) {
+        p += 8; len -= 8;
+    } else if (len >= 7 && memcmp(p, "http://", 7) == 0) {
+        p += 7; len -= 7;
+    }
+
+    // Strip www.
+    if (len >= 4 && memcmp(p, "www.", 4) == 0) {
+        p += 4; len -= 4;
+    }
+
+    // Find end of domain (first '/' or end of string)
+    size_t domain_len = 0;
+    while (domain_len < len && p[domain_len] != '/') {
+        domain_len++;
+    }
+
+    return string(p, domain_len);
+}
+
 // Move and swap utilities
 template <typename T>
 struct remove_reference {typedef T type;};

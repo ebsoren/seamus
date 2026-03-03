@@ -50,10 +50,86 @@ void test_stem_word() {
     check("is", 2, "is", 2);     // < 4 chars for "s"
 }
 
+void test_extract_domain() {
+    std::cout << "Testing extract_domain..." << std::endl;
+
+    // Strips https:// and path
+    {
+        string url("https://example.com/path/page");
+        string domain = extract_domain(url);
+        assert(domain == "example.com");
+        assert(domain.size() == 11);
+        // Original unchanged
+        assert(url == "https://example.com/path/page");
+        assert(url.size() == 29);
+    }
+
+    // Strips http:// and path
+    {
+        string url("http://example.org/foo/bar");
+        string domain = extract_domain(url);
+        assert(domain == "example.org");
+        assert(domain.size() == 11);
+        assert(url == "http://example.org/foo/bar");
+    }
+
+    // Strips https://www.
+    {
+        string url("https://www.example.com/page");
+        string domain = extract_domain(url);
+        assert(domain == "example.com");
+        assert(domain.size() == 11);
+        assert(url == "https://www.example.com/page");
+    }
+
+    // Strips http://www.
+    {
+        string url("http://www.example.com/page");
+        string domain = extract_domain(url);
+        assert(domain == "example.com");
+        assert(domain.size() == 11);
+        assert(url == "http://www.example.com/page");
+    }
+
+    // Strips www. without protocol
+    {
+        string url("www.example.com");
+        string domain = extract_domain(url);
+        assert(domain == "example.com");
+        assert(domain.size() == 11);
+        assert(url == "www.example.com");
+    }
+
+    // No protocol, no www, no path
+    {
+        string url("example.com");
+        string domain = extract_domain(url);
+        assert(domain == "example.com");
+        assert(domain.size() == 11);
+    }
+
+    // No path, just domain with protocol
+    {
+        string url("https://example.com");
+        string domain = extract_domain(url);
+        assert(domain == "example.com");
+        assert(domain.size() == 11);
+    }
+
+    // Subdomain preserved
+    {
+        string url("https://blog.example.com/post");
+        string domain = extract_domain(url);
+        assert(domain == "blog.example.com");
+        assert(domain.size() == 16);
+    }
+}
+
 int main() {
     std::cout << "--- Running Utils Tests ---\n";
 
     test_stem_word();
+    test_extract_domain();
 
     std::cout << "All utils tests passed successfully!\n";
     std::cout << "----------------------------------------\n";
