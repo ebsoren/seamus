@@ -7,7 +7,8 @@ cc_binary(
         "crawler_listener.h",
         "domain_carousel.h",
         "parse_util.h",
-        "url_buckets.h",
+        "bucket_manager.h",
+        "network_util.h"
     ],
     deps = ["//lib:consts", "//lib:vector", "//lib:deque", "//lib:string", "//lib:utils"],
     visibility = ["//visibility:public"],

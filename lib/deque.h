@@ -1,11 +1,3 @@
-/*
-    TODO(hershey):
-
-    - Constructor that initializes capacity at any size
-    - Reallocations if the deque size falls significantly below the deque capacity (to free heap memory)
-            ^^ Note that this happens implicitly when push_back() and push_front() need to realloc_()
-*/
-
 #pragma once
 #include <cassert>
 

@@ -5,16 +5,28 @@
 #include "../lib/consts.h"
 #include <mutex>
 #include <chrono>
+#include <cstdint>
 
 
+// Encapsulation of data that we track as we crawl
 struct CrawlTarget {
     string domain;          // Just the domain (stripped from full URL and free of `http://www` or `https://www.`
     string url;             // Entire URL
+    uint16_t seed_distance; // URL hops from seed list
+    uint16_t domain_dist;   // Domain hops from seed list
 };
 
 
 class DomainCarousel {
 public:
+
+    // In-memory priority buckets of URLs, maintain locks per priority bucket
+    struct alignas(64) PriorityBucket {
+        std::mutex bucket_lock;
+        deque<CrawlTarget> urls{};
+    };
+    PriorityBucket buckets[PRIORITY_BUCKETS]{};
+
 
     // Queue and carousel state
     struct alignas(64) DomainQueue {
@@ -25,6 +37,7 @@ public:
     DomainQueue carousel[CRAWLER_CAROUSEL_SIZE]{};
 
 
+    // Domain hash function
     static size_t hash_domain(const string& domain) {
         // These constants are specific to 64-bit FNV-1
         size_t hash = 0xcbf29ce484222325ULL;
@@ -38,5 +51,11 @@ public:
         }
 
         return hash;
+    }
+
+
+    // Carousel worker, monitors [carousel_left, carousel_right] as a non-overlapping interval of queues on the carousel
+    static void carousel_worker(size_t carousel_left, size_t carousel_right) {
+
     }
 };
