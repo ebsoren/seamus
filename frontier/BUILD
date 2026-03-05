@@ -9,5 +9,6 @@ cc_library(
         "//lib:unordered_map",
         "//lib:priority_queue",
         "//lib:utils",
+        "//lib:consts",
     ],
 )

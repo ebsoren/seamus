@@ -9,12 +9,20 @@
 #include "../lib/unordered_map.h"
 #include "../lib/priority_queue.h"
 #include "../lib/utils.h"
+#include "../lib/consts.h"
 #include "Frontier.h"
 
 // TODO: Add this to lib instead so it is NOT an executable
 // TODO: Create 5 queue buckets with given cutoffs instead of a PQ
 // TODO: Store each bucket in a separate document and when we pull back, just take from the higest bucket with data present 
 // TODO: Our goal is to clear out our top 3-4 buckets. Keep track of when we clear out the buckets to see the effectiveness 
+
+size_t get_priority_bucket(const string& url) {
+    // TODO(Erik): write this function
+    // 0 is the index of the highest priority bucket, PRIORITY_BUCKETS - 1 is the index of the lowest priority bucket
+    // PRIORITY_BUCKETS defined in ~/lib/consts.h
+    return 0;
+}
 
 unordered_map<string,double> makeTldWeight() {
     unordered_map<string, double> m(32);
