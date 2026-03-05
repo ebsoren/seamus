@@ -1,7 +1,0 @@
-todo(hershey): get rid of this later
-
-threads:
-    - listener thread for ingress url crawl requests (rpc listener, simply pushes urls to priority buckets)
-    - persist thread for bucket manager (moves stuff in in-memory priority buckets to on-disk priority buckets)
-    - worker threads to monitor intervals of the carousel (currently set to a pool of 512 in consts.h)
-    - parser thread pool to monitor a queue of char buffers (buffers returned from a GET request), parse out words/other important information, and dump to disk as a buffer for index
