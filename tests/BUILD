@@ -112,3 +112,9 @@ cc_test(
     srcs = ["rpc_test.cpp"],
     deps = ["//lib:rpc_common", "//lib:rpc_listener", "//lib:rpc_urlstore", "//lib:rpc_crawler", "//lib:vector"],
 )
+
+cc_test(
+    name = "crawler_test",
+    srcs = ["crawler_test.cpp"],
+    deps = ["//crawler:crawler_lib"],
+)
