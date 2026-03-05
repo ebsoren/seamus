@@ -10,6 +10,12 @@ cc_library(
         "network_util.h",
         "crawler_worker.h",
     ],
+    copts = ["-I/opt/homebrew/opt/openssl@3/include"],
+    linkopts = [                                                        # todo(hershey): add proper linkopts when we build for linux
+        "-L/opt/homebrew/opt/openssl@3/lib",
+        "-lssl",
+        "-lcrypto",
+    ],
     deps = ["//lib:consts", "//lib:vector", "//lib:deque", "//lib:string", "//lib:utils", "//lib:rpc_listener", "//lib:rpc_crawler"],
     visibility = ["//visibility:public"],
 )

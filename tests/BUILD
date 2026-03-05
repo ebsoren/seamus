@@ -124,3 +124,9 @@ cc_test(
     srcs = ["http_benchmark.cpp"],
     deps = ["//crawler:crawler_lib"],
 )
+
+cc_test(
+    name = "https_benchmark",
+    srcs = ["https_benchmark.cpp"],
+    deps = ["//crawler:crawler_lib"],
+)
