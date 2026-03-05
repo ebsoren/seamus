@@ -11,6 +11,6 @@ cc_binary(
         "network_util.h",
         "crawler_worker.h",
     ],
-    deps = ["//lib:consts", "//lib:vector", "//lib:deque", "//lib:string", "//lib:utils"],
+    deps = ["//lib:consts", "//lib:vector", "//lib:deque", "//lib:string", "//lib:utils", "//lib:rpc_listener", "//lib:rpc_crawler"],
     visibility = ["//visibility:public"],
 )

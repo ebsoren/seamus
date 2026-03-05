@@ -1,20 +1,11 @@
 #pragma once
 
 #include "../lib/deque.h"
-#include "../lib/string.h"
+#include "../lib/rpc_crawler.h"
 #include "../lib/consts.h"
 #include <mutex>
 #include <chrono>
 #include <cstdint>
-
-
-// Encapsulation of data that we track as we crawl
-struct CrawlTarget {
-    string domain;          // Just the domain (stripped from full URL and free of `http://www` or `https://www.`
-    string url;             // Entire URL
-    uint16_t seed_distance; // URL hops from seed list
-    uint16_t domain_dist;   // Domain hops from seed list
-};
 
 
 class DomainCarousel {

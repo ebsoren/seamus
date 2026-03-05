@@ -109,3 +109,10 @@ cc_library(
     visibility = ["//visibility:public"],
     deps = [":thread_pool"],
 )
+
+cc_library(
+    name = "rpc_crawler",
+    hdrs = ["rpc_crawler.h"],
+    visibility = ["//visibility:public"],
+    deps = [":string", ":vector", ":rpc_common"],
+)
