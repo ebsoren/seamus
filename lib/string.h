@@ -30,11 +30,11 @@ public:
         return string_view{data_ + start, length};
     }
 
-    [[nodiscard]] size_t size() const {
+    [[nodiscard]] size_t size() const noexcept{
         return len;
     }
 
-    const char& operator[](const size_t i) const {
+    const char& operator[](const size_t i) const noexcept {
         assert(i < len);
         return data_[i];
     }
@@ -49,20 +49,16 @@ public:
         return memcmp(data_, other.data_, len) == 0;
     }
 
-    friend bool operator==(const string_view& lhs, const char* rhs) {
+    bool operator==(const char* rhs) const {
         if (rhs == nullptr) return false;
 
         const size_t rhs_len = strlen(rhs);
 
-        if (lhs.size() != rhs_len) return false;
+        if (size() != rhs_len) return false;
 
-        if (lhs.data() == rhs) return true;
+        if (data() == rhs) return true;
 
-        return memcmp(lhs.data(), rhs, rhs_len) == 0;
-    }
-
-    friend bool operator==(const char* lhs, const string_view& rhs) {
-        return rhs == lhs;
+        return memcmp(data(), rhs, rhs_len) == 0;
     }
 
     [[nodiscard]] bool ends_with(const auto& other) const {
@@ -83,7 +79,7 @@ public:
         if (size() < suffix_len) return false;
 
         // &(*this)[offset] safely gets the pointer for both string and view
-        return std::memcmp(&(*this)[size() - suffix_len], suffix, suffix_len) == 0;
+        return memcmp(&(*this)[size() - suffix_len], suffix, suffix_len) == 0;
     }
 };
 
@@ -109,7 +105,7 @@ private:
     } state;
 
     // To determine short or long state
-    [[nodiscard]] bool is_short() const {
+    [[nodiscard]] bool is_short() const noexcept{
         return state.s.flag_and_size & FLAG_MASK;
     }
 
@@ -139,7 +135,7 @@ private:
     }
 
 public:
-    explicit string (const char *c_str) : string{c_str, strlen(c_str)} {}
+    explicit string (const char *c_str) : string{c_str, (assert(c_str!= nullptr), strlen(c_str))} {}
 
     template<size_t N>
     explicit string(const char (&c_str)[N]) : string{c_str, N - 1} {}
@@ -213,7 +209,7 @@ public:
     }
 
 
-    [[nodiscard]] size_t size() const {
+    [[nodiscard]] size_t size() const noexcept{
         //Remove flag bit
         if (is_short()) [[likely]]{
             return static_cast<size_t>(state.s.flag_and_size >> 1);
@@ -222,7 +218,7 @@ public:
     }
 
 
-    const char& operator[](const size_t i) const {
+    const char& operator[](const size_t i) const noexcept {
         assert(i < size());
         if (is_short()) [[likely]]{
             return state.s.data[i];
@@ -329,8 +325,11 @@ public:
         }
     }
 
-    friend bool operator==(const char* lhs, const string& rhs) {
-        return rhs == lhs;
+    bool operator==(const string_view& rhs) const {
+        if (size() != rhs.size()) return false;
+
+        if (rhs.data() == data()) return true;
+        return memcmp(data(), rhs.data(), size()) == 0;
     }
 };
 
@@ -349,24 +348,22 @@ inline string string_view::to_string() const {
     return string(data(), len);
 }
 
-
-inline bool operator==(const string& lhs, const string_view& rhs) {
-    if (lhs.size() != rhs.size()) return false;
-
-    if (rhs.data() == lhs.data()) return true;
-    return memcmp(lhs.data(), rhs.data(), lhs.size()) == 0;
-}
-
-
 inline bool operator==(const string_view& lhs, const string& rhs) {
     return rhs == lhs;
 }
 
+inline bool operator==(const char* lhs, const string_view& rhs) {
+    return rhs == lhs;
+}
 
-char* write_to(char* buffer, auto str) {
+inline bool operator==(const char* lhs, const string& rhs) {
+    return rhs == lhs;
+}
+
+inline char* write_to(char* buffer, const auto& str) {
     assert(buffer != nullptr);
-    assert(str != nullptr);
-    memcpy(buffer, str.data(), str.size());
-    buffer[str.size()] = '\0';
-    return buffer+str.size()+1;
+    size_t len = str.size();
+    memcpy(buffer, str.data(), len);
+    buffer[len] = '\0';
+    return buffer+len+1;
 }
