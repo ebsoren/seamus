@@ -20,6 +20,10 @@ public:
     // Incoming BatchCrawlTargetRequests are deserialized and each target is pushed into the appropriate priority bucket.
     void start() {
         std::thread t([this]() {
+
+            // We are defining the handler for the listener loop in this lambda
+            // The lambda continuously receives batch crawl target requests and populates the priority buckets accordingly
+            // When listener.stop() is called, the entire thread `t` safely exits
             listener.listener_loop([this](int fd) {
                 auto batch = recv_batch_crawl_target_request(fd);
                 close(fd);
