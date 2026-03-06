@@ -26,3 +26,15 @@ cc_binary(
     deps = [":crawler_lib"],
     visibility = ["//visibility:public"],
 )
+
+cc_library(
+    name = "domain_carousel",
+    srcs = ["domain_carousel.h"],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//lib:consts",
+        "//lib:deque",
+        "//lib:string",
+        "//lib:utils",
+    ],
+)

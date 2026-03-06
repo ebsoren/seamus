@@ -9,19 +9,28 @@ cc_test(
 cc_test(
     name = "raii_test",
     srcs = ["raii_test.cpp"],
-    deps = ["//lib:mutex", "//lib:lock_guard"],
+    deps = [
+        "//lib:lock_guard",
+        "//lib:mutex",
+    ],
 )
 
 cc_test(
     name = "condition_variable_test",
     srcs = ["condition_variable_test.cpp"],
-    deps = ["//lib:mutex", "//lib:condition_variable"],
+    deps = [
+        "//lib:condition_variable",
+        "//lib:mutex",
+    ],
 )
 
 cc_test(
     name = "lock_guard_test",
     srcs = ["lock_guard_test.cpp"],
-    deps = ["//lib:mutex", "//lib:lock_guard"],
+    deps = [
+        "//lib:lock_guard",
+        "//lib:mutex",
+    ],
 )
 
 cc_test(
@@ -40,12 +49,12 @@ cc_test(
     name = "frontier_test",
     srcs = ["frontier_test.cpp"],
     deps = [
-        "//lib:vector",
+        "//frontier:Frontier",
+        "//lib:priority_queue",
         "//lib:string",
         "//lib:unordered_map",
-        "//lib:priority_queue",
         "//lib:utils",
-        "//frontier:Frontier",
+        "//lib:vector",
     ],
 )
 
@@ -76,7 +85,11 @@ cc_test(
 cc_test(
     name = "unordered_map_test",
     srcs = ["unordered_map_test.cpp"],
-    deps = ["//lib:unordered_map", "//lib:utils", "//lib:vector"],
+    deps = [
+        "//lib:unordered_map",
+        "//lib:utils",
+        "//lib:vector",
+    ],
 )
 
 cc_test(
@@ -98,7 +111,10 @@ cc_test(
 cc_test(
     name = "utils_test",
     srcs = ["utils_test.cpp"],
-    deps = ["//lib:utils", "//lib:consts"],
+    deps = [
+        "//lib:consts",
+        "//lib:utils",
+    ],
 )
 
 cc_test(
@@ -110,7 +126,13 @@ cc_test(
 cc_test(
     name = "rpc_test",
     srcs = ["rpc_test.cpp"],
-    deps = ["//lib:rpc_common", "//lib:rpc_listener", "//lib:rpc_urlstore", "//lib:rpc_crawler", "//lib:vector"],
+    deps = [
+        "//lib:rpc_common",
+        "//lib:rpc_crawler",
+        "//lib:rpc_listener",
+        "//lib:rpc_urlstore",
+        "//lib:vector",
+    ],
 )
 
 cc_test(
@@ -129,4 +151,13 @@ cc_test(
     name = "https_benchmark",
     srcs = ["https_benchmark.cpp"],
     deps = ["//crawler:crawler_lib"],
+)
+
+cc_test(
+    name = "domaain_carousel_test",
+    srcs = ["domain_carousel_test.cpp"],
+    deps = [
+        "//crawler:domain_carousel",
+        "//lib:string",
+    ],
 )
