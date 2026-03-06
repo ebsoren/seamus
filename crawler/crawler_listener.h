@@ -17,8 +17,7 @@ public:
 
 
     // Start the listener loop in a detached thread.
-    // Incoming BatchCrawlTargetRequests are deserialized and each target
-    // is pushed into the appropriate priority bucket.
+    // Incoming BatchCrawlTargetRequests are deserialized and each target is pushed into the appropriate priority bucket.
     void start() {
         std::thread t([this]() {
             listener.listener_loop([this](int fd) {

@@ -101,10 +101,79 @@ void test_push_target_fill_and_overflow() {
 }
 
 
+void test_feed_carousel_concurrent() {
+    printf("---- test_feed_carousel_concurrent ----\n");
+
+    DomainCarousel dc;
+
+    // Populate two different priority buckets with targets
+    // Bucket 0 (highest priority) gets 10 targets, bucket 1 gets 10 targets
+    {
+        std::lock_guard<std::mutex> lock0(dc.buckets[0].bucket_lock);
+        for (size_t i = 0; i < 10; ++i) {
+            char url_buf[64];
+            snprintf(url_buf, sizeof(url_buf), "https://alpha.com/%zu", i);
+            dc.buckets[0].urls.push_back(CrawlTarget{string("alpha.com"), string(url_buf, strlen(url_buf)), 0, 0});
+        }
+    }
+    {
+        std::lock_guard<std::mutex> lock1(dc.buckets[1].bucket_lock);
+        for (size_t i = 0; i < 10; ++i) {
+            char url_buf[64];
+            snprintf(url_buf, sizeof(url_buf), "https://beta.com/%zu", i);
+            dc.buckets[1].urls.push_back(CrawlTarget{string("beta.com"), string(url_buf, strlen(url_buf)), 0, 0});
+        }
+    }
+
+    // Call feed_carousel concurrently from two threads
+    int16_t result1 = -1, result2 = -1;
+    std::thread t1([&]() { result1 = dc.feed_carousel(); });
+    std::thread t2([&]() { result2 = dc.feed_carousel(); });
+    t1.join();
+    t2.join();
+
+    // Both buckets should be fully drained
+    assert(dc.buckets[0].urls.size() == 0);
+    assert(dc.buckets[1].urls.size() == 0);
+
+    // At least one thread must have found a non-empty bucket
+    assert(result1 >= 0 || result2 >= 0);
+
+    // Count total targets across all carousel slots
+    size_t total = 0;
+    for (size_t i = 0; i < CRAWLER_CAROUSEL_SIZE; ++i) {
+        total += dc.carousel[i].targets.size();
+    }
+    assert(total == 20);
+
+    printf("PASS\n");
+}
+
+
+void test_feed_carousel_empty() {
+    printf("---- test_feed_carousel_empty ----\n");
+
+    DomainCarousel dc;
+
+    // All buckets are empty, should return -1
+    int16_t result = dc.feed_carousel();
+    assert(result == -1);
+
+    // Carousel should still be empty
+    for (size_t i = 0; i < CRAWLER_CAROUSEL_SIZE; ++i) {
+        assert(dc.carousel[i].targets.size() == 0);
+    }
+
+    printf("PASS\n");
+}
+
+
 int main() {
     printf("\n===== RUNNING CRAWLER TESTS =====\n\n");
     test_crawler_listener_receives_batch();
     test_push_target_fill_and_overflow();
+    test_feed_carousel_concurrent();
+    test_feed_carousel_empty();
     printf("\n===== ALL CRAWLER TESTS PASSED =====\n");
     return 0;
 }

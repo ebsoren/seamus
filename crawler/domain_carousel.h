@@ -58,4 +58,24 @@ public:
         carousel[domain_index].targets.push_back(std::move(target));
         return true;
     }
+
+
+    // Util function to feed the carousel with the highest priority bucket that is populated
+    // Returns the priority level of the bucket that was emptied into the carousel, -1 on error/all buckets being empty
+    int16_t feed_carousel() {
+        for (size_t plevel = 0; plevel < PRIORITY_BUCKETS; ++plevel) {
+            {
+                std::lock_guard<std::mutex> lock(buckets[plevel].bucket_lock);
+                if (buckets[plevel].urls.size() > 0) {
+                    while (buckets[plevel].urls.size() > 0) {
+                        push_target(std::move(buckets[plevel].urls.front()));
+                        buckets[plevel].urls.pop_front();
+                    }
+                    return static_cast<int16_t>(plevel);
+                }
+            }
+        }
+
+        return -1;
+    }
 };
