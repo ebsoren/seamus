@@ -3,6 +3,7 @@
 #include "../lib/deque.h"
 #include "../lib/rpc_crawler.h"
 #include "../lib/consts.h"
+#include "../lib/consts.h"
 #include <mutex>
 #include <chrono>
 #include <cstdint>
@@ -42,5 +43,19 @@ public:
         }
 
         return hash;
+    }
+
+
+    // Push crawl target to appropriate slot in carousel
+    // Return bool result representing success, lock guard on the respective queue and ensure pushing the target will not exceed size
+    bool push_target(CrawlTarget&& target) {
+        const size_t domain_index = hash_domain(target.domain) % CRAWLER_CAROUSEL_SIZE;
+        std::lock_guard<std::mutex> lock(carousel[domain_index].domain_queue_lock);    
+        if (carousel[domain_index].targets.size() >= CRAWLER_MAX_QUEUE_SIZE) {
+            return false;
+        }
+
+        carousel[domain_index].targets.push_back(std::move(target));
+        return true;
     }
 };
