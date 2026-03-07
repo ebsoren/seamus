@@ -22,6 +22,7 @@ public:
     std::mutex backoff_lock;
     deque<BackoffEntry> backoff_queue;
 
+
     BucketManager(vector<string> bucket_files_in) : bucket_files(static_cast<vector<string>&&>(bucket_files_in)) {
         assert(bucket_files.size() == PRIORITY_BUCKETS);
     }
@@ -34,13 +35,36 @@ public:
         return 0;
     }
 
+
+    // Sequentially spawns detached bucket manager routines (below)
+    // Sleep 500ms between starting each routine:
+    //      1) Load disk buckets into in-memory buckets
+    //      2) Feed carousel
+    //      3) Persist carousel
+    void start() {
+
+    }
+
+
+    // Destructor
+    ~BucketManager() {
+
+    }
+
+
+    // todo(hershey): write a detached, long-lived routine to feed the carousel from the buckets (using feed_carousel() as a util function)
+    // This 1) tries to move crawl targets from priority buckets into the carousel and 2) tries to move crawl targets from the backoff queue into the carousel
+    void feed_carousel_worker() {
+        
+    }
+
+
     // todo(hershey): write helper to load disk buckets into in-memory buckets
     // This should run ad-hoc as needed if in-memory buckets are empty
 
+
     // todo(hershey): write helper to persist in-memory buckets into disk buckets
     // This should run in a detached thread on an interval (PERSIST_INTERVAL_SEC in consts.h)
-
-    // todo(hershey): write a detached thread routine to feed the carousel from the buckets (using feed_carousel() as a util function)
 
 
 private:

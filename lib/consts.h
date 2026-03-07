@@ -32,8 +32,9 @@ constexpr size_t CRAWLER_MAX_QUEUE_SIZE = 32;
 static_assert(CRAWLER_CAROUSEL_SIZE % CRAWLER_THREADPOOL_SIZE == 0, "[consts.h]: CRAWLER_CAROUSEL_SIZE must be a multiple of CRAWLER_THREADPOOL_SIZE");
 static_assert(CRAWLER_CAROUSEL_SIZE >= CRAWLER_THREADPOOL_SIZE, "[consts.h]: CRAWLER_THREADPOOL_SIZE cannot be greater than CRAWLER_CAROUSEL_SIZE");
 
-constexpr size_t CRAWLER_BACKOFF_TIME_SEC = 2;
-constexpr size_t PERSIST_INTERVAL_SEC = 60;
+constexpr size_t CRAWLER_BACKOFF_SEC = 2;           // Time (seconds) to wait between sending GET requests to URLs within the same domain carousel slot
+constexpr size_t PERSIST_INTERVAL_SEC = 60;         // Time (seconds) to wait between persists of in-memory priority buckets -> disk priority bucket files
+constexpr size_t FEED_INTERVAL_SEC = 1;             // Time (seconds) to wait between feeding in-memory priority buckets -> domain carousel
 
 constexpr size_t PRIORITY_BUCKETS = 8;
 inline vector<string> get_frontier_bucket_files() {

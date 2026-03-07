@@ -10,6 +10,10 @@ int main() {
     logger::info("Crawler started...");
 
     // Initialize crawler components/modules
+    // Domain carousel
+    DomainCarousel dc;
+    logger::info("Domain carousel initialized (%zu hash slots, max %zu per queue)", CRAWLER_CAROUSEL_SIZE, CRAWLER_MAX_QUEUE_SIZE);
+
     // Bucket manager
     vector<string> bucket_files = get_frontier_bucket_files();
     logger::info("Initialized %zu bucket files:", bucket_files.size());
@@ -17,10 +21,6 @@ int main() {
         logger::info("  bucket[%zu] = %.*s", i, static_cast<int>(bucket_files[i].size()), bucket_files[i].data());
     }
     BucketManager bm(static_cast<vector<string>&&>(bucket_files));
-
-    // Domain carousel
-    DomainCarousel dc;
-    logger::info("Domain carousel initialized (%zu hash slots, max %zu per queue)", CRAWLER_CAROUSEL_SIZE, CRAWLER_MAX_QUEUE_SIZE);
 
     // Crawler listener
     CrawlerListener cl(&bm, &dc);
