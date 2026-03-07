@@ -93,6 +93,16 @@ cc_test(
 )
 
 cc_test(
+    name = "unordered_map_benchmark",
+    srcs = ["unordered_map_benchmark.cpp"],
+    deps = [
+        "//lib:unordered_map",
+        "//lib:utils",
+        "//lib:vector",
+    ],
+)
+
+cc_test(
     name = "string_test",
     srcs = ["string_test.cpp"],
     copts = ["-fsanitize=address"],
