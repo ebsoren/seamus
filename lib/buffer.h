@@ -9,6 +9,8 @@
 
 #include <sys/socket.h>
 
+#include "io.h"
+
 class buffer {
 public:
     // Can change later - this is 32KB
@@ -45,19 +47,14 @@ public:
     void clear() { size_ = 0; }
     void set_size(size_t n) { size_ = n; }
 
-    // Read up to CAPACITY bytes into the buffer. Returns 1 on successful read,
+    // Read up to CAPACITY bytes into the buffer. Returns read bytes on successful read,
     // 0 on empty read, and -1 on error
-    int8_t read(int fd) {
-        uint32_t bytes_read = 0;
-        ssize_t bytes_in = 0;
-        while ((bytes_in = recv(fd, data_ + bytes_read, CAPACITY - bytes_read, 0)) > 0) {
-            bytes_read += bytes_in;
-        }
-
+    ssize_t read(int fd) {
+        ssize_t bytes_read = seamus_read(fd, data_, CAPACITY);
+        close(fd);
+        if (bytes_read <= 0) return bytes_read;
         size_ = bytes_read;
-        if (bytes_in < 0) return -1;
-        if (bytes_read == 0) return 0;
-        return 1;
+        return bytes_read;
     }
 
     // Write contents to disk and reset buffer
@@ -65,18 +62,9 @@ public:
         int fd = open(filepath, O_WRONLY | O_CREAT | O_APPEND, 0644);
         if (fd == -1)
             throw std::runtime_error("buffer::write_to_disk: failed to open file");
-
-        size_t written = 0;
-        while (written < size_) {
-            ssize_t w = write(fd, data_ + written, size_ - written);
-            if (w == -1) {
-                close(fd);
-                throw std::runtime_error("buffer::write_to_disk: write failed");
-            }
-            written += w;
-        }
-        close(fd);
+        seamus_write(fd, data_, size_);
         size_ = 0;
+        close(fd);
     }
 
 private:
