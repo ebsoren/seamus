@@ -99,7 +99,7 @@ private:
         } l;
         struct {
             unsigned char flag_and_size; // least significant bit = flag, upper 7 = str size
-            char data[MAX_SHORT_LENGTH + 1]; // 14 bits short string length + 1 null terminator
+            char data[MAX_SHORT_LENGTH + 1]; // 14 bytes short string length + 1 null terminator
         } s;
     } state;
 
