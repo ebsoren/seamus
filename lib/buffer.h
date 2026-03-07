@@ -11,7 +11,6 @@
 
 #include "io.h"
 
-// Specific for parsing, just handles read and write nicely.
 class buffer {
 public:
     // Can change later - this is 32KB
