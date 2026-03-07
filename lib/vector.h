@@ -93,7 +93,7 @@ public:
     // REQUIRES: Nothing
     // MODIFIES: *this, leaves other in a default constructed state
     // EFFECTS: Takes the data from other into a newly constructed vector
-    vector(vector<T> &&other) {
+    vector(vector<T> &&other) noexcept {
         alloc_region = other.alloc_region;
         alloc_capacity = other.alloc_capacity;
         vec_size = other.vec_size;
@@ -108,7 +108,7 @@ public:
     // REQUIRES: Nothing
     // MODIFIES: *this, leaves otherin a default constructed state
     // EFFECTS: Takes the data from other in constant time
-    vector& operator=(vector<T> &&other) {
+    vector& operator=(vector<T> &&other) noexcept {
         if (this == &other) return *this;
         for (size_t i = 0; i < vec_size; ++i) alloc_region[i].~T();
         if (alloc_capacity > 0) ::operator delete(alloc_region);
@@ -143,7 +143,7 @@ public:
     // REQUIRES: Nothing
     // MODIFIES: Nothing
     // EFFECTS: Returns the number of elements in the vector
-    size_t size() const { return vec_size; }
+    [[nodiscard]] size_t size() const noexcept { return vec_size; }
 
 
     // Front Function
@@ -170,7 +170,7 @@ public:
     // REQUIRES: Nothing
     // MODIFIES: Nothing
     // EFFECTS: Nothing
-    bool empty() const {
+    [[nodiscard]] bool empty() const noexcept {
         return vec_size == 0;
     }
 
@@ -178,19 +178,19 @@ public:
     // REQUIRES: Nothing
     // MODIFIES: Nothing
     // EFFECTS: Returns the maximum size the vector can attain before resizing
-    size_t capacity() const { return alloc_capacity; }
+    [[nodiscard]] size_t capacity() const noexcept { return alloc_capacity; }
 
 
     // REQUIRES: 0 <= i < size( )
     // MODIFIES: Allows modification of data[i]
     // EFFECTS: Returns a mutable reference to the i'th element
-    T &operator[](size_t i) { return alloc_region[i]; }
+    T &operator[](size_t i) noexcept { return alloc_region[i]; }
 
 
     // REQUIRES: 0 <= i < size( )
     // MODIFIES: Nothing
     // EFFECTS: Get a const reference to the ith element
-    const T &operator[](size_t i) const { return alloc_region[i]; }
+    const T &operator[](size_t i) const noexcept { return alloc_region[i]; }
 
 
     // REQUIRES: Nothing

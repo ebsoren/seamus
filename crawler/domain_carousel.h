@@ -7,6 +7,7 @@
 #include "lib/deque.h"
 #include "lib/string.h"
 #include "lib/utils.h"
+#include "lib/unordered_map.h"
 #include <chrono>
 #include <mutex>
 #include <thread>
@@ -52,6 +53,10 @@ private:
         }
 
         return hash;
+    }
+
+    void test() {
+        auto m = unordered_map<int, string>();
     }
 
 
