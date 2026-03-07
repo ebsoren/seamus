@@ -4,11 +4,11 @@
 #include <cstdint>
 #include <stdexcept>
 
+#include <errno.h>
 #include <fcntl.h>
 #include <unistd.h>
 
 #include <sys/socket.h>
-#include <errno.h>
 
 // Define standard read/write operations to and from file descriptors.
 
