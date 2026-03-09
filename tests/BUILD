@@ -159,3 +159,12 @@ cc_test(
         "//lib:string",
     ],
 )
+
+cc_test(
+    name = "url_store_test",
+    srcs = ["url_store_test.cpp"],
+    deps = [
+        "//lib:consts",
+        "//lib:utils",
+    ],
+)

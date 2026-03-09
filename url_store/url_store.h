@@ -38,7 +38,6 @@ public:
 
     uint32_t findAnchorId(const string& anchor_text);
 
-
     vector<UserAnchorData> getUrlAnchorInfo(const string& url) {
         const UrlData* it = findUrlData(url);
         if (it == nullptr) return {};
