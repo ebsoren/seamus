@@ -20,10 +20,6 @@ bool binary_search(It first, It last, T& value) {
     return false;
 }
 
-inline void radix_sort(vector<string> &vec) {
-    radix_sort(vec, 0, vec.size() - 1, 0);
-}
-
 void radix_sort(vector<string> &vec, size_t l, size_t h, size_t idx) {
     if (h <= l) return;
 
@@ -52,6 +48,10 @@ void radix_sort(vector<string> &vec, size_t l, size_t h, size_t idx) {
     radix_sort(vec, l, lt - 1, idx);
     radix_sort(vec, lt, gt, idx + 1); // This one is sorted by the next character
     radix_sort(vec, gt + 1, h, idx);
+}
+
+inline void radix_sort(vector<string> &vec) {
+    radix_sort(vec, 0, vec.size() - 1, 0);
 }
 
 template <class T>
