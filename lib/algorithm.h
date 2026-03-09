@@ -53,3 +53,17 @@ void radix_sort(vector<string> &vec, size_t l, size_t h, size_t idx) {
     radix_sort(vec, lt, gt, idx + 1); // This one is sorted by the next character
     radix_sort(vec, gt + 1, h, idx);
 }
+
+template <class T>
+constexpr const T& min(const T& a, const T& b) {
+    // If b is strictly less than a, return b.
+    // Otherwise, return a. 
+    return (b < a) ? b : a;
+}
+
+template <class T>
+constexpr const T& max(const T& a, const T& b) {
+    // If b is strictly greater than a, return b.
+    // Otherwise, return a. 
+    return (b > a) ? b : a;
+}
