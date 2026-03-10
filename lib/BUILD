@@ -77,6 +77,13 @@ cc_library(
 )
 
 cc_library(
+    name = "utf8",
+    hdrs = ["utf8.h"],
+    visibility = ["//visibility:public"],
+    deps = []
+)
+
+cc_library(
     name = "utils",
     hdrs = ["utils.h"],
     visibility = ["//visibility:public"],

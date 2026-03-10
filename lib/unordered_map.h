@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cassert>
+#include <cstdint>
 #include <iomanip>
 #include <bit>
 #include <stdexcept>
@@ -179,6 +180,11 @@ public:
         }
 
         return nullptr;
+    }
+
+    bool contains(const Key& key) const {
+        const size_t index = find_index(key);
+        return states[index] == State::FILLED;
     }
 
     // INITIAL SIZE NEEDS TO BE A POWER OF 2!!!

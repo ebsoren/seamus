@@ -152,6 +152,24 @@ void test_reserve() {
     assert(map[1] == 100);
 }
 
+void test_contains() {
+    unordered_map<int, int> map;
+    map.insert(1, 1);
+    map.insert(0, 2);
+    map[-1] = 3;
+
+    assert(map.contains(1));
+    assert(map.contains(0));
+    assert(map.contains(-1));
+    assert(!map.contains(2));
+
+    map.erase(0);
+    map.erase(-1);
+    assert(!map.contains(0));
+    assert(!map.contains(-1));
+    assert(map.contains(1));
+}
+
 int main() {
     test_empty_map();
     test_single_insert_and_find();
@@ -165,6 +183,7 @@ int main() {
     test_iterators();
     test_complex_types_memory_safety();
     test_reserve();
+    test_contains();
 
     std::cout << "All unordered_map tests passed!\n";
     return 0;

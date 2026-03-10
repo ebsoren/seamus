@@ -5,13 +5,14 @@
 #include "lib/utf8.h"
 #include "lib/utils.h"
 
-void init_index() {
+IndexChunk init_index() {
     // Find the latest chunk ID
     if (chunk == 0) {
         while (file_exists(string::join("index_chunk_", string(WORKER_NUMBER), "_", string(chunk), ".txt"))) chunk++;
     }
 
     IndexChunk index;
+    return index;
 }
 
 void IndexChunk::persist() {
@@ -177,7 +178,7 @@ void IndexChunk::persist() {
         Utf8 loc_buff[MAX_UTF8_LEN];
         doc_buff[0] = 0; // Set first bit of doc_buff to be the flag
 
-        // For each word occurrence: <varlen DOC ID/OFFSET><varlen LOC ID/OFFSET>
+        // For each word occurrence: (IF NEW DOC <0b0||varlen DOC OFFSET>)<varlen LOC ID/OFFSET>
         // Because we're doing UTF 8, no delimiters
         for (post p : index[alphabetized_entries[i]].posts) {
             // Only write the doc offset if it's a new document, in which case write the offset after the flag
@@ -219,16 +220,14 @@ vector<string> IndexChunk::sort_entries() {
 
 bool IndexChunk::add_page(const string &path) {
     FILE* fd = fopen(path.data(), "r");
-
-    // TODO: This exact formatting has to be decided on and changed
-    // The HTML parser from HW outputs the words in an HTML page, but that's silly compared to a text file
-    // Assuming some header for title, body, and anchor sections
     
+    // Set of words already encountered in the document to track number of documents word appears in
+    unordered_map<string, bool> word_set;
     char buff[4096];
 
     // Check title header
     fgets(buff, sizeof(buff), fd);
-    if (strcmp(buff, "title")) {
+    if (strcmp(buff, "<title>")) {
         perror("Expected title header missing.\n");
     }
 
@@ -237,21 +236,22 @@ bool IndexChunk::add_page(const string &path) {
 
     // Start a counter for word locations
     uint32_t loc = 0;
+    uint32_t title_end = 0;
 
-    // TODO: Read all words in title
+    // Parse title and body words
     while(fgets(buff, sizeof(buff), fd)) {
+        if (!strcmp(buff, "<\\title>")) {
+            // Title section is over, mark it
+            title_end = loc; // Title end is inclusive
+        } else {
+            // TODO: I believe these all have \n at the end -- have to remove that
+            string word = string(buff, strlen(buff));
+            if (!word_set[word]) {
+                word_set[word] = true;
+                index[word].n_docs++;
+            }
 
-        // TODO: When new line is hit, title section is over
-    }
-
-    // Check body header
-    fgets(buff, sizeof(buff), fd);
-    if (strcmp(buff, "body")) {
-        perror("Expected body header missing.\n");
-    }
-
-    // TODO: Parse body words
-    while(fgets(buff, sizeof(buff), fd)) {
-        // Discussin w aiden on how string lib supports this
+            index[word].posts.push_back({curr_doc_, ++loc});
+        }
     }
 }
