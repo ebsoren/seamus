@@ -51,20 +51,27 @@ struct DefaultHash {
 
 template<>
 struct DefaultHash<string> {
-    size_t operator()(const string& s) const {
+    static size_t hash(const char* data, size_t size) {
         size_t h = 14695981039346656037ULL;
-        for (size_t i = 0; i < s.size(); ++i) {
-            h ^= (unsigned char)s[i];
+        for (size_t i = 0; i < size; ++i) {
+            h ^= static_cast<unsigned char>(data[i]);
             h *= 1099511628211ULL;
         }
         return h;
     }
+
+    size_t operator()(const string& s) const {
+        return hash(s.data(), s.size());
+    }
+
+    size_t operator()(const string_view& sv) const {
+        return hash(sv.data(), sv.size());
+    }
 };
 
 
-template<typename T>
 struct DefaultEq {
-    bool operator()(const T& a, const T& b) const {
+    bool operator()(const auto& a, const auto& b) const {
         return a == b;
     }
 };
@@ -74,7 +81,7 @@ template<
     typename Key,
     typename Value,
     typename Hash = DefaultHash<Key>,
-    typename Eq   = DefaultEq<Key>
+    typename Eq   = DefaultEq
 > class unordered_map {
 private:
 
@@ -140,7 +147,8 @@ private:
 
 
     // Finds the key in the table or an empty index
-    size_t find_index(const Key& key) const {
+    template <typename K>
+    size_t find_index(const K& key) const {
         size_t index = hash(key) & (map_capacity - 1);
         const size_t start = index;
         size_t first_deleted = map_capacity;
@@ -169,17 +177,6 @@ private:
     }
 
 public:
-    // an off-by-1 getter method that exists for const class methods/read-only access to map
-    // todo(charlie): might migrate this into a constIterator class later
-    const Value* get(const Key& key) const {
-        const size_t index = find_index(key);
-
-        if(states[index] == State::FILLED) {
-            return &values[index];
-        }
-
-        return nullptr;
-    }
 
     // INITIAL SIZE NEEDS TO BE A POWER OF 2!!!
     unordered_map(size_t capacity = 2048, double loading_factor = 0.65)
@@ -198,22 +195,38 @@ public:
         ::operator delete(values);
     }
 
-    void insert(const Key& key, const Value& value) {
+    template<typename K, typename V>
+    void insert(K&& key, V&& value) {
         rehash(loading_factor);
 
         const size_t index = find_index(key);
 
         if(states[index] == State::FILLED) {
-            values[index] = value;
+            values[index] = static_cast<V&&>(value);
         } else {
             states[index] = State::FILLED;
-            new (keys + index) Key(key);
-            new (values + index) Value(value);
+            new (keys + index) Key(static_cast<K&&>(key));
+            new (values + index) Value(static_cast<V&&>(value));
             uniqueKeys++;
         }
     }
 
+
     bool erase(const Key& key) {
+        const size_t index = find_index(key);
+        if (states[index] == State::FILLED) {
+            keys[index].~Key();
+            values[index].~Value();
+
+            states[index] = State::DELETED;
+            uniqueKeys--;
+            return true;
+        }
+        return false;
+    }
+
+    // Special case for removal by string_view to avoid copying
+    bool erase(const string_view& key) {
         const size_t index = find_index(key);
         if (states[index] == State::FILLED) {
             keys[index].~Key();
@@ -243,6 +256,43 @@ public:
         if(state == State::EMPTY || state == State::DELETED) {
             states[index] = State::FILLED;
             new (keys + index) Key(key);
+            new (values + index) Value{};
+            uniqueKeys++;
+            return values[index];
+        }
+
+        return values[index];
+    }
+
+    // Special case for moving a Key into the map via []
+    Value& operator[](Key&& key) {
+        rehash(loading_factor);
+
+        const size_t index = find_index(key);
+        State state = states[index];
+
+        if(state == State::EMPTY || state == State::DELETED) {
+            states[index] = State::FILLED;
+            new (keys + index) Key(::move(key));
+            new (values + index) Value{};
+            uniqueKeys++;
+            return values[index];
+        }
+
+        return values[index];
+    }
+
+    // Special case for indexing with string_view to avoid copying
+    Value& operator[](const string_view& key) {
+        rehash(loading_factor);
+
+        const size_t index = find_index(key);
+
+        State state = states[index];
+
+        if(state == State::EMPTY || state == State::DELETED) {
+            states[index] = State::FILLED;
+            new (keys + index) Key(key.to_string());
             new (values + index) Value{};
             uniqueKeys++;
             return values[index];
@@ -327,12 +377,26 @@ public:
         return Iterator(this, map_capacity);
     }
 
-    Iterator find(const Key& key) {
+    template <typename K>
+    Iterator find(const K& key) {
         const size_t index = find_index(key);
 
         if(states[index] == State::FILLED) {
             return Iterator(this, index);
         }
         return end();
+    }
+
+    // an off-by-1 getter method that exists for const class methods/read-only access to map
+    // todo(charlie): might migrate this into a constIterator class later
+    template <typename K>
+    const Value* get(const K& key) const {
+        const size_t index = find_index(key);
+
+        if(states[index] == State::FILLED) {
+            return &values[index];
+        }
+
+        return nullptr;
     }
 };
