@@ -1,6 +1,6 @@
-#include "lib/vector.h"
-#include "lib/string.h"
-#include "lib/unordered_map.h"
+#include "../lib/vector.h"
+#include "../lib/string.h"
+#include "../lib/unordered_map.h"
 
 // Note that both documents and locations are 1-indexed (so that 0 can be used as a flag)
 

@@ -24,7 +24,7 @@ void IndexChunk::persist() {
 
     // 4 bytes for each uint32_t ID, one byte for each char in string, one byte for each new line char
     uint64_t urls_bytes = urls.size() * 4;
-    for (int i = 0; i < urls.size(); i++) urls_bytes += urls[i].size() + 1;
+    for (size_t i = 0; i < urls.size(); i++) urls_bytes += urls[i].size() + 1;
 
     // Write the size of the ID->URL mapping
     // <64b SIZE>\n
@@ -43,7 +43,7 @@ void IndexChunk::persist() {
     fwrite("\n", sizeof(char), 1, fd);
 
     vector<string> alphabetized_entries = sort_entries();
-    const int N = alphabetized_entries.size();
+    const uint32_t N = alphabetized_entries.size();
 
     /**
      * FIRST PASS over postings
@@ -62,7 +62,7 @@ void IndexChunk::persist() {
     vector<vector<uint64_t>> doc_offsets(N, vector<uint64_t>(curr_doc_ + 1, UINT32_MAX));
     uint64_t internal_index_sizes[N];
 
-    for (int i = 0; i < N; i++) {
+    for (uint32_t i = 0; i < N; i++) {
         // First word starting with this letter -- add its offset to the dict lookup table
         if (alphabetized_entries[i][0] > curr_char) {
             curr_char = alphabetized_entries[i][0];
@@ -229,6 +229,7 @@ bool IndexChunk::add_page(const string &path) {
     fgets(buff, sizeof(buff), fd);
     if (strcmp(buff, "<title>")) {
         perror("Expected title header missing.\n");
+        return false;
     }
 
     // TODO: Protect this for parallelism, but have to discuss how we're distributing this
@@ -243,6 +244,7 @@ bool IndexChunk::add_page(const string &path) {
         if (!strcmp(buff, "<\\title>")) {
             // Title section is over, mark it
             title_end = loc; // Title end is inclusive
+            // TODO: How do we get title_end to the URL store?
         } else {
             // TODO: I believe these all have \n at the end -- have to remove that
             string word = string(buff, strlen(buff));
@@ -251,7 +253,9 @@ bool IndexChunk::add_page(const string &path) {
                 index[word].n_docs++;
             }
 
-            index[word].posts.push_back({curr_doc_, ++loc});
+            index[word].posts.push_back({doc, ++loc});
         }
     }
+
+    return true;
 }

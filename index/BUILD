@@ -2,9 +2,8 @@ load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library")
 
 cc_library(
     name = "index_lib",
-    hdrs = [
-        "Index.h"
-    ],
+    srcs = ["Index.cpp"],
+    hdrs = ["Index.h"],
     visibility = ["//visibility:public"],
     deps = [
         "//lib:algorithm",

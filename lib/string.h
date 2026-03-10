@@ -6,6 +6,7 @@
 
 #include <cassert>
 #include <ostream>
+#include <cstdint>
 #include <cstring>
 
 class string;
