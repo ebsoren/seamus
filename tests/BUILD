@@ -182,3 +182,11 @@ cc_test(
         "//lib:utils",
     ],
 )
+
+cc_test(
+    name = "index_test",
+    srcs = ["index_test.cpp"],
+    deps = [
+        "//index:index_lib"
+    ]
+)

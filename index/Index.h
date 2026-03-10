@@ -1,6 +1,8 @@
-#include "lib/vector.h"
-#include "lib/string.h"
-#include "lib/unordered_map.h"
+#include "../lib/vector.h"
+#include "../lib/string.h"
+#include "../lib/unordered_map.h"
+
+// Note that both documents and locations are 1-indexed (so that 0 can be used as a flag)
 
 struct post {
     uint32_t doc;
@@ -17,13 +19,12 @@ private:
     unordered_map<string, postings> index;
     vector<string> urls;
     uint32_t curr_doc_;
-    uint32_t curr_loc_;
 
     vector<string> sort_entries();
 public:
-    IndexChunk() : curr_doc_ (0), curr_loc_ (0) {}
+    IndexChunk() : curr_doc_ (1) {}
 
-    bool add_page(const string &url);
+    bool add_page(const string &path);
     void persist();
 };
 
@@ -32,4 +33,4 @@ uint32_t chunk = 0;
 // TODO: This needs to be defined globally on bootup (defining here for now)
 const uint32_t WORKER_NUMBER = 0;
 
-void init_index();
+IndexChunk init_index();
