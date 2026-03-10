@@ -1,12 +1,10 @@
 #pragma once
 
-#include "vector.h"
-#include "utils.h"
-
 #include <cassert>
-#include <iostream>
 #include <iomanip>
-#include <cstdint>
+#include <bit>
+#include <stdexcept>
+#include "lib/utils.h"
 
 // int next_prime(uint64_t n) {
 //     uint64_t candidate = n + 1;
@@ -35,25 +33,13 @@ enum class State : uint8_t {
 };
 
 template< typename Key, typename Value > class Tuple {
-    public:
-        Key key;
-        Value value;
+public:
+    Key& key;
+    Value& value;
 
-        Tuple( const Key &k, const Value &v ) : key( k ), value( v ) {}
+    Tuple( Key &k, Value &v ) : key( k ), value( v ) {}
 };
 
-
-template< typename Key, typename Value > class Slot {
-    public:
-        Key key;
-        Value value;
-        State state = State::EMPTY;
-
-        Slot( const Key &k, const Value v ) : key(k), value(v) {
-            state = State::FILLED;
-        }
-        Slot() : key(), state(State::EMPTY) {}
-};
 
 // Default Hash functions and equality functors!
 template<typename T>
@@ -63,7 +49,6 @@ struct DefaultHash {
     }
 };
 
-#ifdef SEAMUS_STRING_H
 template<>
 struct DefaultHash<string> {
     size_t operator()(const string& s) const {
@@ -75,7 +60,7 @@ struct DefaultHash<string> {
         return h;
     }
 };
-#endif
+
 
 template<typename T>
 struct DefaultEq {
@@ -93,245 +78,244 @@ template<
 > class unordered_map {
 private:
 
-    vector<Slot<Key, Value>> vec_map;
-    size_t map_capacity;
-    
+    size_t uniqueKeys{};
+    size_t map_capacity = 256;
+    uint64_t collision_counter{};
+    double loading_factor;
 
     Hash hash;
     Eq compareEqual;
-    size_t uniqueKeys;
-    uint64_t collision_counter;
-    double loading_factor;
 
+    State* states;
+    Key* keys;
+    Value* values;
+    // TODO(Aiden) : add a hash cache
 
-    friend class Iterator; // WILL NEED TO EDIT THIS TO WORK WITH THIS SPECIFIC MAP!
     friend class HashBlob; // WILL NEED TO EDIT THIS TO WORK WITH THIS SPECIFIC MAP!
 
+
+    void clear() {
+        for (size_t i = 0; i < map_capacity; i++) {
+            if (states[i] == State::FILLED) {
+                keys[i].~Key();
+                values[i].~Value();
+            }
+        }
+    }
+
+    void reallocate(size_t new_cap) {
+        assert(valid_capacity(new_cap));
+
+        auto* new_states = new State[new_cap]{};
+        auto* new_keys = static_cast<Key*>(::operator new(new_cap*sizeof(Key)));
+        auto* new_values = static_cast<Value*>(::operator new(new_cap*sizeof(Value)));
+
+        collision_counter = 0;
+
+        for (size_t index = 0; index < map_capacity; index++) {
+            if(states[index] == State::FILLED) {
+                size_t new_index = hash(keys[index]) & (new_cap - 1);
+                while(new_states[new_index] == State::FILLED) {
+                    new_index = (new_index + 1) & (new_cap - 1); // linear probing
+                    collision_counter++;
+                }
+                new (new_keys + new_index) Key(::move(keys[index]));
+                new (new_values + new_index) Value(::move(values[index]));
+                new_states[new_index] = State::FILLED;
+            }
+        }
+
+        clear();
+
+        delete[] states;
+        ::operator delete(keys);
+        ::operator delete(values);
+
+        map_capacity = new_cap;
+        states = new_states;
+        keys = new_keys;
+        values = new_values;
+
+    }
+
+
+    // Finds the key in the table or an empty index
+    size_t find_index(const Key& key) const {
+        size_t index = hash(key) & (map_capacity - 1);
+        const size_t start = index;
+        size_t first_deleted = map_capacity;
+
+        do {
+            State state = states[index];
+            if (state == State::EMPTY) {
+                return (first_deleted != map_capacity) ? first_deleted : index;
+            } else if (state == State::FILLED && compareEqual(keys[index], key)) {
+                return index;
+            } else if (state == State::DELETED and first_deleted == map_capacity) {
+                first_deleted = index;
+            }
+            index = (index + 1) & (map_capacity - 1); // Linear Probing
+        } while (index != start);
+
+        if (first_deleted != map_capacity) {
+            return first_deleted;
+        }
+
+        throw std::runtime_error("Table Full");
+    }
+
+    [[nodiscard]] bool valid_capacity(const size_t capacity) const noexcept {
+        return capacity > uniqueKeys and (capacity & (capacity-1))==0;
+    }
+
 public:
+    // an off-by-1 getter method that exists for const class methods/read-only access to map
+    // todo(charlie): might migrate this into a constIterator class later
+    const Value* get(const Key& key) const {
+        const size_t index = find_index(key);
+
+        if(states[index] == State::FILLED) {
+            return &values[index];
+        }
+
+        return nullptr;
+    }
+
     // INITIAL SIZE NEEDS TO BE A POWER OF 2!!!
-    unordered_map(size_t initialSize = 2048, double loading_factor_init = 0.65)
-            : vec_map(initialSize), map_capacity(initialSize), uniqueKeys(0), collision_counter(0), loading_factor(loading_factor_init) { }
-
-    Slot< Key, Value >* find( const Key& k, const Value initialValue ) {
-        // Search for the key k and return a pointer to the
-        // ( key, value ) entry.  If the key is not already
-        // in the hash, add it with the initial value.
-
-        // YOUR CODE HERE
-        size_t index = hash(k) & (map_capacity - 1);
-        
-        size_t start = index;
-        do {
-            Slot<Key, Value>& curr_val = vec_map[index];
-            if(curr_val.state == State::EMPTY) {
-                curr_val = Slot<Key, Value>(k, initialValue);
-                uniqueKeys++;
-                return &vec_map[index];
-            } else if(curr_val.state == State::FILLED) {
-                if(compareEqual(curr_val.key, k)) {
-                    return &curr_val;
-                }
-            }
-            index = (index + 1) & (map_capacity - 1); // linear probing
-        } while(index != start);
-        throw std::runtime_error("table full");
+    unordered_map(size_t capacity = 2048, double loading_factor = 0.65)
+            : map_capacity((assert(valid_capacity(capacity)), capacity)), loading_factor(loading_factor) {
+        states = new State[capacity]{};
+        keys = static_cast<Key*>(::operator new(capacity*sizeof(Key)));
+        values = static_cast<Value*>(::operator new(capacity*sizeof(Value)));
     }
 
-    const Slot<Key, Value>* find(const Key& k) const {
-
-        size_t index = hash(k) & (map_capacity - 1);
-
-        size_t start = index;
-        do {
-            const Slot<Key, Value>& curr_val = vec_map[index];
-            if(curr_val.state == State::EMPTY) {
-                return nullptr; // replace with map.end()
-            } else if(curr_val.state == State::FILLED) {
-                if(compareEqual(curr_val.key, k)) {
-                    return &curr_val;
-                }
-            }
-            index = (index + 1) & (map_capacity - 1); // linear probing
-        } while(index != start);
-        throw std::runtime_error("table full");
+    ~unordered_map() {
+        // First call each object's destructor
+        clear();
+        // Then delete the objects
+        delete[] states;
+        ::operator delete(keys);
+        ::operator delete(values);
     }
 
-    Slot<Key, Value>* find(const Key& k) {
+    void insert(const Key& key, const Value& value) {
+        rehash(loading_factor);
 
-        size_t index = hash(k) & (map_capacity - 1);
+        const size_t index = find_index(key);
 
-        size_t start = index;
-        do {
-            const Slot<Key, Value>& curr_val = vec_map[index];
-            if(curr_val.state == State::EMPTY) {
-                return nullptr; // replace with map.end()
-            } else if(curr_val.state == State::FILLED) {
-                if(compareEqual(curr_val.key, k)) {
-                    return &curr_val;
-                }
-            }
-            index = (index + 1) & (map_capacity - 1); // linear probing
-        } while(index != start);
-        throw std::runtime_error("table full");
+        if(states[index] == State::FILLED) {
+            values[index] = value;
+        } else {
+            states[index] = State::FILLED;
+            new (keys + index) Key(key);
+            new (values + index) Value(value);
+            uniqueKeys++;
+        }
     }
 
-    void insert(const Key& k, const Value& v) {
-        size_t index = hash(k) & (map_capacity - 1);
+    bool erase(const Key& key) {
+        const size_t index = find_index(key);
+        if (states[index] == State::FILLED) {
+            keys[index].~Key();
+            values[index].~Value();
 
-        size_t start = index;
-        do {
-            Slot<Key, Value>& curr_val = vec_map[index];
-            if(vec_map[index].state == State::FILLED) {
-                if(compareEqual(k, vec_map[index].key)) {
-                    vec_map[index].value = v;
-                    return;
-                }
-            } else {
-                curr_val = Slot<Key, Value>(k, v);
-                uniqueKeys++;
-                rehash(loading_factor);
-                return;
-            }
-            index = (index + 1) & (map_capacity - 1);
-            collision_counter++;
-        } while(index != start);
-        throw std::runtime_error("table full");
+            states[index] = State::DELETED;
+            uniqueKeys--;
+            return true;
+        }
+        return false;
     }
 
-    size_t size() {
+    [[nodiscard]] size_t size() const noexcept {
         return uniqueKeys;
     }
 
-    size_t capacity() {
+    [[nodiscard]] size_t capacity() const noexcept {
         return map_capacity;
     }
 
-    Value& operator[](const Key& k) {
+    Value& operator[](const Key& key) {
         rehash(loading_factor);
         
-        size_t index = hash(k) & (map_capacity - 1);
-        size_t start = index;
-        do {
-            Slot<Key, Value>& curr_val = vec_map[index];
-            if(curr_val.state == State::EMPTY) {
-                curr_val.key = k;
-                curr_val.state = State::FILLED;
-                curr_val.value = Value{};
-                uniqueKeys++;
-                return curr_val.value;
-            } else if(curr_val.state == State::FILLED) {
-                if(compareEqual(curr_val.key, k)) {
-                    return curr_val.value;
-                }
-            }
-            index = (index + 1) & (map_capacity - 1); // linear probing
-        } while(index != start);
-        throw std::runtime_error("table full");
+        const size_t index = find_index(key);
+        State state = states[index];
+
+        if(state == State::EMPTY || state == State::DELETED) {
+            states[index] = State::FILLED;
+            new (keys + index) Key(key);
+            new (values + index) Value{};
+            uniqueKeys++;
+            return values[index];
+        }
+
+        return values[index];
     }
 
-    void rehash( double loading ) {
-        // Grow or shrink the table as appropriate once we know the loading. A
-        // goodrule of thumb is that the table size should be at least 1.5x the
-        // number of unique keys.
+    void rehash(const double loading) {
+        // Grow the table given loading
 
-        // YOUR CODE HERE
         loading_factor = loading;
 
-        bool is_overloaded = (double)uniqueKeys / map_capacity >= loading_factor;
-
-        if (is_overloaded) {
-            // grow table by x2
-            vector<Slot<Key, Value>> new_slots;
-            size_t new_cap = (map_capacity == 0 ? 256 : map_capacity * 2);
-
-            new_slots.resize(new_cap);
-            collision_counter = 0;
-            
-            for (Slot<Key, Value>& i : vec_map) {
-                if(i.state == State::FILLED) {
-                    size_t idx = hash(i.key) & (new_cap - 1);
-                    while(new_slots[idx].state == State::FILLED) {
-                        idx = (idx + 1) & (new_cap - 1); // linear probing
-                        collision_counter++;
-                    }
-                    new_slots[idx] = move(i);
-                }
-            }
-            map_capacity = new_cap;
-            vec_map = new_slots;
+        if (uniqueKeys < loading_factor * map_capacity) {
+            return;
         }
+        // grow table by x2, if zero default to 256
+        size_t new_cap = std::bit_ceil(static_cast<size_t>(uniqueKeys / loading_factor));
+        new_cap = 256 > new_cap ? 256 : new_cap;
+
+        reallocate(new_cap);
     }
-    // SET A CUSTOM SIZE FOR THE MAP TO OPTIMIZE!
-    void optimize_size( size_t new_size ) {
 
-        vector<Slot<Key, Value>> new_slots;
-        size_t new_cap = new_size;
+    // SET A CUSTOM SIZE FOR THE MAP TO OPTIMIZE CAPACITY
+    void reserve(const size_t size) {
+        assert(size >= uniqueKeys);
+        size_t new_cap = std::bit_ceil(static_cast<size_t>(size / loading_factor));
 
-        new_slots.resize(new_cap);
-        collision_counter = 0;
-        
-        for (Slot<Key, Value>& i : vec_map) {
-            if(i.state == State::FILLED) {
-                size_t idx = hash(i.key) & (new_cap - 1);
-                while(new_slots[idx].state == State::FILLED) {
-                    idx = (idx + 1) & (new_cap - 1); // linear probing
-                    collision_counter++;
-                }
-                new_slots[idx] = Slot<Key, Value>(i.key, i.value);
-            }
-        }
-        map_capacity = new_cap;
-        vec_map = new_slots;
-    } // new size must be a power of 2!!
+        reallocate(new_cap);
+    }
 
     class Iterator {
+        friend class unordered_map;
+
     private:
         unordered_map* map;
         size_t index;
 
-        void next_valid() {
-            while(index < map->map_capacity) {
-                if(map->vec_map[index].state == State::FILLED) {
-                    return;
+        [[nodiscard]] size_t next_valid() const noexcept {
+            for (size_t i = index; i < map->capacity(); i++) {
+                if(map->states[i] == State::FILLED) {
+                    return i;
                 }
-                index++;
             }
-        }
-    public:
-        Iterator(unordered_map* m, size_t i)
-            : map(m), index(i)
-        {
-            next_valid();
+            return map->capacity();
         }
 
+        Iterator(unordered_map* m, const size_t i) : map(m), index(i) {
+            index = next_valid();
+        }
+
+    public:
+        explicit Iterator(unordered_map* m) : Iterator(m, 0) {}
+
         Iterator& operator++() {
+            assert(index < map->capacity());
             ++index;
-            next_valid();
+            index = next_valid();
             return *this;
         }
 
-        const Slot<Key, Value>& operator*() {
-            return map->vec_map[index];
+        Tuple<Key, Value> operator*() const {
+            assert(index < map->capacity());
+            return {map->keys[index], map->values[index]};
         }
 
-        const Slot<Key, Value>& operator*() const {
-            return map->vec_map[index];
-        }
-
-        Slot<Key, Value>* operator->() {
-            return &map->vec_map[index];
-        }
-
-        const Slot<Key, Value>* operator->() const {
-            return &map->vec_map[index];
-        }
-
-        bool operator!=(const Iterator& other) const {
-            return index != other.index;
-        }
 
         bool operator==(const Iterator& other) const {
-            return index == other.index;
+            return index == other.index and map == other.map;
+        }
+
+        bool operator!=(const Iterator& other) const noexcept {
+            return not (*this == other);
         }
     };
 
@@ -341,5 +325,14 @@ public:
 
     Iterator end() {
         return Iterator(this, map_capacity);
+    }
+
+    Iterator find(const Key& key) {
+        const size_t index = find_index(key);
+
+        if(states[index] == State::FILLED) {
+            return Iterator(this, index);
+        }
+        return end();
     }
 };

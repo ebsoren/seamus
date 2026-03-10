@@ -16,11 +16,20 @@
 // TODO: Store each bucket in a separate document and when we pull back, just take from the higest bucket with data present 
 // TODO: Our goal is to clear out our top 3-4 buckets. Keep track of when we clear out the buckets to see the effectiveness 
 
-size_t get_priority_bucket(const string& url) {
+size_t get_priority_bucket(const string& url, int seed_list_dist) {
     // TODO(Erik): write this function
     // 0 is the index of the highest priority bucket, PRIORITY_BUCKETS - 1 is the index of the lowest priority bucket
     // PRIORITY_BUCKETS defined in ~/lib/consts.h
-    return 0;
+    int score = calcPriorityScore(url, seed_list_dist);
+
+    if      (score >= 500000) return 0;  // elite
+    if      (score >= 400000) return 1;
+    if      (score >= 300000) return 2;
+    if      (score >= 200000) return 3;
+    if      (score >= 100000) return 4;
+    if      (score >=   8000) return 5;
+    if      (score >=   2500) return 6;
+    else                      return 7;  // deprioritize
 }
 
 unordered_map<string,double> makeTldWeight() {
@@ -77,9 +86,19 @@ double calcPriorityScore(const string& u, int seed_list_dist) {
     string extension = string("");
     size_t start = 0;
     size_t len_ext = 0;
+    int path_depth = 0;
+    bool qmarkfound = false;
     for(int i = start_pos; i < url.size(); i++) {
         if(url[i] == '/' || url[i] == '?' || url[i] == '#' || url[i] == ':') {
             len_ext += 1;
+            while(i < url.size()) {
+                if(url[i] == '/') { 
+                    path_depth++;
+                } else if(url[i] == '?') {
+                    qmarkfound = true;
+                }
+                i++;
+            }
             break;
         } else if(url[i] == '.') {
             subdomain_count++;
@@ -117,8 +136,12 @@ double calcPriorityScore(const string& u, int seed_list_dist) {
     // points for shortness of overall url
 
     double factor_7 = max((150.0 - url.size()) / 100.0, 0.5);
+
+    double factor_8 = max(1.0 - 0.1 * path_depth, 0.4);
+
+    double factor_9 = (qmarkfound) ? 0.75 : 1.0;
     
-    return int((factor_1 * factor_2 * factor_3 * factor_4 * factor_5 * factor_6 * factor_7) * 10000.0);
+    return int((factor_1 * factor_2 * factor_3 * factor_4 * factor_5 * factor_6 * factor_7 * factor_8 * factor_9) * 1000000.0);
 }
 
 

@@ -26,11 +26,13 @@ struct UrlData {
 
 // Request sent to end server hosting the (sharded) dynamic URL data when a new URL is encountered
 struct URLStoreUpdateRequest {
-    string url;                         // URL: primary identifier
-    string anchor_text;                 // Vector of anchor text strings used to refer to this URL since its last update (potentially size >1)
+    string url = string("");                         // URL: primary identifier
+
+    // TODO(charlie/hershey): convert this to be vector<string>
+    string anchor_text = string("");                 // Vector of anchor text strings used to refer to this URL since its last update (potentially size >1)
     uint32_t num_encountered;           // Number of additional times this URL has been encountered since its last update
-    uint32_t seed_list_url_hops;        // Found distance in url hops from seed list (updated if lower than current)
-    uint32_t seed_list_domain_hops;     // Found distance in domain hops from the seed list (updated if lower than current)
+    uint16_t seed_list_url_hops;        // Found distance in url hops from seed list (updated if lower than current)
+    uint16_t seed_list_domain_hops;     // Found distance in domain hops from the seed list (updated if lower than current)
 };
 
 struct BatchURLStoreUpdateRequest {
@@ -281,8 +283,8 @@ inline std::optional<BatchURLStoreUpdateRequest> recv_batch_urlstore_update(int 
         URLStoreUpdateRequest req{std::move(*url), std::move(*anchor), 0, 0, 0};
 
         if (!recv_u32(fd, req.num_encountered)) return std::nullopt;
-        if (!recv_u32(fd, req.seed_list_url_hops)) return std::nullopt;
-        if (!recv_u32(fd, req.seed_list_domain_hops)) return std::nullopt;
+        if (!recv_u16(fd, req.seed_list_url_hops)) return std::nullopt;
+        if (!recv_u16(fd, req.seed_list_domain_hops)) return std::nullopt;
 
         batch.reqs.push_back(std::move(req));
     }

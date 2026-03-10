@@ -12,7 +12,6 @@ struct UserAnchorData {
     uint32_t freq;
 };
 
-
 class UrlStore {
 private:
     unordered_map<string, UrlData> url_data;
@@ -34,11 +33,10 @@ public:
     // to read urlStore from disk after a crash, each worker thread will read from its corresponding files and update it's urlstore object accordingly
     static void readFromFile(UrlStore& url_store, const int worker_number);
 
-    bool addUrl(const string& url, const vector<string>& anchor_texts, const uint16_t seed_distance, const uint16_t eot, const uint16_t eod, const uint32_t num_encountered);
-    bool updateUrl(const string& url, const vector<string>& anchor_texts, const uint32_t num_encountered);
+    bool addUrl(const string& url, const vector<string>& anchor_texts, const uint16_t seed_distance, const uint16_t domain_distance, const uint16_t eot, const uint16_t eod, const uint32_t num_encountered);
+    bool updateUrl(const string& url, const vector<string>& anchor_texts, const uint16_t seed_distance, const uint16_t domain_distance, const uint32_t num_encountered);
 
     uint32_t findAnchorId(const string& anchor_text);
-
 
     vector<UserAnchorData> getUrlAnchorInfo(const string& url) {
         const UrlData* it = findUrlData(url);

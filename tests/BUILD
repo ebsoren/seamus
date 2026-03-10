@@ -93,6 +93,16 @@ cc_test(
 )
 
 cc_test(
+    name = "unordered_map_benchmark",
+    srcs = ["unordered_map_benchmark.cpp"],
+    deps = [
+        "//lib:unordered_map",
+        "//lib:utils",
+        "//lib:vector",
+    ],
+)
+
+cc_test(
     name = "string_test",
     srcs = ["string_test.cpp"],
     copts = ["-fsanitize=address"],
@@ -142,6 +152,7 @@ cc_test(
 )
 
 cc_test(
+<<<<<<< HEAD
     name = "http_benchmark",
     srcs = ["http_benchmark.cpp"],
     deps = ["//crawler:crawler_lib"],
@@ -155,9 +166,19 @@ cc_test(
 
 cc_test(
     name = "domaain_carousel_test",
+    name = "domain_carousel_test",
     srcs = ["domain_carousel_test.cpp"],
     deps = [
         "//crawler:domain_carousel",
         "//lib:string",
+    ],
+)
+
+cc_test(
+    name = "url_store_test",
+    srcs = ["url_store_test.cpp"],
+    deps = [
+        "//lib:consts",
+        "//lib:utils",
     ],
 )
