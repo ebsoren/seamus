@@ -210,7 +210,7 @@ vector<string> IndexChunk::sort_entries() {
     res.reserve(index.size());
 
     for (auto it = index.begin(); it != index.end(); ++it) {
-        res.push_back(it->key);
+        res.push_back((*it).key);
     }
 
     radix_sort(res);
