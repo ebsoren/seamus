@@ -6,6 +6,7 @@
 #include <bit>
 #include <stdexcept>
 #include "lib/utils.h"
+#include "lib/string.h"
 
 // int next_prime(uint64_t n) {
 //     uint64_t candidate = n + 1;
@@ -255,19 +256,23 @@ public:
 
     Value& operator[](const Key& key) {
         rehash(loading_factor);
-        
-        const size_t index = find_index(key);
-        State state = states[index];
+        if constexpr (std::is_same_v<Key, string>) {
+            string_view sv = key.str_view(0, key.size()+1);
+            return (*this)[sv];
+        } else {
+            const size_t index = find_index(key);
+            State state = states[index];
 
-        if(state == State::EMPTY || state == State::DELETED) {
-            states[index] = State::FILLED;
-            new (keys + index) Key(key);
-            new (values + index) Value{};
-            uniqueKeys++;
+            if(state == State::EMPTY || state == State::DELETED) {
+                states[index] = State::FILLED;
+                new (keys + index) Key(key);
+                new (values + index) Value{};
+                uniqueKeys++;
+                return values[index];
+            }
+
             return values[index];
         }
-
-        return values[index];
     }
 
     // Special case for moving a Key into the map via []
