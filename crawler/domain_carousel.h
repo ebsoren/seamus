@@ -7,7 +7,6 @@
 #include "lib/deque.h"
 #include "lib/string.h"
 #include "lib/utils.h"
-#include "lib/unordered_map.h"
 #include <chrono>
 #include <mutex>
 #include <thread>
@@ -55,11 +54,6 @@ private:
         return hash;
     }
 
-    void test() {
-        auto m = unordered_map<int, string>();
-    }
-
-
 public:
     CrawlTarget get_target(uint32_t thread_num = 0) {
         const size_t start_index = CRAWLER_CAROUSEL_SIZE * thread_num / CRAWLER_THREADPOOL_SIZE;
@@ -101,17 +95,16 @@ public:
         size.fetch_add(1, std::memory_order_relaxed);
         return true;
     }
-
-    // TODO(Aiden) :
-    //  need a way to deal with the first 100k webpages being wikipedia.com
-    //  Likely issues:
-    //      * Break the re-fill logic, will think carousel is full but its all in wikipedia bucket
-    //  Solutions
-    //      * First set bucket limits (required) + mad push_target return bool, success/fail
-    //      * Keep track of min bucket fill level, not total urls
-    //      * These don't fix the 100k wikipedia issue. Has 2 possible solutions:
-    //          - Keep an overflow queue (basically a second frontier, only pull when a "max fill"
-    //              variable is below a threshold
-    //          - Much simpler: Just push the overflowing url to the back of the frontier
-    //      * Or we say this isn't a problem and insist we want to do wikipedia first
 };
+// TODO(Aiden) :
+//  need a way to deal with the first 100k webpages being wikipedia.com
+//  Likely issues:
+//      * Break the re-fill logic, will think carousel is full but its all in wikipedia bucket
+//  Solutions
+//      * First set bucket limits (required) + mad push_target return bool, success/fail
+//      * Keep track of min bucket fill level, not total urls
+//      * These don't fix the 100k wikipedia issue. Has 2 possible solutions:
+//          - Keep an overflow queue (basically a second frontier, only pull when a "max fill"
+//              variable is below a threshold
+//          - Much simpler: Just push the overflowing url to the back of the frontier
+//      * Or we say this isn't a problem and insist we want to do wikipedia first
