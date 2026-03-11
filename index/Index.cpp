@@ -5,14 +5,11 @@
 #include "lib/utf8.h"
 #include "lib/utils.h"
 
-IndexChunk init_index() {
+void init_index() {
     // Find the latest chunk ID
     if (chunk == 0) {
         while (file_exists(string::join("index_chunk_", string(WORKER_NUMBER), "_", string(chunk), ".txt"))) chunk++;
     }
-
-    IndexChunk index;
-    return index;
 }
 
 void IndexChunk::persist() {
@@ -34,7 +31,9 @@ void IndexChunk::persist() {
     // Write the ID->URL mapping
     // <32b ID> <varlen URL>\n
     for (uint32_t i = 0; i < urls.size(); i++) {
-        fwrite(&i, sizeof(i), 1, fd);
+        uint32_t id = i + 1; // 1 indexed
+        
+        fwrite(&id, sizeof(id), 1, fd);
         fwrite(" ", sizeof(char), 1, fd);
         fwrite(&urls[i], sizeof(char), urls[i].size(), fd);
         fwrite("\n", sizeof(char), 1, fd);
@@ -204,6 +203,8 @@ void IndexChunk::persist() {
     }
     
     fclose(fd);
+
+    chunk++;
 }
 
 vector<string> IndexChunk::sort_entries() {
@@ -224,39 +225,54 @@ bool IndexChunk::add_page(const string &path) {
         perror("Error opening file.\n");
         return false;
     }
-    
-    // Set of words already encountered in the document to track number of documents word appears in
-    unordered_map<string, bool> word_set;
+
     char buff[4096];
+    char url[2048];
+    
+    while (true) {
+        // Set of words already encountered in the document to track number of documents word appears in
+        unordered_map<string, bool> word_set;
 
-    // Check title header
-    fgets(buff, sizeof(buff), fd);
-    if (strcmp(buff, "<title>\n")) {
-        perror("Expected title header missing.\n");
-        return false;
-    }
-
-    // TODO: Protect this for parallelism, but have to discuss how we're distributing this
-    uint32_t doc = curr_doc_++;
-
-    // Start a counter for word locations
-    uint32_t loc = 0;
-
-    // Parse title and body words
-    while(fgets(buff, sizeof(buff), fd)) {
-        // Don't push the title closing tag
-        if (strcmp(buff, "<\\title>\n")) {
-            // -1 because all words have new line at the end from fgets
-            // TODO: The very last word won't have \n -- have to deal with that, but think it's a parser change
-            string_view word_view = string_view(buff, strlen(buff) - 1);
-            // TODO: Have to case convert, but should that happen here or in parser?
-            if (!word_set[word_view]) {
-                word_set[word_view] = true;
-                index[word_view].n_docs++;
-            }
-
-            index[word_view].posts.push_back({doc, ++loc});
+        // Check doc header
+        fgets(buff, sizeof(buff), fd);
+        if (strcmp(buff, "<doc>\n")) {
+            perror("Expected document header missing.\n");
+            return false;
         }
+
+        // Read in the URL (will end with \n\0)
+        fgets(url, sizeof(url), fd);
+
+        // Increment the doc count
+        doc_lock_.lock();
+        uint32_t doc = curr_doc_++;
+        urls.push_back(string(url, strlen(url) - 1)); // -1 bc of \n at the end
+        doc_lock_.unlock();
+
+        // Start a counter for word locations
+        uint32_t loc = 0;
+
+        // Parse title and body words
+        while(fgets(buff, sizeof(buff), fd)) {
+            if (!strcmp(buff, "<\\doc>\n")) {
+                // Doc ended, go back to top of loop
+                continue;
+            } else if (strcmp(buff, "<\\title>\n") && strcmp(buff, "<title>\n")) { // Don't push the title tags
+                // -1 because all words have new line at the end from fgets
+                string_view word_view = string_view(buff, strlen(buff) - 1);
+
+                // TODO: Have to case convert, but should that happen here or in parser?
+                if (!word_set[word_view]) {
+                    word_set[word_view] = true;
+                    index[word_view].n_docs++;
+                }
+
+                index[word_view].posts.push_back({doc, ++loc});
+            }
+        }
+
+        if (feof(fd)) return true;
+        else if (ferror(fd)) return false;
     }
 
     return true;
