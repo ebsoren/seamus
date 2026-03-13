@@ -22,7 +22,6 @@ private:
 
     const UrlData* findUrlData(string& url) const;
     UrlData* findUrlData(string& url);
-    void addAnchorFreq(vector<AnchorData>& freqs, uint32_t anchor_id);
 
     RPCListener* rpc_listener;      // Listener for client requests
     std::thread listener_thread;    // Thread running the listener loop
@@ -43,14 +42,15 @@ public:
     uint32_t findAnchorId(string& anchor_text);
 
     vector<UrlAnchorData> getUrlAnchorInfo(string& url) {
-        const UrlData* it = findUrlData(url);
+        UrlData* it = findUrlData(url);
         if (it == nullptr) return {};
-        if (it->anchor_freqs.empty()) return {};
+        if (it->anchor_freqs.size() == 0) return {};
 
         vector<UrlAnchorData> url_anchor_data;
         url_anchor_data.reserve(it->anchor_freqs.size());
-        for (const AnchorData& anchor_freq : it->anchor_freqs) {
-            url_anchor_data.push_back({&anchor_to_id[anchor_freq.anchor_id] , anchor_freq.freq});
+        for (auto anchor_it = it->anchor_freqs.begin(); anchor_it != it->anchor_freqs.end(); ++anchor_it) {
+            const auto& tuple = *anchor_it;
+            url_anchor_data.push_back({&anchor_to_id[tuple.key] , tuple.value});
         }
 
         return url_anchor_data;

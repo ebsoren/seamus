@@ -52,36 +52,22 @@ uint32_t UrlStore::findAnchorId(string& anchor_text) {
     return anchor_to_id.size() - 1;
 }
 
-void UrlStore::addAnchorFreq(vector<AnchorData>& freqs, uint32_t anchor_id) {
-    for (AnchorData& anchor_freq : freqs) {
-        if (anchor_freq.anchor_id == anchor_id) {
-            anchor_freq.freq++;
-            return;
-        }
-    }
-
-    freqs.push_back({anchor_id, 1});
-}
-
 
 bool UrlStore::addUrl(string& url, vector<string>& anchor_texts, const uint16_t seed_distance, const uint16_t domain_distance, const uint16_t eot, const uint16_t eod, const uint32_t num_encountered) {
     // if url already exists, return false
     if (url_data.find(url) != url_data.end()) return false;
 
-    UrlData new_url_data;
-    new_url_data.num_encountered = num_encountered;
-    new_url_data.seed_distance = seed_distance;
-    new_url_data.domain_dist = domain_distance;
-    new_url_data.eot = eot;
-    new_url_data.eod = eod;
+    url_data[url].num_encountered = num_encountered;
+    url_data[url].seed_distance = seed_distance;
+    url_data[url].domain_dist = domain_distance;
+    url_data[url].eot = eot;
+    url_data[url].eod = eod;
 
     for (string& anchor_text : anchor_texts) {
         uint32_t anchor_id = findAnchorId(anchor_text);
-
-        addAnchorFreq(new_url_data.anchor_freqs, anchor_id);
+        url_data[url].anchor_freqs[anchor_id] = 1;
     }
 
-    url_data[url] = new_url_data;
     return true;
 }
 
@@ -96,19 +82,7 @@ bool UrlStore::updateUrl(string& url, vector<string>& anchor_texts, const uint16
 
     for (string& anchor_text : anchor_texts) {
         uint32_t anchor_id = findAnchorId(anchor_text);
-
-        bool found_anchor_freq = false;
-        for (AnchorData& anchor_freq : url_data_ptr->anchor_freqs) {
-            if (anchor_freq.anchor_id == anchor_id) {
-                anchor_freq.freq++;
-                found_anchor_freq = true;
-                break;
-            }
-        }
-
-        if (!found_anchor_freq) {
-            addAnchorFreq(url_data_ptr->anchor_freqs, anchor_id);
-        }
+        url_data_ptr->anchor_freqs[anchor_id]++;
     }
 
     return true;
@@ -145,7 +119,7 @@ void UrlStore::persist() {
         const string& url = slot.key;
         if (url.size() > URL_STORE_MAX_URL_LEN) continue; 
         
-        const UrlData& data = slot.value;
+        UrlData& data = slot.value;
         
         uint32_t url_len = static_cast<uint32_t>(url.size());
         fwrite(&url_len, sizeof(uint32_t), 1, fd);
@@ -159,9 +133,10 @@ void UrlStore::persist() {
         uint32_t num_freqs = static_cast<uint32_t>(data.anchor_freqs.size());
         fwrite(&num_freqs, sizeof(uint32_t), 1, fd);
 
-        for (const auto& anchor_freq : data.anchor_freqs) {
-            fwrite(&anchor_freq.anchor_id, sizeof(uint32_t), 1, fd);
-            fwrite(&anchor_freq.freq, sizeof(uint32_t), 1, fd);
+        for (auto it = data.anchor_freqs.begin(); it != data.anchor_freqs.end(); ++it) {
+            const auto& tuple = *it;
+            fwrite(&tuple.key, sizeof(uint32_t), 1, fd);
+            fwrite(&tuple.value, sizeof(uint32_t), 1, fd);
         }
     }
 
@@ -208,7 +183,6 @@ void UrlStore::readFromFile(UrlStore& url_store, const int worker_number) {
         fread(url_buff, sizeof(char), url_len, fd);
         
         string url(url_buff, url_len);
-        url_store.url_data[url] = UrlData();
 
         fread(&url_store.url_data[url].num_encountered, sizeof(uint32_t), 1, fd);
         fread(&url_store.url_data[url].seed_distance, sizeof(uint16_t), 1, fd);
@@ -222,7 +196,7 @@ void UrlStore::readFromFile(UrlStore& url_store, const int worker_number) {
             uint32_t anchor_id, freq;
             fread(&anchor_id, sizeof(uint32_t), 1, fd);
             fread(&freq, sizeof(uint32_t), 1, fd);
-            url_store.url_data[url].anchor_freqs.push_back({anchor_id, freq});
+            url_store.url_data[url].anchor_freqs[anchor_id] = freq;
         }
     }
 

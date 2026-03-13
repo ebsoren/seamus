@@ -6,13 +6,15 @@
 #include "utils.h"
 #include "../lib/unordered_map.h"
 
+#include "utils.h"
+#include "../lib/unordered_map.h"
+
 #include <cstdint>
 #include <optional>
 
 /*
-
 Currently, there functionality is divided into a couple categories:
-    - Sending URLStore update/write requsts from crawlers
+    - Sending URLStore update/write requests from crawlers
     - URLStore read/data getters and batch getters
 */
 
@@ -21,10 +23,8 @@ struct AnchorData {
     uint32_t freq;
 };
 
-
-// TODO: decide if vector is better than hashmap for anchor_freqs (cache locality vs. O(1) average lookup)
 struct UrlData {
-    vector<AnchorData> anchor_freqs;                     // anchor text id to frequency since its last update (potentially size >1)
+    unordered_map<uint32_t, uint32_t> anchor_freqs;                     // anchor text id to frequency since its last update (potentially size >1)
     uint32_t num_encountered;                            // Number of times this URL has been encountered
     uint16_t seed_distance;                              // Distance from seed list
     uint16_t domain_dist;                                // Domain distance from seed list TODO(charlie): implement this feature
@@ -181,7 +181,7 @@ inline std::optional<UrlData> recv_url_data(int fd) {
     for (uint32_t i = 0; i < anchor_count; i++) {
         auto a = recv_anchor_data(fd);
         if (!a) return std::nullopt;
-        d.anchor_freqs.push_back(*a);
+        d.anchor_freqs[a->anchor_id] = a->freq;
     }
 
     if (!recv_u32(fd, d.num_encountered)) return std::nullopt;
@@ -195,7 +195,7 @@ inline std::optional<UrlData> recv_url_data(int fd) {
 
 
 // Helper to serialize + send a BatchURLStoreDataResponse over network
-inline bool send_batch_urlstore_data_response(const string& host, uint16_t port, const BatchURLStoreDataResponse& batch) {
+inline bool send_batch_urlstore_data_response(const string& host, uint16_t port, BatchURLStoreDataResponse& batch) {
     // Compute total buffer size:
     // 4 bytes for response count
     // Per UrlData: 4 (anchor count) + 8 per anchor + 4 (num_encountered) + 2*4 (seed_distance, domain_dist, eot, eod)
@@ -215,19 +215,20 @@ inline bool send_batch_urlstore_data_response(const string& host, uint16_t port,
     off += sizeof(uint32_t);
 
     for (size_t i = 0; i < batch.resps.size(); i++) {
-        const auto& d = batch.resps[i];
+        auto& d = batch.resps[i];
 
         // anchor_freqs (count-prefixed)
         uint32_t anchor_count = htonl(static_cast<uint32_t>(d.anchor_freqs.size()));
         std::memcpy(buf + off, &anchor_count, sizeof(uint32_t));
         off += sizeof(uint32_t);
 
-        for (size_t j = 0; j < d.anchor_freqs.size(); j++) {
-            uint32_t aid = htonl(d.anchor_freqs[j].anchor_id);
+        for (auto it = d.anchor_freqs.begin(); it != d.anchor_freqs.end(); ++it) {
+            const auto& tuple = *it;
+            uint32_t aid = htonl(tuple.key);
             std::memcpy(buf + off, &aid, sizeof(uint32_t));
             off += sizeof(uint32_t);
 
-            uint32_t freq = htonl(d.anchor_freqs[j].freq);
+            uint32_t freq = htonl(tuple.value);
             std::memcpy(buf + off, &freq, sizeof(uint32_t));
             off += sizeof(uint32_t);
         }
