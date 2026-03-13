@@ -24,12 +24,9 @@ void UrlStore::client_handler(int fd) {
     if (!req) return;
 
     for (URLStoreUpdateRequest& update_req : req->reqs) {
-        // TODO(charlie/hershey): delete this once anchor_text is converted to vector<string> by default
-        vector<string> list;
-        list.push_back(::move(update_req.anchor_text));
-        if (!updateUrl(update_req.url, list, update_req.seed_list_url_hops, update_req.seed_list_domain_hops, update_req.num_encountered)) {
+        if (!updateUrl(update_req.url, update_req.anchor_text, update_req.seed_list_url_hops, update_req.seed_list_domain_hops, update_req.num_encountered)) {
             // if update fails (url DNE), try adding instead
-            addUrl(update_req.url, list, update_req.seed_list_url_hops, update_req.seed_list_domain_hops, 0, 0, update_req.num_encountered);
+            addUrl(update_req.url, update_req.anchor_text, update_req.seed_list_url_hops, update_req.seed_list_domain_hops, 0, 0, update_req.num_encountered);
         }
     }
 }
@@ -119,8 +116,6 @@ bool UrlStore::updateUrl(string& url, vector<string>& anchor_texts, const uint16
 
 
 /*
-Persisted at same time as index chunks
-
 Stored in url_store_<worker #>.txt
 Vector of anchor_texts (variable length) seen to id mapping (index)
 For each URL:

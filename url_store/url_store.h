@@ -10,7 +10,7 @@
 #include <iostream>
 
 
-struct UserAnchorData {
+struct UrlAnchorData {
     string* anchor_text;
     uint32_t freq;
 };
@@ -42,18 +42,18 @@ public:
 
     uint32_t findAnchorId(string& anchor_text);
 
-    vector<UserAnchorData> getUrlAnchorInfo(string& url) {
+    vector<UrlAnchorData> getUrlAnchorInfo(string& url) {
         const UrlData* it = findUrlData(url);
         if (it == nullptr) return {};
         if (it->anchor_freqs.empty()) return {};
 
-        vector<UserAnchorData> user_anchor_data;
-        user_anchor_data.reserve(it->anchor_freqs.size());
+        vector<UrlAnchorData> url_anchor_data;
+        url_anchor_data.reserve(it->anchor_freqs.size());
         for (const AnchorData& anchor_freq : it->anchor_freqs) {
-            user_anchor_data.push_back({&anchor_to_id[anchor_freq.anchor_id] , anchor_freq.freq});
+            url_anchor_data.push_back({&anchor_to_id[anchor_freq.anchor_id] , anchor_freq.freq});
         }
 
-        return user_anchor_data;
+        return url_anchor_data;
     }
 
 

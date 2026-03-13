@@ -137,7 +137,7 @@ void test_url_store_listener_test() {
     
     // Keep these as rvalues so the struct can invoke move-assignment
     req.url = string("http://rpc-test.com");
-    req.anchor_text = string("rpc anchor");
+    req.anchor_text.push_back(string("rpc anchor"));
     req.num_encountered = 1;
     req.seed_list_url_hops = 3;
     req.seed_list_domain_hops = 3;

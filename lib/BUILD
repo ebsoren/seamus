@@ -98,6 +98,7 @@ cc_library(
         ":rpc_common",
         ":string",
         ":vector",
+        ":utils"
     ],
 )
 
