@@ -5,7 +5,6 @@ cc_library(
     hdrs = ["consts.h"],
     visibility = ["//visibility:public"],
     deps = [
-        ":vector",
         ":string",
     ],
 )

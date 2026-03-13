@@ -119,7 +119,6 @@ cc_test(
 )
 
 cc_test(
-<<<<<<< HEAD
     name = "http_benchmark",
     srcs = ["http_benchmark.cpp"],
     deps = ["//crawler:crawler_lib"],
@@ -132,7 +131,6 @@ cc_test(
 )
 
 cc_test(
-    name = "domaain_carousel_test",
     name = "domain_carousel_test",
     srcs = ["domain_carousel_test.cpp"],
     deps = [

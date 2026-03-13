@@ -3,10 +3,15 @@
 #include "../lib/deque.h"
 #include "../lib/rpc_crawler.h"
 #include "../lib/consts.h"
-#include "bucket_manager.h"
 #include <mutex>
 #include <chrono>
 #include <cstdint>
+
+
+struct BackoffEntry {
+    CrawlTarget target;
+    std::chrono::steady_clock::time_point rejected_at;
+};
 
 
 class DomainCarousel {
@@ -63,7 +68,7 @@ public:
     // Util function to feed the carousel with the highest priority bucket that is populated
     // Targets that fail to push (queue full) are placed into the backoff queue with a rejection timestamp
     // Returns the priority level of the bucket that was emptied into the carousel, -1 on error/all buckets being empty
-    int16_t feed_carousel(std::mutex& backoff_lock, deque<BackoffEntry>& backoff_queue) {
+    int16_t feed_carousel_from_highest_priority_bucket(std::mutex& backoff_lock, deque<BackoffEntry>& backoff_queue) {
         for (size_t plevel = 0; plevel < PRIORITY_BUCKETS; ++plevel) {
             {
                 std::lock_guard<std::mutex> lock(buckets[plevel].bucket_lock);

@@ -3,6 +3,7 @@
 #include "../lib/string.h"
 #include "../lib/rpc_listener.h"
 #include "../lib/rpc_urlstore.h"
+#include "../lib/consts.h"
 #include <cstdint>
 #include <thread>
 
@@ -82,10 +83,3 @@ public:
 };
 
 
-// TODO: This needs to be defined globally on bootup (defining here for now)
-const uint32_t WORKER_NUMBER = 0;
-const uint32_t NUM_THREADS = 8;
-const uint32_t PORT = 9000;
-
-const uint32_t MAX_URL_LEN = 4096; // 4 KB max url length
-const uint32_t MAX_ANCHOR_TEXT_LEN = 512; // 0.5 KB max anchor text length

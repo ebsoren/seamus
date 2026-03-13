@@ -78,7 +78,7 @@ void test_url_store_basic() {
 
 void test_url_store_persistence() {
     cout << string("Running test_url_store_persistence...") << endl;
-    cleanup_test_file(WORKER_NUMBER);
+    cleanup_test_file(URL_STORE_WORKER_NUMBER);
 
     UrlStore store;
     vector<string> anchors;
@@ -91,7 +91,7 @@ void test_url_store_persistence() {
     store.persist();
     
     // Basic sanity check that the file can be opened
-    string fileName = string::join("urlstore_", string(WORKER_NUMBER), ".txt");
+    string fileName = string::join("urlstore_", string(URL_STORE_WORKER_NUMBER), ".txt");
     string read_mode("r");
     FILE* fd = fopen(fileName.data(), read_mode.data());
     assert(fd != nullptr);
@@ -105,7 +105,7 @@ void test_url_store_recover() {
     UrlStore store; // Fresh instance, empty in memory
     
     // Read from the file we just persisted
-    UrlStore::readFromFile(store, WORKER_NUMBER);
+    UrlStore::readFromFile(store, URL_STORE_WORKER_NUMBER);
     
     string persist_url("http://persist.me");
     string persist_anchor("persisted link");
@@ -121,14 +121,14 @@ void test_url_store_recover() {
     assert(*(anchor_info[0].anchor_text) == persist_anchor);
     assert(anchor_info[0].freq == 1);
 
-    cleanup_test_file(WORKER_NUMBER); // Clean up after ourselves
+    cleanup_test_file(URL_STORE_WORKER_NUMBER); // Clean up after ourselves
     cout << string("-> Passed test_url_store_recover\n") << endl;
 }
 
 void test_url_store_listener_test() {
     cout << string("Running test_url_store_listener_test...") << endl;
     
-    // Spinning up this object will automatically start the background RPCListener thread on PORT 9000
+    // Spinning up this object will automatically start the background RPCListener thread on URL_STORE_PORT 9000
     UrlStore store; 
     
     // Build a mock network request simulating a worker finding a new URL
@@ -144,7 +144,7 @@ void test_url_store_listener_test() {
     batch.reqs.push_back(::move(req));
 
     string local_ip("127.0.0.1");
-    bool send_success = send_batch_urlstore_update(local_ip, PORT, batch);
+    bool send_success = send_batch_urlstore_update(local_ip, URL_STORE_PORT, batch);
     assert(send_success == true);
 
     // Give the listener thread a brief moment to accept the socket, read, and mutate state

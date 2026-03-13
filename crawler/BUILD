@@ -23,18 +23,7 @@ cc_library(
 cc_binary(
     name = "crawler",
     srcs = ["main.cpp"],
-    deps = [":crawler_lib"],
+    deps = [":crawler_lib", "//url_store"],
     visibility = ["//visibility:public"],
 )
 
-cc_library(
-    name = "domain_carousel",
-    srcs = ["domain_carousel.h"],
-    visibility = ["//visibility:public"],
-    deps = [
-        "//lib:consts",
-        "//lib:deque",
-        "//lib:string",
-        "//lib:utils",
-    ],
-)

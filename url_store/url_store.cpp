@@ -6,7 +6,7 @@
 
 
 UrlStore::UrlStore() {
-    rpc_listener = new RPCListener(PORT, NUM_THREADS);
+    rpc_listener = new RPCListener(URL_STORE_PORT, URL_STORE_NUM_THREADS);
     listener_thread = std::thread([this]() {
         rpc_listener->listener_loop([this](int fd) { client_handler(fd); });
     });
@@ -130,7 +130,7 @@ For each URL:
         For each list: <anchor_text id (32 bits)> <times seen (32 bits)>\n
 */
 void UrlStore::persist() {
-    string fileName = string::join("urlstore_", string(WORKER_NUMBER), "_tmp.txt");
+    string fileName = string::join("urlstore_", string(URL_STORE_WORKER_NUMBER), "_tmp.txt");
     string write_mode("wb");
     FILE* fd = fopen(fileName.data(), write_mode.data());
 
@@ -148,7 +148,7 @@ void UrlStore::persist() {
     
     for (const auto& slot : url_data) {
         const string& url = slot.key;
-        if (url.size() > MAX_URL_LEN) continue; 
+        if (url.size() > URL_STORE_MAX_URL_LEN) continue; 
         
         const UrlData& data = slot.value;
         
@@ -172,7 +172,7 @@ void UrlStore::persist() {
 
     fclose(fd);
 
-    int rc = rename(fileName.data(), string::join("urlstore_", string(WORKER_NUMBER), ".txt").data());
+    int rc = rename(fileName.data(), string::join("urlstore_", string(URL_STORE_WORKER_NUMBER), ".txt").data());
     if (rc != 0) {
         perror("Error renaming urlstore file");
     }
@@ -194,22 +194,22 @@ void UrlStore::readFromFile(UrlStore& url_store, const int worker_number) {
         return; // handle empty file gracefully
     }
 
-    char anchor_text_buff[MAX_ANCHOR_TEXT_LEN];
+    char anchor_text_buff[URL_STORE_MAX_ANCHOR_TEXT_LEN];
     for (uint32_t i = 0; i < num_anchor_texts; i++) {
         uint32_t anchor_text_len;
         fread(&anchor_text_len, sizeof(uint32_t), 1, fd);
         
         // Guard against file corruption causing buffer overflow
-        if (anchor_text_len > MAX_ANCHOR_TEXT_LEN) anchor_text_len = MAX_ANCHOR_TEXT_LEN; 
+        if (anchor_text_len > URL_STORE_MAX_ANCHOR_TEXT_LEN) anchor_text_len = URL_STORE_MAX_ANCHOR_TEXT_LEN; 
         
         fread(anchor_text_buff, sizeof(char), anchor_text_len, fd);
         url_store.anchor_to_id.push_back(string(anchor_text_buff, anchor_text_len));
     }
 
     uint32_t url_len;
-    char url_buff[MAX_URL_LEN];
+    char url_buff[URL_STORE_MAX_URL_LEN];
     while (fread(&url_len, sizeof(uint32_t), 1, fd) == 1) {
-        if (url_len > MAX_URL_LEN) url_len = MAX_URL_LEN;
+        if (url_len > URL_STORE_MAX_URL_LEN) url_len = URL_STORE_MAX_URL_LEN;
         fread(url_buff, sizeof(char), url_len, fd);
         
         string url(url_buff, url_len);
