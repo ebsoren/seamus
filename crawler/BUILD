@@ -9,6 +9,7 @@ cc_library(
         "bucket_manager.h",
         "network_util.h",
         "crawler_worker.h",
+        "crawler_outbound.h",
     ],
     copts = ["-I/opt/homebrew/opt/openssl@3/include"],
     linkopts = [                                                        # todo(hershey): add proper linkopts when we build for linux

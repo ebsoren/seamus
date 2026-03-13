@@ -3,6 +3,7 @@
 #include <thread>
 #include <chrono>
 #include "../crawler/crawler_listener.h"
+#include "../crawler/crawler_outbound.h"
 #include "../crawler/crawler_worker.h"
 #include "../crawler/domain_carousel.h"
 
@@ -407,6 +408,53 @@ void test_spawn_crawler_workers_consumes_and_stops() {
 }
 
 
+void test_crawler_outbound_flushes_to_listener() {
+    printf("---- test_crawler_outbound_flushes_to_listener ----\n");
+
+    DomainCarousel dc;
+
+    vector<string> bucket_files;
+    for (size_t i = 0; i < PRIORITY_BUCKETS; i++) {
+        bucket_files.push_back(string("bucket_"));
+    }
+    BucketManager bm(static_cast<vector<string>&&>(bucket_files), &dc);
+
+    // Start the crawler listener (machine 0 = 127.0.0.1)
+    CrawlerListener cl(&bm, &dc);
+    cl.start();
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+    // Push exactly CRAWLER_OUTBOUND_BATCH_SIZE targets to machine 0
+    // This should trigger a flush to the local crawler listener
+    CrawlerOutbound outbound;
+    for (size_t i = 0; i < CRAWLER_OUTBOUND_BATCH_SIZE; ++i) {
+        char url_buf[64];
+        snprintf(url_buf, sizeof(url_buf), "https://outbound%zu.com/page", i);
+        char domain_buf[64];
+        snprintf(domain_buf, sizeof(domain_buf), "outbound%zu.com", i);
+        outbound.add(0, CrawlTarget{
+            string(domain_buf, strlen(domain_buf)),
+            string(url_buf, strlen(url_buf)),
+            0, 0
+        });
+    }
+
+    // Wait for the listener to process the batch
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
+    // Verify total targets across all priority buckets equals CRAWLER_OUTBOUND_BATCH_SIZE
+    size_t total = 0;
+    for (size_t i = 0; i < PRIORITY_BUCKETS; ++i) {
+        std::lock_guard<std::mutex> lock(dc.buckets[i].bucket_lock);
+        total += dc.buckets[i].urls.size();
+    }
+    assert(total == CRAWLER_OUTBOUND_BATCH_SIZE);
+
+    cl.stop();
+    printf("PASS\n");
+}
+
+
 int main() {
     printf("\n===== RUNNING CRAWLER TESTS =====\n\n");
     test_crawler_listener_receives_batch();
@@ -417,6 +465,7 @@ int main() {
     test_backoff_queue_drains_after_slot_cleared();
     test_bucket_manager_empty_buckets();
     test_spawn_crawler_workers_consumes_and_stops();
+    test_crawler_outbound_flushes_to_listener();
     printf("\n===== ALL CRAWLER TESTS PASSED =====\n");
     return 0;
 }
