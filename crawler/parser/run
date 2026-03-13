@@ -1,9 +1,0 @@
-#!/bin/bash
-
-rm -f out.txt
-
-g++ -std=c++17 basic_test.cpp -o test &&
-
-curl -s -L $1 -o in.txt &&
-
-./test
