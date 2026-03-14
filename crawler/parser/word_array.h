@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <iostream>
 #include <initializer_list>
 
 #include <stdlib.h>
@@ -43,8 +44,12 @@ public:
 
     // Convert the contents of a given segment of the data array to lowercase
     // Converts the entire array if no args are given
-    void case_convert(int start = 0, int end = size_) {
-        while (start < end) *(data_ + start) = tolower(*(data_ + start++));
+    void case_convert(int start = 0, int end = MAX_MEMORY) {
+        if (end == MAX_MEMORY) end = size_;
+        while (start < end) {
+            *(data_ + start) = tolower(*(data_ + start));
+            start++;
+        }
     }
 
     char *data() { return data_; }

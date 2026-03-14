@@ -67,8 +67,8 @@ public:
         write_footer();
 
         // Flush any data remaining in buffer
-        words.flush();
         words.case_convert();
+        words.flush();
         links.flush();
         title_lengths.flush();
     }
@@ -221,7 +221,7 @@ private:
                         !comma_in_number(p, end) ? links.push_back(word_start, word_len, SPACE_DELIM) : links.push_back(word_start, word_len, NULL_DELIM);
 
                         // Convert just the anchor text, not the URL (since URLs case sensitive)
-                        links.case_convert(links.size() - word_len, links.size());
+                        links.case_convert(links.size() - (word_len + 1), links.size());
                     }
                     
                     // If a comma in between two ints, treat the whole number as a single word
@@ -257,7 +257,10 @@ private:
                     // If the tag was immediately after a word, add it to our list
                     if ((!is_closing && word_start < tag_start - 1) || word_start < tag_start - 2) {
                         size_t word_len = is_closing ? (tag_start - 2) - word_start : (tag_start - 1) - word_start;
-                        if (in_a_) links.push_back(word_start, word_len, SPACE_DELIM);
+                        if (in_a_) {
+                            links.push_back(word_start, word_len, SPACE_DELIM);
+                            links.case_convert(links.size() - (word_len + 1), links.size());
+                        }
 
                         words.push_back(word_start, word_len);
                         num_words++;
@@ -268,7 +271,13 @@ private:
                 case DesiredAction::OrdinaryText:
                     if (p < end && is_word_break_char(*p)) {
                         size_t word_len = p - word_start;
-                        if (in_a_) links.push_back(word_start, word_len, SPACE_DELIM);
+
+                        if (in_a_) {
+                            links.push_back(word_start, word_len, SPACE_DELIM);
+
+                            // Convert just the anchor text, not the URL (since URLs case sensitive)
+                            links.case_convert(links.size() - (word_len + 1), links.size());
+                        }
 
                         words.push_back(word_start, word_len);
                         num_words++;
@@ -424,13 +433,19 @@ private:
                     // Push back without adding a delimiter, so we get "cant", not "can t"
                     if (p > word_start) {
                         words.push_back(word_start, p - word_start, NULL_DELIM);
-                        if (in_a_) links.push_back(word_start, p - word_start, NULL_DELIM);
+                        if (in_a_) {
+                            links.push_back(word_start, p - word_start, NULL_DELIM);
+                            links.case_convert(links.size() - ((p - word_start) + 1), links.size());
+                        }
                     }
                 } else {
                     // Treat as word boundary, i.e. space
                     if (p > word_start) {
                         size_t word_len = p - word_start;
-                        if (in_a_) links.push_back(word_start, word_len, SPACE_DELIM);
+                        if (in_a_) {
+                            links.push_back(word_start, word_len, SPACE_DELIM);
+                            links.case_convert(links.size() - (word_len + 1), links.size());
+                        }
                         words.push_back(word_start, word_len);
                         num_words++;
                     }
@@ -446,7 +461,10 @@ private:
                          && (unsigned char) *(p + 2) == 0x99)) {
                 if (p > word_start) {
                     words.push_back(word_start, p - word_start, NULL_DELIM);
-                    if (in_a_) links.push_back(word_start, p - word_start, NULL_DELIM);
+                    if (in_a_) {
+                        links.push_back(word_start, p - word_start, NULL_DELIM);
+                        links.case_convert(links.size() - ((p - word_start) + 1), links.size());
+                    }
                 }
                 int skip = (*p == '\'') ? 1 : 3;
                 p += skip;
@@ -457,7 +475,10 @@ private:
             else if ((unsigned char) *p == 0xC2 && p + 1 < end && (unsigned char) *(p + 1) == 0xA0) {
                 if (p > word_start) {
                     words.push_back(word_start, p - word_start);
-                    if (in_a_) links.push_back(word_start, p - word_start, SPACE_DELIM);
+                    if (in_a_) {
+                        links.push_back(word_start, p - word_start, SPACE_DELIM);
+                        links.case_convert(links.size() - ((p - word_start) + 1), links.size());
+                    }
                     num_words++;
                 }
                 p += 2;
