@@ -267,10 +267,10 @@ bool IndexChunk::index_file(const string &path) {
 
         // Parse title and body words
         while(fgets(buff, sizeof(buff), fd)) {
-            if (!strcmp(buff, "<\\doc>\n")) {
+            if (!strcmp(buff, "</doc>\n")) {
                 // Doc ended, go back to top of loop
                 continue;
-            } else if (strcmp(buff, "<\\title>\n") && strcmp(buff, "<title>\n")) { // Don't push the title tags
+            } else if (strcmp(buff, "</title>\n") && strcmp(buff, "<title>\n")) { // Don't push the title tags
                 // -1 because all words have new line at the end from fgets
                 string_view word_view = string_view(buff, strlen(buff) - 1);
 

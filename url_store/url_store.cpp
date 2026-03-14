@@ -35,7 +35,7 @@ const UrlData* UrlStore::findUrlData(string& url) const {
     return url_data.get(url);
 }
 
-UrlData* UrlStore::findUrlData(string& url) {
+UrlData* UrlStore::findUrlData(const string& url) {
     auto slot = url_data.find(url);
     return slot != url_data.end() ? &(*slot).value : nullptr;
 }
@@ -72,7 +72,7 @@ bool UrlStore::addUrl(string& url, vector<string>& anchor_texts, const uint16_t 
 }
 
 
-bool UrlStore::updateUrl(string& url, vector<string>& anchor_texts, const uint16_t seed_distance, const uint16_t domain_distance, const uint32_t num_encountered) {
+bool UrlStore::updateUrl(const string& url, vector<string>& anchor_texts, const uint16_t seed_distance, const uint16_t domain_distance, const uint32_t num_encountered) {
     UrlData* url_data_ptr = findUrlData(url);
     if (url_data_ptr == nullptr) return false;
 
@@ -88,6 +88,13 @@ bool UrlStore::updateUrl(string& url, vector<string>& anchor_texts, const uint16
     return true;
 }
 
+bool UrlStore::updateTitleLen(const string& url, const uint16_t eot) {
+    UrlData* url_data_ptr = findUrlData(url);
+    if (!url_data_ptr) return false;
+
+    url_data_ptr->eot = eot;
+    return true;
+}
 
 /*
 Stored in url_store_<worker #>.txt
