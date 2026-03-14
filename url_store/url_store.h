@@ -20,7 +20,7 @@ private:
     unordered_map<string, UrlData> url_data;
     vector<string> anchor_to_id; // anchor text to corresponding id (index)
 
-    const UrlData* findUrlData(string& url) const;
+    const UrlData* findUrlData(const string& url) const;
     UrlData* findUrlData(const string& url);
 
     RPCListener* rpc_listener;      // Listener for client requests

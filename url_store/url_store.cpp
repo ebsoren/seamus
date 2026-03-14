@@ -31,7 +31,7 @@ void UrlStore::client_handler(int fd) {
     }
 }
 
-const UrlData* UrlStore::findUrlData(string& url) const {
+const UrlData* UrlStore::findUrlData(const string& url) const {
     return url_data.get(url);
 }
 
