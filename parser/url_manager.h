@@ -5,6 +5,7 @@
 #include "../lib/string.h"
 #include "../lib/vector.h"
 #include "../url_store/url_store.h"
+#include "../crawler/crawler_outbound.h"
 
 class UrlManager {
 public:
@@ -79,25 +80,32 @@ public:
                 size_t recipient = get_destination_machine_from_url(url);
                 // URL belongs to this machine
                 if (recipient == ME) {
-                    // TODO: Does this get to the crawler/frontier?? Or do I need to send to crawler AND url store
-                    // To me it seems like the ideal thing is that addUrl in URL store should send link to frontier/crawler as needed
-                    // Since updateUrl calls addUrl for a new URL, that would solve the issue
                     // Also TODO: I get an error when I try to move(anchor_words) here, but I fear string will break if I don't move
-
-                    urlStore.updateUrl(move(url), anchor_words, hops + 1, domain_hops + dhop, 1);
+                    urlStore.updateUrl(url, anchor_words, hops + 1, domain_hops + dhop, 1);
                 } 
                 // Send RPC to destination machine
                 else {
                     URLStoreUpdateRequest rpc{
-                        move(url), 
+                        // needs explicit copy here, because string data is needed for crawlTarget below
+                        string(url.data(), url.size()), 
                         move(anchor_words), 
                         1,
                         hops + 1,
                         domain_hops + dhop,
                     };
 
-                    rpcs[recipient].reqs.push_back(move(rpc));
+                    store_rpcs[recipient].reqs.push_back(move(rpc));
                 }
+                
+                // once a new URL is discovered, need to forward this to appropriate crawler
+                // TODO: for communicating to the crawler on the same machine as us, is a network call still needed?
+                // is there some local API we can just call to feed this crawlerTarget directly to its corresponding crawler?
+                crawlerOutbound.add(recipient, {
+                    extract_domain(url),
+                    move(url),                     // can move here because url is discarded after this loop
+                    static_cast<uint16_t>(hops + 1),
+                    static_cast<uint16_t>(domain_hops + dhop)
+                });
             }
 
             p += 7; // Skip </doc>\n
@@ -105,10 +113,11 @@ public:
     }
 
     // TODO: When a certain threshold is met, send all the RPCs in vector
-    bool send_rpcs();
+    bool send_store_rpcs();
 
 private:
-    BatchURLStoreUpdateRequest rpcs[NUM_MACHINES];
+    BatchURLStoreUpdateRequest store_rpcs[NUM_MACHINES];
     UrlStore urlStore; // TODO: This should be passed in or declared elsewhere
     size_t ME; // TODO: Initialize a machine ID on crawler startup
+    CrawlerOutbound crawlerOutbound; // TODO: This should be passed in or declared elsewhere
 };
