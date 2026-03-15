@@ -119,5 +119,5 @@ private:
     BatchURLStoreUpdateRequest store_rpcs[NUM_MACHINES];
     UrlStore urlStore; // TODO: This should be passed in or declared elsewhere
     size_t ME; // TODO: Initialize a machine ID on crawler startup
-    CrawlerOutbound crawlerOutbound; // TODO: This should be passed in or declared elsewhere
+    CrawlerOutbound crawlerOutbound;
 };

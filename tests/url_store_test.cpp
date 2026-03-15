@@ -70,8 +70,11 @@ void test_url_store_basic() {
     }
     
     // Test 3: Updating a non-existent URL should fail
-    bool failed_update = store.updateUrl(dne_url, anchors1, 1, 1, 1);
-    assert(failed_update == false);
+    bool update_calls_add = store.updateUrl(dne_url, anchors1, 1, 1, 1);
+    assert(update_calls_add == true);
+
+    bool dup_url = store.addUrl(umich_url, anchors1, 0, 0, 0, 0, 0);
+    assert(dup_url == false);
 
     cout << string("-> Passed test_url_store_basic\n") << endl;
 }

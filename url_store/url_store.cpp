@@ -24,18 +24,20 @@ void UrlStore::client_handler(int fd) {
     if (!req) return;
 
     for (URLStoreUpdateRequest& update_req : req->reqs) {
-        if (!updateUrl(update_req.url, update_req.anchor_text, update_req.seed_list_url_hops, update_req.seed_list_domain_hops, update_req.num_encountered)) {
-            // if update fails (url DNE), try adding instead
-            addUrl(update_req.url, update_req.anchor_text, update_req.seed_list_url_hops, update_req.seed_list_domain_hops, 0, 0, update_req.num_encountered);
-        }
+        updateUrl(update_req.url, update_req.anchor_text, update_req.seed_list_url_hops, update_req.seed_list_domain_hops, update_req.num_encountered);
     }
 }
 
-const UrlData* UrlStore::findUrlData(string& url) const {
+const UrlData* UrlStore::findUrlData(const string& url) const {
     return url_data.get(url);
 }
 
 UrlData* UrlStore::findUrlData(const string& url) {
+    auto slot = url_data.find(url);
+    return slot != url_data.end() ? &(*slot).value : nullptr;
+}
+
+UrlData* UrlStore::findUrlData(string& url) {
     auto slot = url_data.find(url);
     return slot != url_data.end() ? &(*slot).value : nullptr;
 }
@@ -53,7 +55,7 @@ uint32_t UrlStore::findAnchorId(string& anchor_text) {
 }
 
 
-bool UrlStore::addUrl(string& url, vector<string>& anchor_texts, const uint16_t seed_distance, const uint16_t domain_distance, const uint16_t eot, const uint16_t eod, const uint32_t num_encountered) {
+ bool UrlStore::addUrl(string& url, vector<string>& anchor_texts, const uint16_t seed_distance, const uint16_t domain_distance, const uint16_t eot, const uint16_t eod, const uint32_t num_encountered) {
     // if url already exists, return false
     if (url_data.find(url) != url_data.end()) return false;
 
@@ -72,9 +74,9 @@ bool UrlStore::addUrl(string& url, vector<string>& anchor_texts, const uint16_t 
 }
 
 
-bool UrlStore::updateUrl(const string& url, vector<string>& anchor_texts, const uint16_t seed_distance, const uint16_t domain_distance, const uint32_t num_encountered) {
+bool UrlStore::updateUrl(string& url, vector<string>& anchor_texts, const uint16_t seed_distance, const uint16_t domain_distance, const uint32_t num_encountered) {
     UrlData* url_data_ptr = findUrlData(url);
-    if (url_data_ptr == nullptr) return false;
+    if (url_data_ptr == nullptr) return addUrl(url, anchor_texts, seed_distance, domain_distance, 0, 0, num_encountered);
 
     url_data_ptr->num_encountered += num_encountered;
     url_data_ptr->seed_distance = min(url_data_ptr->seed_distance, seed_distance);
