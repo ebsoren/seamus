@@ -20,17 +20,15 @@ size_t get_priority_bucket(const string& url, int seed_list_dist) {
     // CURRENT FUNCTION WRITTEN WITH 8 EXPECTED BUCKETS, WILL NEED TO CHANGE IF THAT IS CHANGED!!
     int score = calcPriorityScore(url, seed_list_dist);
 
-    int interval = 30000 / (PRIORITY_BUCKETS - 5);
-
     if      (score >= 400000) return 0;  // elite
     if      (score >= 300000) return 1;
     if      (score >= 200000) return 2;
     if      (score >= 100000) return 3;
     if      (score >= 50000) return 4;
-    if      (score >= 50000 - interval) return 5;
-    if      (score >= 50000 - interval * 2) return 6;
-    if      (score >= 50000 - interval * 3) return 7;
-    else                      return -1;  // don't add to the buckets (bad url)
+    if      (score >= 40000) return 5;
+    if      (score >= 30000) return 6;
+    if      (score >= 20000) return 7;
+    else                     return 8;  // don't add to the buckets (bad url)
 }
 
 unordered_map<string,double> makeTldWeight() {
@@ -47,21 +45,21 @@ unordered_map<string,double> makeTldWeight() {
 
     return m;
 }
-static const auto tldWeight = makeTldWeight(); // factory function to avoid having to implement initializer lists lol
+const unordered_map<string,double> tldWeight = makeTldWeight(); // factory function to avoid having to implement initializer lists lol
 
 bool is_digit(char c) {
     return c >= '0' && c <= '9';
 }
 
 double max(double i, double j) {
-    if(i > j) {
+    if(i < j) {
         return j;
     } else {
         return i;
     }
 }
 
-double calcPriorityScore(const string& u, int seed_list_dist) {
+int calcPriorityScore(const string& u, int seed_list_dist) {
     // points for http or https however https > http
     double factor_1;
 
@@ -103,6 +101,7 @@ double calcPriorityScore(const string& u, int seed_list_dist) {
         } else if(url[i] == '.') {
             subdomain_count++;
             start = i+1;
+            len_ext = 0;
         } else {
             len_ext += 1;
             if(is_digit(url[i])) {
@@ -142,23 +141,16 @@ double calcPriorityScore(const string& u, int seed_list_dist) {
 struct UncrawledItem {
     string url;
     uint16_t seed_list_dist;
-    uint16_t priority_score; // only to be set once inserted
 
-    UncrawledItem(string init_url, uint16_t init_seed_list_dist) : url(static_cast<string&&>(init_url)), seed_list_dist(init_seed_list_dist),
-        priority_score(calcPriorityScore(init_url, init_seed_list_dist)) { }
+    UncrawledItem(string init_url, uint16_t init_seed_list_dist) : url(static_cast<string&&>(init_url)), seed_list_dist(init_seed_list_dist) { }
 
-    bool operator()(const UncrawledItem& u1, const UncrawledItem& u2) const {
-        return u1.priority_score < u2.priority_score;
-    }
 };
 
 struct CrawledItem {
     string url;
     uint16_t seed_list_dist;
-    uint32_t times_seen;
 
-    CrawledItem(string init_url, uint16_t init_seed_list_dist, uint16_t times_seen_init) : url(static_cast<string&&>(init_url)), seed_list_dist(init_seed_list_dist),
-        times_seen(times_seen_init) { }
+    CrawledItem(string init_url, uint16_t init_seed_list_dist) : url(static_cast<string&&>(init_url)), seed_list_dist(init_seed_list_dist) { }
 };
 
 struct UncrawledComp {
@@ -169,48 +161,62 @@ class Frontier {
 private:
     priority_queue<UncrawledItem, vector<UncrawledItem>, UncrawledComp> pq;
     vector<vector<UncrawledItem>> priority_buckets;
-    unordered_map<string, uint32_t> curr_urls;
-    UrlStore urls; 
+    // unordered_map<string, uint32_t> curr_urls;
     uint16_t worker_id;
 public:
-    Frontier(uint16_t worker_id_init, size_t initial_map_size = 2048, double initial_loading_factor = 0.65) 
-        : curr_urls(initial_map_size, initial_loading_factor), worker_id(worker_id_init), priority_buckets(PRIORITY_BUCKETS) { }
+    Frontier(u_int16_t worker_id_init) 
+        : worker_id(worker_id_init), priority_buckets(PRIORITY_BUCKETS) { }
 
     void Frontier::push(const UncrawledItem &u) {
-        uint32_t& count = curr_urls[u.url];
-        
-        if (count++ == 0) {
-            pq.push(u);
+        size_t bucket = get_priority_bucket(u.url, u.seed_list_dist);
+        for(size_t i = bucket; i < PRIORITY_BUCKETS; i++) {
+            if(priority_buckets[i].size() < MAX_SIZE_BUCKET) {
+                priority_buckets[i].push_back(u);
+                return;
+            }
         }
     }
 
-    void Frontier::push(string &url, int seed_list_dist) {
-        uint32_t& count = curr_urls[url];
-        
-        if (count++ == 0) {
-            pq.push(UncrawledItem(static_cast<string&&>(url), seed_list_dist));
+    void Frontier::push(string &&url, int seed_list_dist) {
+        size_t bucket = get_priority_bucket(url, seed_list_dist);
+        for(size_t i = bucket; i < PRIORITY_BUCKETS; i++) {
+            if(priority_buckets[i].size() < MAX_SIZE_BUCKET) {
+                priority_buckets[i].push_back(UncrawledItem(static_cast<string&&>(url), seed_list_dist));
+                return;
+            }
         }
     }
 
     void Frontier::pop() {
-        if(pq.size() != 0) {
-            pq.pop();
-        } 
+        for(size_t i = 0; i < PRIORITY_BUCKETS; i++) {
+            if(!priority_buckets[i].empty()) {
+                priority_buckets[i].pop_back();
+                return;
+            }
+        }
     }
 
     CrawledItem Frontier::front() {
-        assert(!pq.empty());
-
-        UncrawledItem front =
-        static_cast<UncrawledItem&&>(
-            const_cast<UncrawledItem&>(pq.front())
-        );
-
-        return CrawledItem(static_cast<string&&>(front.url), front.seed_list_dist, curr_urls[front.url]);
+        for(size_t i = 0; i < PRIORITY_BUCKETS; i++) {
+            size_t idx = priority_buckets[i].size();
+            if(idx != 0) {
+                UncrawledItem& item = priority_buckets[i][idx-1];
+                return CrawledItem(
+                    (item.url.str_view(0,item.url.size()).to_string()),
+                    item.seed_list_dist
+                );
+            }
+        }
+        throw std::runtime_error("Frontier empty");
+        return;
     }
 
     size_t Frontier::size() {
-        return pq.size();
+        size_t sz = 0;
+        for(size_t i = 0; i < PRIORITY_BUCKETS; i++) {
+            sz += priority_buckets[i].size();
+        }
+        return sz;
     }
 
     void Frontier::persist() {
@@ -220,26 +226,31 @@ public:
 
         if (fd == nullptr) perror("Error opening frontier file for writing.");
 
-        // <url_len (32 bits)><url (variable)><distance from seed list (16 bits)><times seen (32 bits)>
+        // <url_len (32 bits)><url (variable)><distance from seed list (16 bits)>
         uint64_t total_bytes = 0;
-        for (auto it = pq.begin(); it != pq.end(); ++it) {
-            total_bytes += (*it).url.size() + 10;
+        for(size_t i = 0; i < PRIORITY_BUCKETS; i++) {
+            for(auto it = priority_buckets[i].begin(); it != priority_buckets[i].end(); it++) {
+                total_bytes += (*it).url.size();
+            }
         }
 
         // Write the size
         fwrite(&total_bytes, sizeof(total_bytes), 1, fd);
         fwrite("\n", sizeof(char), 1, fd);
 
-        // Write the file
-        for (auto it = pq.begin(); it != pq.end(); ++it) {
-            string url = (*it).url;
-            uint16_t seed_dist = (*it).seed_list_dist;
-            uint32_t times_seen = curr_urls[url];
-            uint32_t sz = url.size();
-            fwrite(&sz, sizeof(uint32_t), 1, fd);
-            fwrite(url.data(), sizeof(char), url.size(), fd);
-            fwrite(&seed_dist, sizeof(uint16_t), 1, fd);
-            fwrite(&times_seen, sizeof(uint32_t), 1, fd);
+        // write the file
+        for(uint16_t i = 0; i < PRIORITY_BUCKETS; i++) {
+            fwrite(&i, sizeof(uint16_t), 1, fd);
+            uint64_t bucket_size = priority_buckets[i].size();
+            fwrite(&bucket_size, sizeof(uint64_t), 1, fd);
+            for(auto it = priority_buckets[i].begin(); it != priority_buckets[i].end(); it++) {
+                string url = static_cast<string&&>((*it).url);
+                uint16_t seed_dist = (*it).seed_list_dist;
+                uint32_t sz = url.size();
+                fwrite(&sz, sizeof(uint32_t), 1, fd);
+                fwrite(url.data(), sizeof(char), url.size(), fd);
+                fwrite(&seed_dist, sizeof(uint16_t), 1, fd);
+            }
         }
 
         fclose(fd);
