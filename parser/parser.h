@@ -84,7 +84,8 @@ public:
         links.flush();
 
         // Pass the links buffer to url manager to handle
-        // TODO: Should this be a separate thread? Can be if we pass by copy
+        // TODO: Refactor -- this should be a separate thread
+        // Since it's passed by copy, it's fine to immediately overwrite links without lock here
         urlManager.add_urls(links);
     }
 

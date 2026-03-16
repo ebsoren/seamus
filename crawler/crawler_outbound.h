@@ -35,6 +35,11 @@ private:
     vector<CrawlTarget> buffers[NUM_MACHINES];
     std::mutex locks[NUM_MACHINES];
 
+    // TODO: Refactor --
+    // Flush_locked should add a pointer switch before this
+    // Create a new buffer and swap it into the array, then unlock
+    // 
+    // Can unlock once you switch the pointers
 
     // Sends the buffered targets to the machine's crawler listener and clears the buffer
     // Caller must hold locks[machine_id]
