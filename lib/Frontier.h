@@ -8,27 +8,11 @@
 #include "string.h"
 #include "unordered_map.h"
 #include "priority_queue.h"
-#include "../url_store/url_store.h"
 #include "utils.h"
 #include "consts.h"
 
-size_t get_priority_bucket(const string& url, int seed_list_dist) {
-    // TODO(Erik): write this function
-    // 0 is the index of the highest priority bucket, PRIORITY_BUCKETS - 1 is the index of the lowest priority bucket
-    // PRIORITY_BUCKETS defined in ~/lib/consts.h
-
-    // CURRENT FUNCTION WRITTEN WITH 8 EXPECTED BUCKETS, WILL NEED TO CHANGE IF THAT IS CHANGED!!
-    int score = calcPriorityScore(url, seed_list_dist);
-
-    if      (score >= 400000) return 0;  // elite
-    if      (score >= 300000) return 1;
-    if      (score >= 200000) return 2;
-    if      (score >= 100000) return 3;
-    if      (score >= 50000) return 4;
-    if      (score >= 40000) return 5;
-    if      (score >= 30000) return 6;
-    if      (score >= 20000) return 7;
-    else                     return 8;  // don't add to the buckets (bad url)
+bool is_digit(char c) {
+    return c >= '0' && c <= '9';
 }
 
 unordered_map<string,double> makeTldWeight() {
@@ -45,11 +29,7 @@ unordered_map<string,double> makeTldWeight() {
 
     return m;
 }
-const unordered_map<string,double> tldWeight = makeTldWeight(); // factory function to avoid having to implement initializer lists lol
-
-bool is_digit(char c) {
-    return c >= '0' && c <= '9';
-}
+unordered_map<string, double> tldWeight = makeTldWeight(); // factory function to avoid having to implement initializer lists lol
 
 double max(double i, double j) {
     if(i < j) {
@@ -110,9 +90,9 @@ int calcPriorityScore(const string& u, int seed_list_dist) {
         }
         domain_size += 1.0;
     }
-    string extension = (url.substr(start, len_ext)).to_string();
+    string_view extension = (url.substr(start, len_ext));
     auto slot = tldWeight.find(extension);
-    double factor_2 = (slot == nullptr) ? 0.6 : slot->value; 
+    double factor_2 = (slot == tldWeight.end()) ? 0.6 : (*slot).value; 
 
     // points for closer to seed list
 
@@ -136,6 +116,25 @@ int calcPriorityScore(const string& u, int seed_list_dist) {
     double factor_7 = max((150.0 - url.size()) / 100.0, 0.5);
     
     return int((factor_1 * factor_2 * factor_3 * factor_4 * factor_5 * factor_6 * factor_7) * 10000.0);
+}
+
+size_t get_priority_bucket(const string& url, int seed_list_dist) {
+    // TODO(Erik): write this function
+    // 0 is the index of the highest priority bucket, PRIORITY_BUCKETS - 1 is the index of the lowest priority bucket
+    // PRIORITY_BUCKETS defined in ~/lib/consts.h
+
+    // CURRENT FUNCTION WRITTEN WITH 8 EXPECTED BUCKETS, WILL NEED TO CHANGE IF THAT IS CHANGED!!
+    int score = calcPriorityScore(url, seed_list_dist);
+
+    if      (score >= 400000) return 0;  // elite
+    if      (score >= 300000) return 1;
+    if      (score >= 200000) return 2;
+    if      (score >= 100000) return 3;
+    if      (score >= 50000) return 4;
+    if      (score >= 40000) return 5;
+    if      (score >= 30000) return 6;
+    if      (score >= 20000) return 7;
+    else                     return 8;  // don't add to the buckets (bad url)
 }
 
 struct UncrawledItem {
@@ -165,9 +164,9 @@ private:
     uint16_t worker_id;
 public:
     Frontier(u_int16_t worker_id_init) 
-        : worker_id(worker_id_init), priority_buckets(PRIORITY_BUCKETS) { }
+        : priority_buckets(PRIORITY_BUCKETS), worker_id(worker_id_init) { }
 
-    void Frontier::push(const UncrawledItem &u) {
+    void push(const UncrawledItem &u) {
         size_t bucket = get_priority_bucket(u.url, u.seed_list_dist);
         for(size_t i = bucket; i < PRIORITY_BUCKETS; i++) {
             if(priority_buckets[i].size() < MAX_SIZE_BUCKET) {
@@ -177,7 +176,7 @@ public:
         }
     }
 
-    void Frontier::push(string &&url, int seed_list_dist) {
+    void push(string &&url, int seed_list_dist) {
         size_t bucket = get_priority_bucket(url, seed_list_dist);
         for(size_t i = bucket; i < PRIORITY_BUCKETS; i++) {
             if(priority_buckets[i].size() < MAX_SIZE_BUCKET) {
@@ -187,7 +186,7 @@ public:
         }
     }
 
-    void Frontier::pop() {
+    void pop() {
         for(size_t i = 0; i < PRIORITY_BUCKETS; i++) {
             if(!priority_buckets[i].empty()) {
                 priority_buckets[i].pop_back();
@@ -196,7 +195,7 @@ public:
         }
     }
 
-    CrawledItem Frontier::front() {
+    CrawledItem front() {
         for(size_t i = 0; i < PRIORITY_BUCKETS; i++) {
             size_t idx = priority_buckets[i].size();
             if(idx != 0) {
@@ -208,10 +207,9 @@ public:
             }
         }
         throw std::runtime_error("Frontier empty");
-        return;
     }
 
-    size_t Frontier::size() {
+    size_t size() {
         size_t sz = 0;
         for(size_t i = 0; i < PRIORITY_BUCKETS; i++) {
             sz += priority_buckets[i].size();
@@ -219,7 +217,7 @@ public:
         return sz;
     }
 
-    void Frontier::persist() {
+    void persist() {
             // Create a file (if it already exists, fail -- don't want to overwrite)
         string path = string::join("frontier_", string(worker_id), ".txt");
         FILE* fd = fopen(path.data(), "wx");

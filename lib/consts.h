@@ -38,6 +38,7 @@ constexpr size_t CRAWLER_WORKER_SLEEP_MS = 10;              // Time (millisecond
 
 constexpr size_t CRAWLER_OUTBOUND_BATCH_SIZE = 50;         // Number of crawl targets to buffer per machine before sending
 constexpr size_t PRIORITY_BUCKETS = 8;
+constexpr size_t MAX_SIZE_BUCKET = 16777216;
 
 
 // URL Store
