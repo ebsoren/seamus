@@ -229,7 +229,6 @@ private:
     }
 
     // Core parsing logic, man i'm glad David did most of this
-    // TODO: Case convert
     void parse_chunk(const char *buffer, size_t length) {
         const char *end = buffer + length;
         const char *p = buffer;
@@ -243,11 +242,8 @@ private:
                 if (p > word_start) {
                     size_t word_len = p - word_start;
                     if (in_a_) {
-                        // TODO: Push back to anchor text vector instead of writing to links
-                        // PROBLEM: How to get this check for numbers to work without word buffer?
                         !comma_in_number(p, end) ? links.push_back(word_start, word_len, SPACE_DELIM) : links.push_back(word_start, word_len, NULL_DELIM);
 
-                        // TODO: Have to modify case conversion for this as well if not writing to links
                         // Convert just the anchor text, not the URL (since URLs case sensitive)
                         links.case_convert(links.size() - (word_len + 1), links.size());
                     }
@@ -374,7 +370,7 @@ private:
                 case DesiredAction::Anchor:
                     if (is_closing) {
                         in_a_ = false;
-                        links.push_back(nullptr, 0); // TODO: Delete this if we stop using word_array for links
+                        links.push_back(nullptr, 0);
                         while (p < end && *p != '>') p++;
                     } else {
                         while (p < end && *p != '>') {

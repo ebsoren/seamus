@@ -80,13 +80,12 @@ public:
                 size_t recipient = get_destination_machine_from_url(url);
                 // URL belongs to this machine
                 if (recipient == ME) {
-                    // Also TODO: I get an error when I try to move(anchor_words) here, but I fear string will break if I don't move
                     urlStore.updateUrl(url, anchor_words, hops + 1, domain_hops + dhop, 1);
                 } 
                 // Send RPC to destination machine
                 else {
                     URLStoreUpdateRequest rpc{
-                        // needs explicit copy here, because string data is needed for crawlTarget below
+                        // Needs explicit copy because string data is needed for crawlTarget below
                         string(url.data(), url.size()), 
                         move(anchor_words), 
                         1,
