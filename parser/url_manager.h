@@ -36,10 +36,9 @@ public:
         while (p < end) {
             uint16_t hops = 0;
             uint16_t domain_hops = 0;
-            string domain("");
 
             // Expect start of document token
-            if (memcmp(p, "<doc>", 5)) {
+            if (memcmp(p, "<doc>", 5)!=0) {
                 // Didn't find expected token
                 perror("Missing expected start of document token.\n");
                 return false;
@@ -58,16 +57,16 @@ public:
             // Read the domain of the page the URLs were found on
             const char* word_start = p;
             while (*(++p) != '\n') {}
-            domain = string(word_start, p - word_start);
+            auto domain = string(word_start, p - word_start);
             p++;
 
             // Parse URLs until </doc> is reached
-            while (memcmp(p, "</doc>", 6)) {
+            while (memcmp(p, "</doc>", 6)!=0) {
                 // Get the URL itself
                 word_start = p;
                 while(*(++p) != '\n') {}
                 string url(word_start, p - word_start);
-                uint16_t dhop = extract_domain(string(word_start, p - word_start)) != move(domain) ? 1 : 0;
+                uint16_t dhop = extract_domain(url) != domain ? 1 : 0;
                 vector<string> anchor_words;
 
                 // Parse space-separated anchor texts
@@ -89,8 +88,8 @@ public:
                         string(url.data(), url.size()), 
                         move(anchor_words), 
                         1,
-                        hops + 1,
-                        domain_hops + dhop,
+                        static_cast<uint16_t>(hops + 1),
+                        static_cast<uint16_t>(domain_hops + dhop),
                     };
 
                     store_rpcs[recipient].reqs.push_back(move(rpc));
