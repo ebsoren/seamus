@@ -9,7 +9,6 @@ cc_library(
         "bucket_manager.h",
         "network_util.h",
         "crawler_worker.h",
-        "crawler_outbound.h",
     ],
     copts = ["-I/opt/homebrew/opt/openssl@3/include"],
     linkopts = [                                                        # todo(hershey): add proper linkopts when we build for linux
@@ -17,7 +16,7 @@ cc_library(
         "-lssl",
         "-lcrypto",
     ],
-    deps = ["//lib:consts", "//lib:vector", "//lib:deque", "//lib:string", "//lib:utils", "//lib:rpc_listener", "//lib:rpc_crawler", "//lib:logger"],
+    deps = ["//lib:consts", "//lib:vector", "//lib:deque", "//lib:string", "//lib:utils", "//lib:rpc_listener", "//lib:rpc_crawler", "//lib:logger", "//parser:parser"],
     visibility = ["//visibility:public"],
 )
 

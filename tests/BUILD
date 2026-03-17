@@ -115,7 +115,10 @@ cc_test(
 cc_test(
     name = "crawler_test",
     srcs = ["crawler_test.cpp"],
-    deps = ["//crawler:crawler_lib"],
+    deps = [
+        "//crawler:crawler_lib",
+        "//parser:parser"
+    ],
 )
 
 cc_test(

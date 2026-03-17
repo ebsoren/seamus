@@ -73,7 +73,6 @@ uint32_t UrlStore::findAnchorId(string& anchor_text) {
     return true;
 }
 
-
 bool UrlStore::updateUrl(string& url, vector<string>& anchor_texts, const uint16_t seed_distance, const uint16_t domain_distance, const uint32_t num_encountered) {
     UrlData* url_data_ptr = findUrlData(url);
     if (url_data_ptr == nullptr) return addUrl(url, anchor_texts, seed_distance, domain_distance, 0, 0, num_encountered);

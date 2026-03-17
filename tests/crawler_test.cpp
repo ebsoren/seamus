@@ -3,9 +3,9 @@
 #include <thread>
 #include <chrono>
 #include "../crawler/crawler_listener.h"
-#include "../crawler/crawler_outbound.h"
 #include "../crawler/crawler_worker.h"
 #include "../crawler/domain_carousel.h"
+#include "../parser/url_buffers.h"
 
 
 void test_crawler_listener_receives_batch() {
@@ -426,16 +426,14 @@ void test_crawler_outbound_flushes_to_listener() {
 
     // Push exactly CRAWLER_OUTBOUND_BATCH_SIZE targets to machine 0
     // This should trigger a flush to the local crawler listener
-    CrawlerOutbound outbound;
+    OutboundUrlBuffer outbound;
     for (size_t i = 0; i < CRAWLER_OUTBOUND_BATCH_SIZE; ++i) {
         char url_buf[64];
         snprintf(url_buf, sizeof(url_buf), "https://outbound%zu.com/page", i);
-        char domain_buf[64];
-        snprintf(domain_buf, sizeof(domain_buf), "outbound%zu.com", i);
-        outbound.add(0, CrawlTarget{
-            string(domain_buf, strlen(domain_buf)),
+        outbound.add_url(0, URLStoreUpdateRequest{
             string(url_buf, strlen(url_buf)),
-            0, 0
+            vector<string>(),
+            1, 0, 0
         });
     }
 

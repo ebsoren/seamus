@@ -5,7 +5,6 @@
 #include <cstring>
 #include <iostream>
 #include <initializer_list>
-
 #include <stdlib.h>
 
 #include "../lib/io.h"
@@ -40,6 +39,13 @@ public:
             seamus_write(fd_, data_, size_);
             size_ = 0;
         }
+    }
+
+    // Resets a word_array to be "dataless" without requiring reallocation of data_
+    // TODO: Esben, am I correct that this works as intended/is sufficient? 
+    // Don't need to reset the actual data_ array, I believe
+    inline void reset() {
+        size_ = 0;
     }
 
     // Convert the contents of a given segment of the data array to lowercase

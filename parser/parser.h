@@ -7,41 +7,32 @@
 
 #include "../url_store/url_store.h"
 #include "../lib/buffer.h"
+#include "../lib/consts.h"
 #include "../lib/string.h"
 #include "../lib/utils.h"
 #include "HtmlTags.h"
-#include "url_manager.h"
+#include "url_buffers.h"
 #include "word_array.h"
 
 class HtmlParser {
 public:
-    static constexpr int MAX_CONSECUTIVE_NON_ALNUM = 15;
-    static constexpr char RETURN_DELIM = '\r';
-    static constexpr char NULL_DELIM = '\0';
-    static constexpr char SPACE_DELIM = ' ';
-    static constexpr int MAX_LINK_MEMORY = 8 * 1024;
-    static constexpr int MAX_TITLELEN_MEMORY = 8 * 1024;   // Just copying value for link memory -- no logic behind this
-    static constexpr int MAX_WORD_MEMORY = 32 * 1024;
+    HtmlParser() : parser_id_(-1), url("") {}
 
-    int in_fd_;
-    uint16_t hops_;
-    uint16_t domain_hops_;
-    string url;
-    buffer buf;
-    word_array<MAX_WORD_MEMORY> words;
-    word_array<MAX_LINK_MEMORY> links;
-    static constexpr size_t MAX_BASE_LEN = 256;
-    char base[MAX_BASE_LEN] = {};
-    size_t base_len = 0;
-
-    // TODO: I assume this will be instantiated elsewhere?
-    UrlStore urlStore;
-    UrlManager urlManager;
-
-    HtmlParser(int words_fd, int links_fd)
-        : words(words_fd)
-        , links(links_fd)
-        , url("") {}
+    HtmlParser(size_t parser_id, LocalUrlBuffer* url_buff, UrlStore* url_store)
+        : parser_id_(parser_id)
+        , url("")
+        , localBuffer(url_buff)
+        , urlStore(url_store) 
+    {
+        // TODO: Create output file here and initalize words_fd
+    }
+    
+    HtmlParser& operator=(const HtmlParser& rhs) {
+        parser_id_ = rhs.parser_id_;
+        url = string("");
+        localBuffer = rhs.localBuffer;
+        urlStore = rhs.urlStore;
+    }
 
     bool killed() const { return killed_; }
 
@@ -81,12 +72,20 @@ public:
         // Flush any data remaining in buffer
         words.case_convert();
         words.flush();
-        links.flush();
 
-        // Pass the links buffer to url manager to handle
-        // TODO: Refactor -- this should be a separate thread
-        // Since it's passed by copy, it's fine to immediately overwrite links without lock here
-        urlManager.add_urls(links);
+        // Pass the links buffer to local URL buffer to disseminate
+        /**
+         * NOTE: This currently blocks. We discussed in 3/16 meeting whether we like that.
+         * Esben is pro: thinks that avoiding copies > not blocking.
+         * Aiden is anti: thinks that allowing max parallelism > avoiding copies.
+         * To switch this to non-blocking, only two small changes are needed:
+         *  a. Put this call in a thread
+         *  b. Pass by copy, not by reference, to add_urls
+         */
+        localBuffer->add_urls(links);
+
+        // Reset links word array
+        links.reset();
     }
 
     void inline write_headers() {
@@ -107,6 +106,19 @@ public:
     }
 
 private:
+    int in_fd_;
+    size_t parser_id_;
+    uint16_t hops_;
+    uint16_t domain_hops_;
+    string url;
+    buffer buf;
+    char base[MAX_BASE_LEN] = {};
+    size_t base_len = 0;
+    word_array<MAX_WORD_MEMORY> words;
+    word_array<MAX_LINK_MEMORY> links;
+    UrlStore* urlStore;
+    LocalUrlBuffer* localBuffer;
+
     // Internal parse that operates on the current buffer contents
     size_t parse_buf() {
         const char *data = buf.data();         // Front of buffer
@@ -317,7 +329,7 @@ private:
                         words.push_back("<title>", 7);
                     } else {
                         words.push_back("</title>", 8);
-                        urlStore.updateTitleLen(string(url.data(), url.size()), num_words);
+                        urlStore->updateTitleLen(string(url.data(), url.size()), num_words);
                     }
 
                     while (p < end && *p != '>') p++;

@@ -5,6 +5,7 @@ cc_library(
     hdrs = [
         "HtmlTags.h",
         "parser.h",
+        "url_buffers.h",
         "word_array.h"
     ],
     deps = [

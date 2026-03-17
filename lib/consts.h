@@ -36,9 +36,19 @@ constexpr size_t CRAWLER_PERSIST_INTERVAL_SEC = 60;         // Time (seconds) to
 constexpr size_t CRAWLER_FEED_INTERVAL_SEC = 1;             // Time (seconds) to wait between feeding in-memory priority buckets -> domain carousel
 constexpr size_t CRAWLER_WORKER_SLEEP_MS = 10;              // Time (milliseconds) for the crawler worker to sleep before moving to a new slot
 
-constexpr size_t CRAWLER_OUTBOUND_BATCH_SIZE = 50;         // Number of crawl targets to buffer per machine before sending
+constexpr size_t CRAWLER_OUTBOUND_BATCH_SIZE = 1000;         // Number of crawl targets to buffer per machine before sending
 constexpr size_t PRIORITY_BUCKETS = 8;
 
+
+// Parser
+static constexpr int MAX_CONSECUTIVE_NON_ALNUM = 15;
+static constexpr char RETURN_DELIM = '\r';
+static constexpr char NULL_DELIM = '\0';
+static constexpr char SPACE_DELIM = ' ';
+static constexpr int MAX_LINK_MEMORY = 8 * 1024;
+static constexpr int MAX_TITLELEN_MEMORY = 8 * 1024;   // Just copying value for link memory -- no logic behind this
+static constexpr int MAX_WORD_MEMORY = 32 * 1024;
+static constexpr size_t MAX_BASE_LEN = 256;
 
 // URL Store
 constexpr uint32_t URL_STORE_WORKER_NUMBER = 0;
