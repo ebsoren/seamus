@@ -56,6 +56,7 @@ private:
 class LocalUrlBuffer {
 public:
     LocalUrlBuffer() : ME(-1) {}
+    
     LocalUrlBuffer(size_t machine_id, OutboundUrlBuffer* outbound_buff, UrlStore* local_store) 
     : ME(machine_id), outboundBuffer(outbound_buff), urlStore(local_store) {}
 
@@ -154,9 +155,9 @@ public:
 
 private:
     vector<URLStoreUpdateRequest> url_updates[NUM_MACHINES];
-    UrlStore* urlStore; // TODO: This should be passed in or declared elsewhere
+    UrlStore* urlStore;
     OutboundUrlBuffer* outboundBuffer;
-    size_t ME; // TODO: Initialize a machine ID on crawler startup
+    size_t ME;
 
     // Once all URLs have been parsed into update requests, pass to outbound buffer
     void pass_rpcs() {

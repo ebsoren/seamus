@@ -34,9 +34,9 @@ public:
         }
     }
 
-    void flush() {
+    void flush(int fd = fd_) {
         if (size_ > 0) {
-            seamus_write(fd_, data_, size_);
+            seamus_write(fd, data_, size_);
             size_ = 0;
         }
     }

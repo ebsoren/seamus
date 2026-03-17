@@ -47,6 +47,7 @@ int main() {
         
         parsers[i] = HtmlParser(i, &url_buffers[i], &url_store);
     }
+    logger::info("Spawned %u parsers and local URL buffers.", NUM_PARSERS);
 
     // Bucket manager
     vector<string> bucket_files = get_frontier_bucket_files();

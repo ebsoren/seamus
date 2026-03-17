@@ -20,12 +20,10 @@ public:
 
     HtmlParser(size_t parser_id, LocalUrlBuffer* url_buff, UrlStore* url_store)
         : parser_id_(parser_id)
+        , file_num_(0)
         , url("")
         , localBuffer(url_buff)
-        , urlStore(url_store) 
-    {
-        // TODO: Create output file here and initalize words_fd
-    }
+        , urlStore(url_store) { init_fd(); }
     
     HtmlParser& operator=(const HtmlParser& rhs) {
         parser_id_ = rhs.parser_id_;
@@ -60,6 +58,7 @@ public:
         return status;
     }
 
+    // TODO: Do we really want to call this after each parse_page()? Presumably no -- less often
     // Call after parse_page() returns 0. Parses remaining bytes and flushes words.
     void finish() {
         if (buf.size() > 0) {
@@ -71,7 +70,7 @@ public:
 
         // Flush any data remaining in buffer
         words.case_convert();
-        words.flush();
+        words.flush(out_fd_);
 
         // Pass the links buffer to local URL buffer to disseminate
         /**
@@ -86,6 +85,10 @@ public:
 
         // Reset links word array
         links.reset();
+
+        // Create a new file descriptor to write to
+        close(out_fd_);
+        init_fd();
     }
 
     void inline write_headers() {
@@ -107,7 +110,9 @@ public:
 
 private:
     int in_fd_;
+    int out_fd_;
     size_t parser_id_;
+    size_t file_num_;
     uint16_t hops_;
     uint16_t domain_hops_;
     string url;
@@ -118,6 +123,11 @@ private:
     word_array<MAX_LINK_MEMORY> links;
     UrlStore* urlStore;
     LocalUrlBuffer* localBuffer;
+
+    inline void init_fd() {
+        string file_name = string::join("parser_", string(parser_id_), "out_", string(file_num_++), ".txt");
+        out_fd_ = open(file_name.data(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    }
 
     // Internal parse that operates on the current buffer contents
     size_t parse_buf() {
