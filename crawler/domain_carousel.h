@@ -21,6 +21,11 @@ public:
     struct alignas(64) PriorityBucket {
         std::mutex bucket_lock;
         deque<CrawlTarget> urls{};
+
+        // Enqueue a crawl target into this bucket. Caller must hold bucket_lock.
+        void enqueue(CrawlTarget&& target) {
+            urls.push_back(std::move(target));
+        }
     };
     PriorityBucket buckets[PRIORITY_BUCKETS]{};
 
