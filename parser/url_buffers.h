@@ -129,20 +129,20 @@ public:
 
                 size_t recipient = get_destination_machine_from_url(url);
                 
+                URLStoreUpdateRequest rpc{
+                    move(url),
+                    move(anchor_words),
+                    1,
+                    static_cast<uint16_t>(hops + 1),
+                    static_cast<uint16_t>(domain_hops + dhop),
+                };
+
                 // URL belongs to this machine
                 if (recipient == ME) {
-                    urlStore->updateUrl(url, anchor_words, hops + 1, domain_hops + dhop, 1);
-                } 
+                    urlStore->manage_frontier_and_update_url(rpc);
+                }
                 // Create RPC for destination machine
                 else {
-                    URLStoreUpdateRequest rpc{
-                        move(url), // Can move here bc url is discarded after this call
-                        move(anchor_words), 
-                        1,
-                        static_cast<uint16_t>(hops + 1),
-                        static_cast<uint16_t>(domain_hops + dhop),
-                    };
-
                     url_updates[recipient].push_back(move(rpc));
                 }
             }

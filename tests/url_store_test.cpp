@@ -1,10 +1,10 @@
 #include "../url_store/url_store.h"
+#include "../crawler/domain_carousel.h"
 #include "../lib/rpc_urlstore.h"
 #include <iostream>
 #include <cassert>
 #include <chrono>
 #include <thread>
-#include <vector>
 
 using std::cout;
 using std::endl;
@@ -19,7 +19,7 @@ void cleanup_test_file(int worker_number) {
 // Tests getters, setters for class data structures as well as content title and body detection
 void test_url_store_basic() {
     cout << string("Running test_url_store_basic...") << endl;
-    UrlStore store;
+    UrlStore store(nullptr);
     
     // Workaround 1: Create explicit lvalue variables for the URLs
     string umich_url("https://umich.edu");
@@ -83,7 +83,7 @@ void test_url_store_persistence() {
     cout << string("Running test_url_store_persistence...") << endl;
     cleanup_test_file(URL_STORE_WORKER_NUMBER);
 
-    UrlStore store;
+    UrlStore store(nullptr);
     vector<string> anchors;
     anchors.push_back(string("persisted link"));
     
@@ -105,7 +105,7 @@ void test_url_store_persistence() {
 
 void test_url_store_recover() {
     cout << string("Running test_url_store_recover...") << endl;
-    UrlStore store; // Fresh instance, empty in memory
+    UrlStore store(nullptr); // Fresh instance, empty in memory
     
     // Read from the file we just persisted
     UrlStore::readFromFile(store, URL_STORE_WORKER_NUMBER);
@@ -132,7 +132,7 @@ void test_url_store_listener_test() {
     cout << string("Running test_url_store_listener_test...") << endl;
     
     // Spinning up this object will automatically start the background RPCListener thread on URL_STORE_PORT 9000
-    UrlStore store; 
+    UrlStore store(nullptr); 
     
     // Build a mock network request simulating a worker finding a new URL
     BatchURLStoreUpdateRequest batch;
@@ -167,16 +167,65 @@ void test_url_store_listener_test() {
     cout << string("-> Passed test_url_store_listener_test\n") << endl;
 }
 
+void test_manage_frontier_and_update_url() {
+    cout << string("Running test_manage_frontier_and_update_url...") << endl;
+
+    DomainCarousel dc;
+    UrlStore store(&dc);
+
+    // New URL should be added to the url store AND pushed to a frontier bucket
+    URLStoreUpdateRequest req;
+    req.url = string("https://www.example.com/page1");
+    req.anchor_text.push_back(string("example"));
+    req.num_encountered = 1;
+    req.seed_list_url_hops = 2;
+    req.seed_list_domain_hops = 1;
+
+    store.manage_frontier_and_update_url(req);
+
+    // Verify URL was added to the store
+    string check_url("https://www.example.com/page1");
+    assert(store.getUrlNumEncountered(check_url) == 1);
+    assert(store.getUrlSeedDistance(check_url) == 2);
+
+    // Verify a CrawlTarget was pushed to bucket 0
+    assert(dc.buckets[0].urls.size() == 1);
+    string expected_domain("example.com");
+    assert(dc.buckets[0].urls.front().domain == expected_domain);
+    assert(dc.buckets[0].urls.front().seed_distance == 2);
+    assert(dc.buckets[0].urls.front().domain_dist == 1);
+
+    // Second update for the same URL should NOT push another target to the frontier
+    URLStoreUpdateRequest req2;
+    req2.url = string("https://www.example.com/page1");
+    req2.anchor_text.push_back(string("example site"));
+    req2.num_encountered = 1;
+    req2.seed_list_url_hops = 1;
+    req2.seed_list_domain_hops = 0;
+
+    store.manage_frontier_and_update_url(req2);
+
+    // Store should be updated (encounter count increased, seed distance lowered)
+    assert(store.getUrlNumEncountered(check_url) == 2);
+    assert(store.getUrlSeedDistance(check_url) == 1);
+
+    // But frontier should still have only one target
+    assert(dc.buckets[0].urls.size() == 1);
+
+    cout << string("-> Passed test_manage_frontier_and_update_url\n") << endl;
+}
+
 int main() {
     cout << string("Starting UrlStore Test Suite...\n") << endl;
 
     test_url_store_basic();
-    
+
     // Order matters here: persistence must write the file before recover tries to read it
     test_url_store_persistence();
     test_url_store_recover();
-    
+
     test_url_store_listener_test();
+    test_manage_frontier_and_update_url();
 
     cout << string("All UrlStore tests passed successfully!") << endl;
     return 0;

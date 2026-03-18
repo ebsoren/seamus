@@ -54,7 +54,9 @@ static constexpr size_t MAX_BASE_LEN = 256;
 
 // URL Store
 constexpr uint32_t URL_STORE_WORKER_NUMBER = 0;
-constexpr uint32_t URL_STORE_NUM_THREADS = 8;
+constexpr uint32_t URL_STORE_NUM_THREADS = 1;               // TODO(hershey/charlie): make url store thread safe and increase this number afterward
+                                                            // We cannot have multiple client listeners running concurrently calling read and update methods without locks
+                                                            // At the same time, we do want multiple listeners, so we should add some locking mechanism better than a global one
 constexpr uint32_t URL_STORE_PORT = 9000;
 constexpr uint32_t URL_STORE_MAX_URL_LEN = 4096;           // 4 KB max url length
 constexpr uint32_t URL_STORE_MAX_ANCHOR_TEXT_LEN = 512;     // 0.5 KB max anchor text length

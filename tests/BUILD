@@ -149,6 +149,7 @@ cc_test(
         "//lib:consts",
         "//lib:utils",
         "//url_store:url_store",
+        "//crawler:domain_carousel",
     ],
 )
 

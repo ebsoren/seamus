@@ -1,11 +1,12 @@
 #include "url_store.h"
+#include "../crawler/domain_carousel.h"
 #include "../lib/rpc_urlstore.h"
 #include "../lib/utils.h"
 #include "../lib/algorithm.h"
 #include <optional>
 
 
-UrlStore::UrlStore() {
+UrlStore::UrlStore(DomainCarousel* dc) : dc(dc) {
     rpc_listener = new RPCListener(URL_STORE_PORT, URL_STORE_NUM_THREADS);
     listener_thread = std::thread([this]() {
         rpc_listener->listener_loop([this](int fd) { client_handler(fd); });
@@ -18,13 +19,33 @@ UrlStore::~UrlStore() {
     delete rpc_listener;
 }
 
-// Handles a BatchURLStoreUpdateRequest given an ephemeral socket fd  
+void UrlStore::manage_frontier_and_update_url(URLStoreUpdateRequest& req) {
+    bool is_new = findUrlData(req.url) == nullptr;
+    updateUrl(req.url, req.anchor_text, req.seed_list_url_hops, req.seed_list_domain_hops, req.num_encountered);
+
+    if (is_new && dc) {
+        string domain = extract_domain(req.url);
+        CrawlTarget target{
+            std::move(domain),
+            string(req.url.data(), req.url.size()),
+            req.seed_list_url_hops,
+            req.seed_list_domain_hops,
+        };
+
+        // TODO: Use real priority once frontier scoring is implemented
+        size_t priority = 0;
+        std::lock_guard<std::mutex> lock(dc->buckets[priority].bucket_lock);
+        dc->buckets[priority].urls.push_back(std::move(target));
+    }
+}
+
+// Handles a BatchURLStoreUpdateRequest given an ephemeral socket fd
 void UrlStore::client_handler(int fd) {
     std::optional<BatchURLStoreUpdateRequest> req = recv_batch_urlstore_update(fd);
     if (!req) return;
 
     for (URLStoreUpdateRequest& update_req : req->reqs) {
-        updateUrl(update_req.url, update_req.anchor_text, update_req.seed_list_url_hops, update_req.seed_list_domain_hops, update_req.num_encountered);
+        manage_frontier_and_update_url(update_req);
     }
 }
 

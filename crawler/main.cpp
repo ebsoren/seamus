@@ -35,7 +35,7 @@ int main() {
     logger::info("Domain carousel initialized (%zu hash slots, max %zu per queue)", CRAWLER_CAROUSEL_SIZE, CRAWLER_MAX_QUEUE_SIZE);
 
     // URL Store
-    UrlStore url_store;
+    UrlStore url_store(&dc);
     logger::info("URL store listener started on port %u with %u threads", URL_STORE_PORT, URL_STORE_NUM_THREADS);
 
     // Parsers and buffer managers

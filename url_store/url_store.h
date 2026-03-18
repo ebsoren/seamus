@@ -9,8 +9,7 @@
 #include <cstdint>
 #include <thread>
 
-#include <iostream>
-
+class DomainCarousel;
 
 struct UrlAnchorData {
     string* anchor_text;
@@ -28,11 +27,12 @@ private:
 
     RPCListener* rpc_listener;      // Listener for client requests
     std::thread listener_thread;    // Thread running the listener loop
+    DomainCarousel* dc;             // Frontier carousel for newly discovered URLs
     void client_handler(int fd);    // Detached handler for client requests
 
 
 public:
-    UrlStore();
+    UrlStore(DomainCarousel* dc);
     ~UrlStore();
     void persist();
 
@@ -41,6 +41,7 @@ public:
 
     bool addUrl(string& url, vector<string>& anchor_texts, const uint16_t seed_distance, const uint16_t domain_distance, const uint16_t eot, const uint16_t eod, const uint32_t num_encountered);
     bool updateUrl(string& url, vector<string>& anchor_texts, const uint16_t seed_distance, const uint16_t domain_distance, const uint32_t num_encountered);
+    void manage_frontier_and_update_url(URLStoreUpdateRequest& req);
     bool updateTitleLen(const string& url, const uint16_t eot);
 
     uint32_t findAnchorId(string& anchor_text);
