@@ -15,11 +15,13 @@
 inline void crawler_worker(DomainCarousel& dc, size_t carousel_left, size_t carousel_right, std::atomic<bool>& running) {
     while (running) {
         for (size_t carousel_index = carousel_left; running; carousel_index = (carousel_index < carousel_right) ? carousel_index + 1 : carousel_left) {
-            // Check current slot
-            // Fetch HTML buffer and reset `request_last_sent` if enough time has elapsed
+            // Try lock on the carousel slot - if contended, skip to next slot
             std::optional<CrawlTarget> target;
             {
-                std::lock_guard<std::mutex> lock(dc.carousel[carousel_index].domain_queue_lock);
+                std::unique_lock<std::mutex> lock(dc.carousel[carousel_index].domain_queue_lock, std::try_to_lock);
+                if (!lock.owns_lock()) {
+                    continue;
+                }
                 auto& slot = dc.carousel[carousel_index];
                 if (!slot.targets.empty()) {
                     auto now = std::chrono::steady_clock::now();
@@ -32,7 +34,7 @@ inline void crawler_worker(DomainCarousel& dc, size_t carousel_left, size_t caro
                 }
             }
 
-            // Sleep if we couldn't acquire a target
+            // Sleep if we couldn't acquire a target (empty slot or backoff not elapsed)
             if (!target) {
                 std::this_thread::sleep_for(std::chrono::milliseconds(CRAWLER_WORKER_SLEEP_MS));
                 continue;
