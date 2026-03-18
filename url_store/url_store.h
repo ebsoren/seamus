@@ -1,3 +1,5 @@
+#pragma once
+
 #include "../lib/unordered_map.h"
 #include "../lib/vector.h"
 #include "../lib/string.h"

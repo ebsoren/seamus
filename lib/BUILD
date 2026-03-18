@@ -122,6 +122,19 @@ cc_library(
 )
 
 cc_library(
+    name = "io",
+    hdrs = ["io.h"],
+    visibility = ["//visibility:public"],
+)
+
+cc_library(
+    name = "buffer",
+    hdrs = ["buffer.h"],
+    visibility = ["//visibility:public"],
+    deps = [":io"],
+)
+
+cc_library(
     name = "logger",
     hdrs = ["logger.h"],
     visibility = ["//visibility:public"],

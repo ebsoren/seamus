@@ -22,8 +22,8 @@ public:
         : parser_id_(parser_id)
         , file_num_(0)
         , url("")
-        , localBuffer(url_buff)
-        , urlStore(url_store) { init_fd(); }
+        , urlStore(url_store)
+        , localBuffer(url_buff) { init_fd(); }
     
     HtmlParser& operator=(const HtmlParser& rhs) {
         parser_id_ = rhs.parser_id_;

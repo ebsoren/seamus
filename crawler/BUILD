@@ -4,8 +4,7 @@ cc_library(
     name = "crawler_lib",
     hdrs = [
         "crawler_listener.h",
-        "domain_carousel.h",
-        "parser.h",
+        "domain_carousel.h", 
         "bucket_manager.h",
         "network_util.h",
         "crawler_worker.h",

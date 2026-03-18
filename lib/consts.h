@@ -38,6 +38,8 @@ constexpr size_t CRAWLER_WORKER_SLEEP_MS = 10;              // Time (millisecond
 
 constexpr size_t CRAWLER_OUTBOUND_BATCH_SIZE = 1000;         // Number of crawl targets to buffer per machine before sending
 constexpr size_t PRIORITY_BUCKETS = 8;
+constexpr size_t NUM_PARSERS = CRAWLER_THREADPOOL_SIZE;
+static_assert(NUM_PARSERS == CRAWLER_THREADPOOL_SIZE);      // TODO(hershey): make sure this assumption is valid
 
 
 // Parser

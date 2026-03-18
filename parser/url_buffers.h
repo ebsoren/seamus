@@ -1,3 +1,5 @@
+#pragma once
+
 #include <cstdint>
 #include <cstdlib>
 #include <mutex>
@@ -22,7 +24,7 @@ public:
 
     // Invariant: lock must be called by the LOCAL buffer outside of add_url being invoked 
     void add_url(size_t machine_id, URLStoreUpdateRequest&& target) {
-        buffers[machine_id].push_back(target);
+        buffers[machine_id].push_back(move(target));
         if (buffers[machine_id].size() >= CRAWLER_OUTBOUND_BATCH_SIZE) {
             flush(machine_id);
         }
@@ -35,12 +37,12 @@ private:
 
     void flush(size_t machine_id) {
         BatchURLStoreUpdateRequest batch;
-        batch.reqs = buffers[machine_id];
+        batch.reqs = move(buffers[machine_id]);
         buffers[machine_id] = vector<URLStoreUpdateRequest>();
 
         // Send RPC in a separate thread so we can return & release the lock ASAP
         // Safe to release the lock bc we copied and reset the buffer
-        std::thread(flush_async, machine_id, batch);
+        std::thread(&OutboundUrlBuffer::flush_async, this, machine_id, std::ref(batch)).detach();
     }
 
     // Send the copied contents of an RPC buffer to the correct machine
@@ -57,8 +59,8 @@ class LocalUrlBuffer {
 public:
     LocalUrlBuffer() : ME(-1) {}
     
-    LocalUrlBuffer(size_t machine_id, OutboundUrlBuffer* outbound_buff, UrlStore* local_store) 
-    : ME(machine_id), outboundBuffer(outbound_buff), urlStore(local_store) {}
+    LocalUrlBuffer(size_t machine_id, OutboundUrlBuffer* outbound_buff, UrlStore* local_store)
+    : urlStore(local_store), outboundBuffer(outbound_buff), ME(machine_id) {}
 
     bool add_urls(word_array<MAX_LINK_MEMORY> &urls) {
         /**
@@ -80,7 +82,6 @@ public:
         }
 
         const char* p = urls.data();
-        const char* const start = p;
         const char* const end = p + urls.size();
 
         while (p < end) {
@@ -162,7 +163,7 @@ private:
     // Once all URLs have been parsed into update requests, pass to outbound buffer
     void pass_rpcs() {
         for (size_t i = 0; i < NUM_MACHINES; i++) {
-            std::thread(pass_rpc, i);
+            std::thread(&LocalUrlBuffer::pass_rpc, this, i).detach();
         }
     }
 

@@ -11,8 +11,8 @@ cc_library(
     deps = [
         "//lib:buffer",
         "//lib:string",
-        "//lib:url_store"
-        "//lib:utils"
+        "//url_store:url_store",
+        "//lib:utils",
     ],
     visibility = ["//visibility:public"]
 )
