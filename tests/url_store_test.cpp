@@ -167,6 +167,62 @@ void test_url_store_listener_test() {
     cout << string("-> Passed test_url_store_listener_test\n") << endl;
 }
 
+void test_manage_frontier_via_listener() {
+    cout << string("Running test_manage_frontier_via_listener...") << endl;
+
+    DomainCarousel dc;
+    UrlStore store(&dc);
+
+    // Send a batch update over the network to the listener
+    BatchURLStoreUpdateRequest batch;
+    URLStoreUpdateRequest req;
+    req.url = string("https://www.listener-frontier.com/page");
+    req.anchor_text.push_back(string("listener test"));
+    req.num_encountered = 1;
+    req.seed_list_url_hops = 4;
+    req.seed_list_domain_hops = 2;
+    batch.reqs.push_back(::move(req));
+
+    string local_ip("127.0.0.1");
+    bool sent = send_batch_urlstore_update(local_ip, URL_STORE_PORT, batch);
+    assert(sent == true);
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(250));
+
+    // Verify URL was added to the store
+    string check_url("https://www.listener-frontier.com/page");
+    assert(store.getUrlNumEncountered(check_url) == 1);
+    assert(store.getUrlSeedDistance(check_url) == 4);
+
+    // Verify the listener path also pushed a CrawlTarget to the frontier
+    assert(dc.buckets[0].urls.size() == 1);
+    string expected_domain("listener-frontier.com");
+    assert(dc.buckets[0].urls.front().domain == expected_domain);
+    assert(dc.buckets[0].urls.front().seed_distance == 4);
+    assert(dc.buckets[0].urls.front().domain_dist == 2);
+
+    // Send the same URL again — should update store but NOT add to frontier
+    BatchURLStoreUpdateRequest batch2;
+    URLStoreUpdateRequest req2;
+    req2.url = string("https://www.listener-frontier.com/page");
+    req2.anchor_text.push_back(string("another anchor"));
+    req2.num_encountered = 1;
+    req2.seed_list_url_hops = 1;
+    req2.seed_list_domain_hops = 0;
+    batch2.reqs.push_back(::move(req2));
+
+    sent = send_batch_urlstore_update(local_ip, URL_STORE_PORT, batch2);
+    assert(sent == true);
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(250));
+
+    assert(store.getUrlNumEncountered(check_url) == 2);
+    assert(store.getUrlSeedDistance(check_url) == 1);
+    assert(dc.buckets[0].urls.size() == 1);
+
+    cout << string("-> Passed test_manage_frontier_via_listener\n") << endl;
+}
+
 void test_manage_frontier_and_update_url() {
     cout << string("Running test_manage_frontier_and_update_url...") << endl;
 
@@ -225,6 +281,7 @@ int main() {
     test_url_store_recover();
 
     test_url_store_listener_test();
+    test_manage_frontier_via_listener();
     test_manage_frontier_and_update_url();
 
     cout << string("All UrlStore tests passed successfully!") << endl;
