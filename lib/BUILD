@@ -10,6 +10,15 @@ cc_library(
 )
 
 cc_library(
+    name = "Frontier",
+    hdrs = ["Frontier.h"],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":string", ":vector", ":priority_queue", ":unordered_map", ":consts"
+    ],
+)
+
+cc_library(
     name = "vector",
     hdrs = ["vector.h"],
     visibility = ["//visibility:public"],

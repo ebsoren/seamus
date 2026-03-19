@@ -1,6 +1,6 @@
 #include <cassert>
 #include <cstdio>
-#include "../frontier/Frontier.h"
+#include "../lib/Frontier.h"
 
 static void print_header(const char* name) {
     printf("---- %s ----\n", name);

@@ -60,3 +60,4 @@ constexpr uint32_t URL_STORE_NUM_THREADS = 1;               // TODO(hershey/char
 constexpr uint32_t URL_STORE_PORT = 9000;
 constexpr uint32_t URL_STORE_MAX_URL_LEN = 4096;           // 4 KB max url length
 constexpr uint32_t URL_STORE_MAX_ANCHOR_TEXT_LEN = 512;     // 0.5 KB max anchor text length
+constexpr size_t URL_NUM_SHARDS = 64;

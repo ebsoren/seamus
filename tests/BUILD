@@ -16,7 +16,7 @@ cc_test(
     name = "frontier_test",
     srcs = ["frontier_test.cpp"],
     deps = [
-        "//frontier:Frontier",
+        "//lib:Frontier",
         "//lib:priority_queue",
         "//lib:string",
         "//lib:unordered_map",

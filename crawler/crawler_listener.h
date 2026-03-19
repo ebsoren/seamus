@@ -33,7 +33,7 @@ public:
                     size_t bucket_idx = BucketManager::get_priority_bucket(batch->targets[i].url);
                     auto& bucket = domain_carousel->buckets[bucket_idx];
                     std::lock_guard<std::mutex> lock(bucket.bucket_lock);
-                    bucket.urls.push_back(static_cast<CrawlTarget&&>(batch->targets[i]));
+                    bucket.enqueue(static_cast<CrawlTarget&&>(batch->targets[i]));
                 }
             });
         });
