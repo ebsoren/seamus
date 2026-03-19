@@ -40,16 +40,17 @@ UrlData* UrlStore::findUrlData(const string& url) {
     return us.findUrlData(url);
 }
 
-uint32_t UrlStore::findAnchorId(string& anchor_text) {
+size_t UrlStore::findAnchorId(string& anchor_text) {
     std::lock_guard<std::mutex> lock(global_mtx);
-     for (size_t i = 0; i < anchor_to_id.size(); i++) {
-        if (anchor_to_id[i] == anchor_text) {
-            return i;
-        }
+    auto it = anchor_to_id.find(anchor_text);
+
+    if (it == anchor_to_id.end()) {
+        anchor_to_id[string(anchor_text.data(), anchor_text.size())] = anchor_to_id.size();
+        id_to_anchor.push_back(::move(anchor_text));
+        return id_to_anchor.size() - 1;
     }
 
-    anchor_to_id.push_back(::move(anchor_text));
-    return anchor_to_id.size() - 1;
+    return (*it).value;
 }
 
 bool UrlStore::addUrl_unlocked(string& url, vector<string>& anchor_texts, const uint16_t seed_distance, const uint16_t domain_distance, const uint32_t num_encountered) {
@@ -132,7 +133,7 @@ void UrlStore::persist() {
         uint32_t num_anchors = static_cast<uint32_t>(anchor_to_id.size());
         fwrite(&num_anchors, sizeof(uint32_t), 1, fd);
 
-        for (const string& anchor_text : anchor_to_id) {
+        for (const string& anchor_text : id_to_anchor) {
             uint32_t anchor_len = static_cast<uint32_t>(anchor_text.size());
             fwrite(&anchor_len, sizeof(uint32_t), 1, fd);
             fwrite(anchor_text.data(), sizeof(char), anchor_len, fd);
@@ -202,7 +203,8 @@ void UrlStore::readFromFile(const int worker_number) {
         if (anchor_text_len > URL_STORE_MAX_ANCHOR_TEXT_LEN) anchor_text_len = URL_STORE_MAX_ANCHOR_TEXT_LEN; 
         
         fread(anchor_text_buff, sizeof(char), anchor_text_len, fd);
-        anchor_to_id.push_back(string(anchor_text_buff, anchor_text_len));
+        id_to_anchor.push_back(string(anchor_text_buff, anchor_text_len));
+        anchor_to_id[string(anchor_text_buff, anchor_text_len)] = id_to_anchor.size() - 1;
     }
 
     uint32_t url_len;

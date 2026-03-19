@@ -33,7 +33,8 @@ class UrlStore {
 private:
     std::mutex global_mtx; // used when reading/modifying data like anchor_to_id
     UrlShard shards[URL_NUM_SHARDS];
-    vector<string> anchor_to_id; // anchor text to corresponding id (index)
+    unordered_map<string, size_t> anchor_to_id; // anchor text to corresponding id (index)
+    vector<string> id_to_anchor;
 
     DefaultHash<string> hasher;
     UrlShard& get_shard(const string& url) {
@@ -70,7 +71,7 @@ public:
     bool updateTitleLen(const string& url, const uint16_t eot);
     bool updateBodyLen(const string& url, const uint16_t eod);
 
-    uint32_t findAnchorId(string& anchor_text);
+    size_t findAnchorId(string& anchor_text);
 
     vector<UrlAnchorData> getUrlAnchorInfo(const string& url) {
         UrlShard& us = get_shard(url);
@@ -84,7 +85,7 @@ public:
         url_anchor_data.reserve(it->anchor_freqs.size());
         for (auto anchor_it = it->anchor_freqs.begin(); anchor_it != it->anchor_freqs.end(); ++anchor_it) {
             const auto& tuple = *anchor_it;
-            url_anchor_data.push_back({&anchor_to_id[tuple.key] , tuple.value});
+            url_anchor_data.push_back({&id_to_anchor[tuple.key] , tuple.value});
         }
 
         return url_anchor_data;
