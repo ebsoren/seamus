@@ -24,44 +24,44 @@ void UrlStore::client_handler(int fd) {
     if (!req) return;
 
     for (URLStoreUpdateRequest& update_req : req->reqs) {
-        if (!updateUrl(update_req.url, update_req.anchor_text, update_req.seed_list_url_hops, update_req.seed_list_domain_hops, update_req.num_encountered)) {
-            // if update fails (url DNE), try adding instead
-            addUrl(update_req.url, update_req.anchor_text, update_req.seed_list_url_hops, update_req.seed_list_domain_hops, 0, 0, update_req.num_encountered);
-        }
+        updateUrl(update_req.url, update_req.anchor_text, update_req.seed_list_url_hops, update_req.seed_list_domain_hops, update_req.num_encountered);
     }
 }
 
 const UrlData* UrlStore::findUrlData(const string& url) const {
-    return url_data.get(url);
+    const UrlShard& us = get_shard(url);
+    std::lock_guard<std::mutex> lock(us.mtx);
+    return us.findUrlData(url);
 }
 
 UrlData* UrlStore::findUrlData(const string& url) {
-    auto slot = url_data.find(url);
-    return slot != url_data.end() ? &(*slot).value : nullptr;
+    UrlShard& us = get_shard(url);
+    std::lock_guard<std::mutex> lock(us.mtx);
+    return us.findUrlData(url);
 }
 
 uint32_t UrlStore::findAnchorId(string& anchor_text) {
-    for (size_t i = 0; i < anchor_to_id.size(); i++) {
+    std::lock_guard<std::mutex> lock(global_mtx);
+     for (size_t i = 0; i < anchor_to_id.size(); i++) {
         if (anchor_to_id[i] == anchor_text) {
             return i;
         }
     }
 
-    // needs explicit copy here to avoid destroying OG anchor text data
     anchor_to_id.push_back(::move(anchor_text));
     return anchor_to_id.size() - 1;
 }
 
+bool UrlStore::addUrl_unlocked(string& url, vector<string>& anchor_texts, const uint16_t seed_distance, const uint16_t domain_distance, const uint32_t num_encountered) {
+    UrlShard& us = get_shard(url);
+    auto& url_data = us.url_data;
 
-bool UrlStore::addUrl(string& url, vector<string>& anchor_texts, const uint16_t seed_distance, const uint16_t domain_distance, const uint16_t eot, const uint16_t eod, const uint32_t num_encountered) {
     // if url already exists, return false
     if (url_data.find(url) != url_data.end()) return false;
 
     url_data[url].num_encountered = num_encountered;
     url_data[url].seed_distance = seed_distance;
     url_data[url].domain_dist = domain_distance;
-    url_data[url].eot = eot;
-    url_data[url].eod = eod;
 
     for (string& anchor_text : anchor_texts) {
         uint32_t anchor_id = findAnchorId(anchor_text);
@@ -71,10 +71,11 @@ bool UrlStore::addUrl(string& url, vector<string>& anchor_texts, const uint16_t 
     return true;
 }
 
-
-bool UrlStore::updateUrl(const string& url, vector<string>& anchor_texts, const uint16_t seed_distance, const uint16_t domain_distance, const uint32_t num_encountered) {
-    UrlData* url_data_ptr = findUrlData(url);
-    if (url_data_ptr == nullptr) return false;
+bool UrlStore::updateUrl(string& url, vector<string>& anchor_texts, const uint16_t seed_distance, const uint16_t domain_distance, const uint32_t num_encountered) {
+    UrlShard& us = get_shard(url);
+    std::lock_guard<std::mutex> lg(us.mtx);
+    UrlData* url_data_ptr = us.findUrlData(url);
+    if (url_data_ptr == nullptr) return addUrl_unlocked(url, anchor_texts, seed_distance, domain_distance, num_encountered);
 
     url_data_ptr->num_encountered += num_encountered;
     url_data_ptr->seed_distance = min(url_data_ptr->seed_distance, seed_distance);
@@ -89,10 +90,23 @@ bool UrlStore::updateUrl(const string& url, vector<string>& anchor_texts, const 
 }
 
 bool UrlStore::updateTitleLen(const string& url, const uint16_t eot) {
-    UrlData* url_data_ptr = findUrlData(url);
+    UrlShard& us = get_shard(url);
+    std::lock_guard<std::mutex> lg(us.mtx);
+    UrlData* url_data_ptr = us.findUrlData(url);
     if (!url_data_ptr) return false;
 
     url_data_ptr->eot = eot;
+    return true;
+}
+
+
+bool UrlStore::updateBodyLen(const string& url, const uint16_t eod) {
+    UrlShard& us = get_shard(url);
+    std::lock_guard<std::mutex> lg(us.mtx);
+    UrlData* url_data_ptr = us.findUrlData(url);
+    if (!url_data_ptr) return false;
+
+    url_data_ptr->eod = eod;
     return true;
 }
 
@@ -112,38 +126,46 @@ void UrlStore::persist() {
 
     if (fd == nullptr) perror("Error opening urlstore file for writing.");
 
-    // Write number of anchors as a binary uint32_t
-    uint32_t num_anchors = static_cast<uint32_t>(anchor_to_id.size());
-    fwrite(&num_anchors, sizeof(uint32_t), 1, fd);
+    {
+        std::lock_guard<std::mutex> lock(global_mtx);
+        // Write number of anchors as a binary uint32_t
+        uint32_t num_anchors = static_cast<uint32_t>(anchor_to_id.size());
+        fwrite(&num_anchors, sizeof(uint32_t), 1, fd);
 
-    for (const string& anchor_text : anchor_to_id) {
-        uint32_t anchor_len = static_cast<uint32_t>(anchor_text.size());
-        fwrite(&anchor_len, sizeof(uint32_t), 1, fd);
-        fwrite(anchor_text.data(), sizeof(char), anchor_len, fd);
+        for (const string& anchor_text : anchor_to_id) {
+            uint32_t anchor_len = static_cast<uint32_t>(anchor_text.size());
+            fwrite(&anchor_len, sizeof(uint32_t), 1, fd);
+            fwrite(anchor_text.data(), sizeof(char), anchor_len, fd);
+        }
     }
     
-    for (const auto& slot : url_data) {
-        const string& url = slot.key;
-        if (url.size() > URL_STORE_MAX_URL_LEN) continue; 
-        
-        UrlData& data = slot.value;
-        
-        uint32_t url_len = static_cast<uint32_t>(url.size());
-        fwrite(&url_len, sizeof(uint32_t), 1, fd);
-        fwrite(url.data(), sizeof(char), url_len, fd); // FIX: Use .data()
+    for (size_t i = 0; i < URL_NUM_SHARDS; i++) {
+        auto& curr_shard = *(shards + i);
+        std::lock_guard<std::mutex> lock(curr_shard.mtx);
+        auto& url_data = curr_shard.url_data;
+        for (const auto& slot : url_data) {
+            const string& url = slot.key;
+            if (url.size() > URL_STORE_MAX_URL_LEN) continue; 
+            
+            UrlData& data = slot.value;
+            
+            uint32_t url_len = static_cast<uint32_t>(url.size());
+            fwrite(&url_len, sizeof(uint32_t), 1, fd);
+            fwrite(url.data(), sizeof(char), url_len, fd); // FIX: Use .data()
 
-        fwrite(&data.num_encountered, sizeof(uint32_t), 1, fd);
-        fwrite(&data.seed_distance, sizeof(uint16_t), 1, fd);
-        fwrite(&data.eot, sizeof(uint16_t), 1, fd);
-        fwrite(&data.eod, sizeof(uint16_t), 1, fd);
+            fwrite(&data.num_encountered, sizeof(uint32_t), 1, fd);
+            fwrite(&data.seed_distance, sizeof(uint16_t), 1, fd);
+            fwrite(&data.eot, sizeof(uint16_t), 1, fd);
+            fwrite(&data.eod, sizeof(uint16_t), 1, fd);
 
-        uint32_t num_freqs = static_cast<uint32_t>(data.anchor_freqs.size());
-        fwrite(&num_freqs, sizeof(uint32_t), 1, fd);
+            uint32_t num_freqs = static_cast<uint32_t>(data.anchor_freqs.size());
+            fwrite(&num_freqs, sizeof(uint32_t), 1, fd);
 
-        for (auto it = data.anchor_freqs.begin(); it != data.anchor_freqs.end(); ++it) {
-            const auto& tuple = *it;
-            fwrite(&tuple.key, sizeof(uint32_t), 1, fd);
-            fwrite(&tuple.value, sizeof(uint32_t), 1, fd);
+            for (auto it = data.anchor_freqs.begin(); it != data.anchor_freqs.end(); ++it) {
+                const auto& tuple = *it;
+                fwrite(&tuple.key, sizeof(uint32_t), 1, fd);
+                fwrite(&tuple.value, sizeof(uint32_t), 1, fd);
+            }
         }
     }
 
@@ -155,7 +177,7 @@ void UrlStore::persist() {
     }
 }
 
-void UrlStore::readFromFile(UrlStore& url_store, const int worker_number) {
+void UrlStore::readFromFile(const int worker_number) {
     string fileName = string::join("urlstore_", string(worker_number), ".txt");
     string read_mode("rb");
     FILE* fd = fopen(fileName.data(), read_mode.data());
@@ -180,7 +202,7 @@ void UrlStore::readFromFile(UrlStore& url_store, const int worker_number) {
         if (anchor_text_len > URL_STORE_MAX_ANCHOR_TEXT_LEN) anchor_text_len = URL_STORE_MAX_ANCHOR_TEXT_LEN; 
         
         fread(anchor_text_buff, sizeof(char), anchor_text_len, fd);
-        url_store.anchor_to_id.push_back(string(anchor_text_buff, anchor_text_len));
+        anchor_to_id.push_back(string(anchor_text_buff, anchor_text_len));
     }
 
     uint32_t url_len;
@@ -191,10 +213,15 @@ void UrlStore::readFromFile(UrlStore& url_store, const int worker_number) {
         
         string url(url_buff, url_len);
 
-        fread(&url_store.url_data[url].num_encountered, sizeof(uint32_t), 1, fd);
-        fread(&url_store.url_data[url].seed_distance, sizeof(uint16_t), 1, fd);
-        fread(&url_store.url_data[url].eot, sizeof(uint16_t), 1, fd);
-        fread(&url_store.url_data[url].eod, sizeof(uint16_t), 1, fd);
+        // TODO: is locking needed here? supposedly readFromFile should only be called on startup before requests are sent right
+        UrlShard& shard = get_shard(url);
+        std::lock_guard<std::mutex> lock(shard.mtx);
+        auto& url_data = shard.url_data;
+
+        fread(&url_data[url].num_encountered, sizeof(uint32_t), 1, fd);
+        fread(&url_data[url].seed_distance, sizeof(uint16_t), 1, fd);
+        fread(&url_data[url].eot, sizeof(uint16_t), 1, fd);
+        fread(&url_data[url].eod, sizeof(uint16_t), 1, fd);
 
         uint32_t num_anchor_freqs;
         fread(&num_anchor_freqs, sizeof(uint32_t), 1, fd);
@@ -203,7 +230,7 @@ void UrlStore::readFromFile(UrlStore& url_store, const int worker_number) {
             uint32_t anchor_id, freq;
             fread(&anchor_id, sizeof(uint32_t), 1, fd);
             fread(&freq, sizeof(uint32_t), 1, fd);
-            url_store.url_data[url].anchor_freqs[anchor_id] = freq;
+            url_data[url].anchor_freqs[anchor_id] = freq;
         }
     }
 
