@@ -50,8 +50,8 @@ void test_url_store_basic() {
     anchors2.push_back(string("michigan")); 
     anchors2.push_back(string("university")); 
     
-    bool updated = store.updateUrl(umich_url, anchors2, 1, 1, 3);
-    assert(updated == true);
+    bool is_new = store.updateUrl(umich_url, anchors2, 1, 1, 3);
+    assert(is_new == false);
     
     // Verify counters and minimum distances updated properly
     assert(store.getUrlNumEncountered(umich_url) == 4); 
@@ -169,7 +169,7 @@ void test_url_store_listener_test() {
 
 void test_url_store_concurrent_same_url() {
     cout << string("Running test_url_store_concurrent_same_url...") << endl;
-    UrlStore store;
+    UrlStore store(nullptr);
     const int num_threads = 10;
     const int updates_per_thread = 1000;
     std::vector<std::thread> threads;
@@ -200,7 +200,7 @@ void test_url_store_concurrent_same_url() {
 
 void test_url_store_concurrent_different_urls() {
     cout << string("Running test_url_store_concurrent_different_urls...") << endl;
-    UrlStore store;
+    UrlStore store(nullptr);
     const int num_threads = 50;
     std::vector<std::thread> threads;
 
@@ -228,7 +228,7 @@ void test_url_store_concurrent_different_urls() {
 
 void test_url_store_concurrent_anchors() {
     cout << string("Running test_url_store_concurrent_anchors...") << endl;
-    UrlStore store;
+    UrlStore store(nullptr);
     const int num_threads = 20;
     std::vector<std::thread> threads;
 
@@ -273,7 +273,7 @@ void test_url_store_concurrent_anchors() {
 
 void test_url_store_massive_stress() {
     cout << string("Running test_url_store_massive_stress (This might take a second)...") << endl;
-    UrlStore store;
+    UrlStore store(nullptr);
     
     // 32 threads performing 5,000 complex operations each = 160,000 total updates
     const int num_threads = 32;

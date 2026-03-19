@@ -20,8 +20,7 @@ UrlStore::~UrlStore() {
 }
 
 void UrlStore::manage_frontier_and_update_url(URLStoreUpdateRequest& req) {
-    bool is_new = findUrlData(req.url) == nullptr;
-    updateUrl(req.url, req.anchor_text, req.seed_list_url_hops, req.seed_list_domain_hops, req.num_encountered);
+    bool is_new = updateUrl(req.url, req.anchor_text, req.seed_list_url_hops, req.seed_list_domain_hops, req.num_encountered);
 
     if (is_new && dc) {
         string domain = extract_domain(req.url);
@@ -45,8 +44,7 @@ void UrlStore::batch_manage_frontier_and_update_url(BatchURLStoreUpdateRequest& 
 
     for (size_t i = 0; i < batch_req.reqs.size(); ++i) {
         URLStoreUpdateRequest& req = batch_req.reqs[i];
-        bool is_new = findUrlData(req.url) == nullptr;
-        updateUrl(req.url, req.anchor_text, req.seed_list_url_hops, req.seed_list_domain_hops, req.num_encountered);
+        bool is_new = updateUrl(req.url, req.anchor_text, req.seed_list_url_hops, req.seed_list_domain_hops, req.num_encountered);
 
         if (is_new && dc) {
             string domain = extract_domain(req.url);
@@ -93,8 +91,9 @@ UrlData* UrlStore::findUrlData(const string& url) {
 }
 
 UrlData* UrlStore::findUrlData(string& url) {
-    auto slot = url_data.find(url);
-    return slot != url_data.end() ? &(*slot).value : nullptr;
+    UrlShard& us = get_shard(url);
+    std::lock_guard<std::mutex> lock(us.mtx);
+    return us.findUrlData(url);
 }
 
 size_t UrlStore::findAnchorId(string& anchor_text) {
@@ -129,6 +128,8 @@ bool UrlStore::addUrl_unlocked(string& url, vector<string>& anchor_texts, const 
     return true;
 }
 
+
+// returns whether or not the url was new to the url_store
 bool UrlStore::updateUrl(string& url, vector<string>& anchor_texts, const uint16_t seed_distance, const uint16_t domain_distance, const uint32_t num_encountered) {
     UrlShard& us = get_shard(url);
     std::lock_guard<std::mutex> lg(us.mtx);
@@ -144,7 +145,7 @@ bool UrlStore::updateUrl(string& url, vector<string>& anchor_texts, const uint16
         url_data_ptr->anchor_freqs[anchor_id]++;
     }
 
-    return true;
+    return false;
 }
 
 bool UrlStore::updateTitleLen(const string& url, const uint16_t eot) {
