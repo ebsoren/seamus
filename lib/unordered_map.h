@@ -200,6 +200,58 @@ public:
         ::operator delete(values);
     }
 
+    // Explicitly Delete Copying (Prevents shallow copy from ever happening)
+    unordered_map(const unordered_map&) = delete;
+    unordered_map& operator=(const unordered_map&) = delete;
+
+    unordered_map(unordered_map&& other) noexcept
+        : uniqueKeys(other.uniqueKeys),
+          map_capacity(other.map_capacity),
+          collision_counter(other.collision_counter),
+          loading_factor(other.loading_factor),
+          hash(::move(other.hash)),
+          compareEqual(::move(other.compareEqual)),
+          states(other.states),
+          keys(other.keys),
+          values(other.values) 
+    {
+        // nullify the old map
+        other.states = nullptr;
+        other.keys = nullptr;
+        other.values = nullptr;
+        other.map_capacity = 0; // Ensures clear() doesn't loop
+        other.uniqueKeys = 0;
+    }
+
+    unordered_map& operator=(unordered_map&& other) noexcept {
+        if (this != &other) {
+            // Clean up our own memory first
+            clear();
+            delete[] states;
+            ::operator delete(keys);
+            ::operator delete(values);
+
+            // Steal from the other map
+            uniqueKeys = other.uniqueKeys;
+            map_capacity = other.map_capacity;
+            collision_counter = other.collision_counter;
+            loading_factor = other.loading_factor;
+            hash = ::move(other.hash);
+            compareEqual = ::move(other.compareEqual);
+            states = other.states;
+            keys = other.keys;
+            values = other.values;
+
+            // nullify the old map
+            other.states = nullptr;
+            other.keys = nullptr;
+            other.values = nullptr;
+            other.map_capacity = 0;
+            other.uniqueKeys = 0;
+        }
+        return *this;
+    }
+
     template<typename K, typename V>
     void insert(K&& key, V&& value) {
         rehash(loading_factor);
