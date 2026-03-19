@@ -271,6 +271,125 @@ void test_manage_frontier_and_update_url() {
     cout << string("-> Passed test_manage_frontier_and_update_url\n") << endl;
 }
 
+void test_batch_manage_frontier_and_update_url() {
+    cout << string("Running test_batch_manage_frontier_and_update_url...") << endl;
+
+    DomainCarousel dc;
+    UrlStore store(&dc);
+
+    // Build a batch with 3 distinct new URLs and 1 duplicate
+    BatchURLStoreUpdateRequest batch;
+
+    URLStoreUpdateRequest req1;
+    req1.url = string("https://www.alpha.com/page");
+    req1.anchor_text.push_back(string("alpha"));
+    req1.num_encountered = 1;
+    req1.seed_list_url_hops = 2;
+    req1.seed_list_domain_hops = 1;
+    batch.reqs.push_back(::move(req1));
+
+    URLStoreUpdateRequest req2;
+    req2.url = string("https://www.beta.com/page");
+    req2.anchor_text.push_back(string("beta"));
+    req2.num_encountered = 1;
+    req2.seed_list_url_hops = 3;
+    req2.seed_list_domain_hops = 2;
+    batch.reqs.push_back(::move(req2));
+
+    URLStoreUpdateRequest req3;
+    req3.url = string("https://www.gamma.com/page");
+    req3.anchor_text.push_back(string("gamma"));
+    req3.num_encountered = 1;
+    req3.seed_list_url_hops = 1;
+    req3.seed_list_domain_hops = 0;
+    batch.reqs.push_back(::move(req3));
+
+    // Duplicate of alpha — should update store but NOT add a second frontier entry
+    URLStoreUpdateRequest req4;
+    req4.url = string("https://www.alpha.com/page");
+    req4.anchor_text.push_back(string("alpha link"));
+    req4.num_encountered = 1;
+    req4.seed_list_url_hops = 5;
+    req4.seed_list_domain_hops = 3;
+    batch.reqs.push_back(::move(req4));
+
+    store.batch_manage_frontier_and_update_url(batch);
+
+    // Verify all 3 distinct URLs are in the store
+    string alpha_url("https://www.alpha.com/page");
+    string beta_url("https://www.beta.com/page");
+    string gamma_url("https://www.gamma.com/page");
+
+    assert(store.getUrlNumEncountered(alpha_url) == 2);  // encountered twice in batch
+    assert(store.getUrlSeedDistance(alpha_url) == 2);     // min(2, 5) = 2
+    assert(store.getUrlNumEncountered(beta_url) == 1);
+    assert(store.getUrlSeedDistance(beta_url) == 3);
+    assert(store.getUrlNumEncountered(gamma_url) == 1);
+    assert(store.getUrlSeedDistance(gamma_url) == 1);
+
+    // Verify exactly 3 CrawlTargets were pushed to the frontier (not 4)
+    size_t total_frontier = 0;
+    for (size_t i = 0; i < PRIORITY_BUCKETS; ++i) {
+        std::lock_guard<std::mutex> lock(dc.buckets[i].bucket_lock);
+        total_frontier += dc.buckets[i].urls.size();
+    }
+    assert(total_frontier == 3);
+
+    // Verify frontier entries have correct data (all in bucket 0 with current hardcoded priority)
+    assert(dc.buckets[0].urls.size() == 3);
+
+    string expected_alpha("alpha.com");
+    string expected_beta("beta.com");
+    string expected_gamma("gamma.com");
+
+    // Targets should be in insertion order
+    assert(dc.buckets[0].urls[0].domain == expected_alpha);
+    assert(dc.buckets[0].urls[0].seed_distance == 2);
+    assert(dc.buckets[0].urls[0].domain_dist == 1);
+
+    assert(dc.buckets[0].urls[1].domain == expected_beta);
+    assert(dc.buckets[0].urls[1].seed_distance == 3);
+    assert(dc.buckets[0].urls[1].domain_dist == 2);
+
+    assert(dc.buckets[0].urls[2].domain == expected_gamma);
+    assert(dc.buckets[0].urls[2].seed_distance == 1);
+    assert(dc.buckets[0].urls[2].domain_dist == 0);
+
+    // Now call batch again with one new URL and one existing — only the new one should hit frontier
+    BatchURLStoreUpdateRequest batch2;
+
+    URLStoreUpdateRequest req5;
+    req5.url = string("https://www.delta.com/page");
+    req5.anchor_text.push_back(string("delta"));
+    req5.num_encountered = 1;
+    req5.seed_list_url_hops = 1;
+    req5.seed_list_domain_hops = 1;
+    batch2.reqs.push_back(::move(req5));
+
+    URLStoreUpdateRequest req6;
+    req6.url = string("https://www.beta.com/page");
+    req6.anchor_text.push_back(string("beta again"));
+    req6.num_encountered = 1;
+    req6.seed_list_url_hops = 1;
+    req6.seed_list_domain_hops = 1;
+    batch2.reqs.push_back(::move(req6));
+
+    store.batch_manage_frontier_and_update_url(batch2);
+
+    assert(store.getUrlNumEncountered(beta_url) == 2);
+    assert(store.getUrlSeedDistance(beta_url) == 1);  // min(3, 1) = 1
+
+    // Frontier should now have 4 total (3 + 1 new delta, beta was already known)
+    total_frontier = 0;
+    for (size_t i = 0; i < PRIORITY_BUCKETS; ++i) {
+        std::lock_guard<std::mutex> lock(dc.buckets[i].bucket_lock);
+        total_frontier += dc.buckets[i].urls.size();
+    }
+    assert(total_frontier == 4);
+
+    cout << string("-> Passed test_batch_manage_frontier_and_update_url\n") << endl;
+}
+
 int main() {
     cout << string("Starting UrlStore Test Suite...\n") << endl;
 
@@ -283,6 +402,7 @@ int main() {
     test_url_store_listener_test();
     test_manage_frontier_via_listener();
     test_manage_frontier_and_update_url();
+    test_batch_manage_frontier_and_update_url();
 
     cout << string("All UrlStore tests passed successfully!") << endl;
     return 0;

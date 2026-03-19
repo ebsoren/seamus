@@ -39,11 +39,11 @@ int main() {
     logger::info("URL store listener started on port %u with %u threads", URL_STORE_PORT, URL_STORE_NUM_THREADS);
 
     // Parsers and buffer managers
-    OutboundUrlBuffer outbound;
+    OutboundUrlBuffer outbound(machine_id, &url_store);
     LocalUrlBuffer url_buffers[NUM_PARSERS];
     HtmlParser parsers[NUM_PARSERS];
     for (size_t i = 0; i < NUM_PARSERS; i++) {
-        url_buffers[i] = LocalUrlBuffer(machine_id, &outbound, &url_store);
+        url_buffers[i] = LocalUrlBuffer(machine_id, &outbound);
         
         parsers[i] = HtmlParser(i, &url_buffers[i], &url_store);
     }

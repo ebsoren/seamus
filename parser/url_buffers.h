@@ -16,13 +16,20 @@
 // We'll lock around the URL inclusion loop and push to the buffer
 class OutboundUrlBuffer {
 public:
-    OutboundUrlBuffer() {
+    OutboundUrlBuffer() : ME(-1), urlStore(nullptr) {
         for (size_t i = 0; i < NUM_MACHINES; i++) {
             buffers[i] = vector<URLStoreUpdateRequest>();
         }
     }
 
-    // Invariant: lock must be called by the LOCAL buffer outside of add_url being invoked 
+    OutboundUrlBuffer(size_t machine_id, UrlStore* local_store)
+        : ME(machine_id), urlStore(local_store) {
+        for (size_t i = 0; i < NUM_MACHINES; i++) {
+            buffers[i] = vector<URLStoreUpdateRequest>();
+        }
+    }
+
+    // Invariant: lock must be called by the LOCAL buffer outside of add_url being invoked
     void add_url(size_t machine_id, URLStoreUpdateRequest&& target) {
         buffers[machine_id].push_back(move(target));
         if (buffers[machine_id].size() >= CRAWLER_OUTBOUND_BATCH_SIZE) {
@@ -34,15 +41,22 @@ public:
 private:
     vector<URLStoreUpdateRequest> buffers[NUM_MACHINES];
     std::mutex locks[NUM_MACHINES];
+    size_t ME;
+    UrlStore* urlStore;
 
     void flush(size_t machine_id) {
         BatchURLStoreUpdateRequest batch;
         batch.reqs = move(buffers[machine_id]);
         buffers[machine_id] = vector<URLStoreUpdateRequest>();
 
-        // Send RPC in a separate thread so we can return & release the lock ASAP
-        // Safe to release the lock bc we copied and reset the buffer
-        std::thread(&OutboundUrlBuffer::flush_async, this, machine_id, std::ref(batch)).detach();
+        if (machine_id == ME && urlStore) {
+            // Local machine: call directly instead of RPC
+            urlStore->batch_manage_frontier_and_update_url(batch);
+        } else {
+            // Send RPC in a separate thread so we can return & release the lock ASAP
+            // Safe to release the lock bc we copied and reset the buffer
+            std::thread(&OutboundUrlBuffer::flush_async, this, machine_id, std::ref(batch)).detach();
+        }
     }
 
     // Send the copied contents of an RPC buffer to the correct machine
@@ -58,9 +72,9 @@ private:
 class LocalUrlBuffer {
 public:
     LocalUrlBuffer() : ME(-1) {}
-    
-    LocalUrlBuffer(size_t machine_id, OutboundUrlBuffer* outbound_buff, UrlStore* local_store)
-    : urlStore(local_store), outboundBuffer(outbound_buff), ME(machine_id) {}
+
+    LocalUrlBuffer(size_t machine_id, OutboundUrlBuffer* outbound_buff)
+    : outboundBuffer(outbound_buff), ME(machine_id) {}
 
     bool add_urls(word_array<MAX_LINK_MEMORY> &urls) {
         /**
@@ -128,7 +142,7 @@ public:
                 }
 
                 size_t recipient = get_destination_machine_from_url(url);
-                
+
                 URLStoreUpdateRequest rpc{
                     move(url),
                     move(anchor_words),
@@ -137,14 +151,7 @@ public:
                     static_cast<uint16_t>(domain_hops + dhop),
                 };
 
-                // URL belongs to this machine
-                if (recipient == ME) {
-                    urlStore->manage_frontier_and_update_url(rpc);
-                }
-                // Create RPC for destination machine
-                else {
-                    url_updates[recipient].push_back(move(rpc));
-                }
+                url_updates[recipient].push_back(move(rpc));
             }
 
             p += 7; // Skip </doc>\n
@@ -156,7 +163,6 @@ public:
 
 private:
     vector<URLStoreUpdateRequest> url_updates[NUM_MACHINES];
-    UrlStore* urlStore;
     OutboundUrlBuffer* outboundBuffer;
     size_t ME;
 

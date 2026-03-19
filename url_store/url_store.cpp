@@ -39,14 +39,45 @@ void UrlStore::manage_frontier_and_update_url(URLStoreUpdateRequest& req) {
     }
 }
 
+void UrlStore::batch_manage_frontier_and_update_url(BatchURLStoreUpdateRequest& batch_req) {
+    // Bucket-sort new URLs by priority, then batch-push to frontier with one lock per bucket
+    vector<CrawlTarget> bucket_targets[PRIORITY_BUCKETS];
+
+    for (size_t i = 0; i < batch_req.reqs.size(); ++i) {
+        URLStoreUpdateRequest& req = batch_req.reqs[i];
+        bool is_new = findUrlData(req.url) == nullptr;
+        updateUrl(req.url, req.anchor_text, req.seed_list_url_hops, req.seed_list_domain_hops, req.num_encountered);
+
+        if (is_new && dc) {
+            string domain = extract_domain(req.url);
+            size_t priority = 0;                                    // TODO: Use real priority once frontier scoring is implemented
+            if (priority < PRIORITY_BUCKETS) {
+                bucket_targets[priority].push_back(CrawlTarget{
+                    std::move(domain),
+                    string(req.url.data(), req.url.size()),
+                    req.seed_list_url_hops,
+                    req.seed_list_domain_hops,
+                });
+            }
+        }
+    }
+
+    // One lock acquisition per bucket instead of per URL
+    for (size_t p = 0; p < PRIORITY_BUCKETS; ++p) {
+        if (bucket_targets[p].size() == 0) continue;
+        std::lock_guard<std::mutex> lock(dc->buckets[p].bucket_lock);
+        for (size_t i = 0; i < bucket_targets[p].size(); ++i) {
+            dc->buckets[p].urls.push_back(std::move(bucket_targets[p][i]));
+        }
+    }
+}
+
 // Handles a BatchURLStoreUpdateRequest given an ephemeral socket fd
 void UrlStore::client_handler(int fd) {
     std::optional<BatchURLStoreUpdateRequest> req = recv_batch_urlstore_update(fd);
     if (!req) return;
 
-    for (URLStoreUpdateRequest& update_req : req->reqs) {
-        manage_frontier_and_update_url(update_req);
-    }
+    batch_manage_frontier_and_update_url(*req);
 }
 
 const UrlData* UrlStore::findUrlData(const string& url) const {
