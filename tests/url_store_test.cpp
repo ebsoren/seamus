@@ -1,10 +1,10 @@
 #include "../url_store/url_store.h"
+#include "../crawler/domain_carousel.h"
 #include "../lib/rpc_urlstore.h"
 #include <iostream>
 #include <cassert>
 #include <chrono>
 #include <thread>
-#include <vector>
 
 using std::cout;
 using std::endl;
@@ -19,7 +19,7 @@ void cleanup_test_file(int worker_number) {
 // Tests getters, setters for class data structures as well as content title and body detection
 void test_url_store_basic() {
     cout << string("Running test_url_store_basic...") << endl;
-    UrlStore store;
+    UrlStore store(nullptr, URL_STORE_WORKER_NUMBER);
     
     // Workaround 1: Create explicit lvalue variables for the URLs
     string umich_url("https://umich.edu");
@@ -50,8 +50,8 @@ void test_url_store_basic() {
     anchors2.push_back(string("michigan")); 
     anchors2.push_back(string("university")); 
     
-    bool updated = store.updateUrl(umich_url, anchors2, 1, 1, 3);
-    assert(updated == true);
+    bool is_new = store.updateUrl(umich_url, anchors2, 1, 1, 3);
+    assert(is_new == false);
     
     // Verify counters and minimum distances updated properly
     assert(store.getUrlNumEncountered(umich_url) == 4); 
@@ -81,7 +81,7 @@ void test_url_store_persistence() {
     cout << string("Running test_url_store_persistence...") << endl;
     cleanup_test_file(URL_STORE_WORKER_NUMBER);
 
-    UrlStore store;
+    UrlStore store(nullptr, URL_STORE_WORKER_NUMBER);
     vector<string> anchors;
     anchors.push_back(string("persisted link"));
     
@@ -105,11 +105,8 @@ void test_url_store_persistence() {
 
 void test_url_store_recover() {
     cout << string("Running test_url_store_recover...") << endl;
-    UrlStore store; // Fresh instance, empty in memory
-    
-    // Read from the file we just persisted
-    store.readFromFile(URL_STORE_WORKER_NUMBER);
-    
+    UrlStore store(nullptr, URL_STORE_WORKER_NUMBER); // Fresh instance, empty in memory
+
     string persist_url("http://persist.me");
     string persist_anchor("persisted link");
     
@@ -132,7 +129,7 @@ void test_url_store_listener_test() {
     cout << string("Running test_url_store_listener_test...") << endl;
     
     // Spinning up this object will automatically start the background RPCListener thread on URL_STORE_PORT 9000
-    UrlStore store; 
+    UrlStore store(nullptr, URL_STORE_WORKER_NUMBER); 
     
     // Build a mock network request simulating a worker finding a new URL
     BatchURLStoreUpdateRequest batch;
@@ -169,7 +166,7 @@ void test_url_store_listener_test() {
 
 void test_url_store_concurrent_same_url() {
     cout << string("Running test_url_store_concurrent_same_url...") << endl;
-    UrlStore store;
+    UrlStore store(nullptr, URL_STORE_WORKER_NUMBER);
     const int num_threads = 10;
     const int updates_per_thread = 1000;
     std::vector<std::thread> threads;
@@ -200,7 +197,7 @@ void test_url_store_concurrent_same_url() {
 
 void test_url_store_concurrent_different_urls() {
     cout << string("Running test_url_store_concurrent_different_urls...") << endl;
-    UrlStore store;
+    UrlStore store(nullptr, URL_STORE_WORKER_NUMBER);
     const int num_threads = 50;
     std::vector<std::thread> threads;
 
@@ -228,7 +225,7 @@ void test_url_store_concurrent_different_urls() {
 
 void test_url_store_concurrent_anchors() {
     cout << string("Running test_url_store_concurrent_anchors...") << endl;
-    UrlStore store;
+    UrlStore store(nullptr, URL_STORE_WORKER_NUMBER);
     const int num_threads = 20;
     std::vector<std::thread> threads;
 
@@ -273,7 +270,7 @@ void test_url_store_concurrent_anchors() {
 
 void test_url_store_massive_stress() {
     cout << string("Running test_url_store_massive_stress (This might take a second)...") << endl;
-    UrlStore store;
+    UrlStore store(nullptr, URL_STORE_WORKER_NUMBER);
     
     // 32 threads performing 5,000 complex operations each = 160,000 total updates
     const int num_threads = 32;
@@ -351,12 +348,12 @@ int main() {
     cout << string("Starting UrlStore Test Suite...\n") << endl;
 
     test_url_store_basic();
-    
+
     // Order matters here: persistence must write the file before recover tries to read it
     test_url_store_persistence();
 
     test_url_store_recover();
-    
+
     test_url_store_listener_test();
 
     test_url_store_concurrent_same_url();

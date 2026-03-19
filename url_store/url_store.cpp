@@ -1,11 +1,13 @@
 #include "url_store.h"
+#include "../crawler/domain_carousel.h"
 #include "../lib/rpc_urlstore.h"
 #include "../lib/utils.h"
 #include "../lib/algorithm.h"
 #include <optional>
 
 
-UrlStore::UrlStore() {
+UrlStore::UrlStore(DomainCarousel* dc, const int worker_num) : dc(dc) {
+    readFromFile(worker_num);
     rpc_listener = new RPCListener(URL_STORE_PORT, URL_STORE_NUM_THREADS);
     listener_thread = std::thread([this]() {
         rpc_listener->listener_loop([this](int fd) { client_handler(fd); });
@@ -18,14 +20,63 @@ UrlStore::~UrlStore() {
     delete rpc_listener;
 }
 
-// Handles a BatchURLStoreUpdateRequest given an ephemeral socket fd  
+void UrlStore::manage_frontier_and_update_url(URLStoreUpdateRequest& req) {
+    bool is_new = updateUrl(req.url, req.anchor_text, req.seed_list_url_hops, req.seed_list_domain_hops, req.num_encountered);
+
+    if (is_new && dc) {
+        string domain = extract_domain(req.url);
+        CrawlTarget target{
+            std::move(domain),
+            string(req.url.data(), req.url.size()),
+            req.seed_list_url_hops,
+            req.seed_list_domain_hops,
+        };
+
+        // TODO: Use real priority once frontier scoring is implemented
+        size_t priority = 0;
+        std::lock_guard<std::mutex> lock(dc->buckets[priority].bucket_lock);
+        dc->buckets[priority].urls.push_back(std::move(target));
+    }
+}
+
+void UrlStore::batch_manage_frontier_and_update_url(BatchURLStoreUpdateRequest& batch_req) {
+    // Bucket-sort new URLs by priority, then batch-push to frontier with one lock per bucket
+    vector<CrawlTarget> bucket_targets[PRIORITY_BUCKETS];
+
+    for (size_t i = 0; i < batch_req.reqs.size(); ++i) {
+        URLStoreUpdateRequest& req = batch_req.reqs[i];
+        bool is_new = updateUrl(req.url, req.anchor_text, req.seed_list_url_hops, req.seed_list_domain_hops, req.num_encountered);
+
+        if (is_new && dc) {
+            string domain = extract_domain(req.url);
+            size_t priority = 0;                                    // TODO: Use real priority once frontier scoring is implemented
+            if (priority < PRIORITY_BUCKETS) {
+                bucket_targets[priority].push_back(CrawlTarget{
+                    std::move(domain),
+                    string(req.url.data(), req.url.size()),
+                    req.seed_list_url_hops,
+                    req.seed_list_domain_hops,
+                });
+            }
+        }
+    }
+
+    // One lock acquisition per bucket instead of per URL
+    for (size_t p = 0; p < PRIORITY_BUCKETS; ++p) {
+        if (bucket_targets[p].size() == 0) continue;
+        std::lock_guard<std::mutex> lock(dc->buckets[p].bucket_lock);
+        for (size_t i = 0; i < bucket_targets[p].size(); ++i) {
+            dc->buckets[p].urls.push_back(std::move(bucket_targets[p][i]));
+        }
+    }
+}
+
+// Handles a BatchURLStoreUpdateRequest given an ephemeral socket fd
 void UrlStore::client_handler(int fd) {
     std::optional<BatchURLStoreUpdateRequest> req = recv_batch_urlstore_update(fd);
     if (!req) return;
 
-    for (URLStoreUpdateRequest& update_req : req->reqs) {
-        updateUrl(update_req.url, update_req.anchor_text, update_req.seed_list_url_hops, update_req.seed_list_domain_hops, update_req.num_encountered);
-    }
+    batch_manage_frontier_and_update_url(*req);
 }
 
 const UrlData* UrlStore::findUrlData(const string& url) const {
@@ -35,6 +86,12 @@ const UrlData* UrlStore::findUrlData(const string& url) const {
 }
 
 UrlData* UrlStore::findUrlData(const string& url) {
+    UrlShard& us = get_shard(url);
+    std::lock_guard<std::mutex> lock(us.mtx);
+    return us.findUrlData(url);
+}
+
+UrlData* UrlStore::findUrlData(string& url) {
     UrlShard& us = get_shard(url);
     std::lock_guard<std::mutex> lock(us.mtx);
     return us.findUrlData(url);
@@ -72,6 +129,8 @@ bool UrlStore::addUrl_unlocked(string& url, vector<string>& anchor_texts, const 
     return true;
 }
 
+
+// returns whether or not the url was new to the url_store
 bool UrlStore::updateUrl(string& url, vector<string>& anchor_texts, const uint16_t seed_distance, const uint16_t domain_distance, const uint32_t num_encountered) {
     UrlShard& us = get_shard(url);
     std::lock_guard<std::mutex> lg(us.mtx);
@@ -87,7 +146,7 @@ bool UrlStore::updateUrl(string& url, vector<string>& anchor_texts, const uint16
         url_data_ptr->anchor_freqs[anchor_id]++;
     }
 
-    return true;
+    return false;
 }
 
 bool UrlStore::updateTitleLen(const string& url, const uint16_t eot) {
@@ -126,18 +185,24 @@ void UrlStore::persist() {
     FILE* fd = fopen(fileName.data(), write_mode.data());
 
     if (fd == nullptr) perror("Error opening urlstore file for writing.");
+    vector<string> anchor_snapshot;
 
     {
         std::lock_guard<std::mutex> lock(global_mtx);
-        // Write number of anchors as a binary uint32_t
-        uint32_t num_anchors = static_cast<uint32_t>(anchor_to_id.size());
-        fwrite(&num_anchors, sizeof(uint32_t), 1, fd);
-
+        anchor_snapshot.reserve(id_to_anchor.size());
+        
         for (const string& anchor_text : id_to_anchor) {
-            uint32_t anchor_len = static_cast<uint32_t>(anchor_text.size());
-            fwrite(&anchor_len, sizeof(uint32_t), 1, fd);
-            fwrite(anchor_text.data(), sizeof(char), anchor_len, fd);
+            anchor_snapshot.push_back(string(anchor_text.data(), anchor_text.size()));
         }
+    }
+    // Write number of anchors as a binary uint32_t
+    uint32_t num_anchors = static_cast<uint32_t>(anchor_snapshot.size());
+    fwrite(&num_anchors, sizeof(uint32_t), 1, fd);
+
+    for (const string& anchor_text : anchor_snapshot) {
+        uint32_t anchor_len = static_cast<uint32_t>(anchor_text.size());
+        fwrite(&anchor_len, sizeof(uint32_t), 1, fd);
+        fwrite(anchor_text.data(), sizeof(char), anchor_len, fd);
     }
     
     for (size_t i = 0; i < URL_NUM_SHARDS; i++) {
@@ -217,7 +282,7 @@ void UrlStore::readFromFile(const int worker_number) {
 
         // TODO: is locking needed here? supposedly readFromFile should only be called on startup before requests are sent right
         UrlShard& shard = get_shard(url);
-        std::lock_guard<std::mutex> lock(shard.mtx);
+        // std::lock_guard<std::mutex> lock(shard.mtx);
         auto& url_data = shard.url_data;
 
         fread(&url_data[url].num_encountered, sizeof(uint32_t), 1, fd);

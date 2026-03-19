@@ -7,6 +7,8 @@
 #include "../lib/logger.h"
 #include "../lib/vector.h"
 #include "../lib/consts.h"
+#include "../parser/parser.h"
+#include "../parser/url_buffers.h"
 #include "../url_store/url_store.h"
 
 
@@ -24,14 +26,28 @@ inline vector<string> get_frontier_bucket_files() {
 int main() {
     logger::info("Crawler started...");
 
+    // TODO: Assign correct machine ID value
+    size_t machine_id = 0;
+
     // Initialize crawler components/modules
     // Domain carousel
     DomainCarousel dc;
     logger::info("Domain carousel initialized (%zu hash slots, max %zu per queue)", CRAWLER_CAROUSEL_SIZE, CRAWLER_MAX_QUEUE_SIZE);
 
     // URL Store
-    UrlStore url_store;
+    UrlStore url_store(&dc);
     logger::info("URL store listener started on port %u with %u threads", URL_STORE_PORT, URL_STORE_NUM_THREADS);
+
+    // Parsers and buffer managers
+    OutboundUrlBuffer outbound(machine_id, &url_store);
+    LocalUrlBuffer url_buffers[NUM_PARSERS];
+    HtmlParser parsers[NUM_PARSERS];
+    for (size_t i = 0; i < NUM_PARSERS; i++) {
+        url_buffers[i] = LocalUrlBuffer(machine_id, &outbound);
+        
+        parsers[i] = HtmlParser(i, &url_buffers[i], &url_store);
+    }
+    logger::info("Spawned %u parsers and local URL buffers.", NUM_PARSERS);
 
     // Bucket manager
     vector<string> bucket_files = get_frontier_bucket_files();

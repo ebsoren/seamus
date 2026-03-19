@@ -1,3 +1,5 @@
+#pragma once
+
 #include "../lib/unordered_map.h"
 #include "../lib/vector.h"
 #include "../lib/string.h"
@@ -7,8 +9,7 @@
 #include <cstdint>
 #include <thread>
 
-#include <iostream>
-
+class DomainCarousel;
 
 struct UrlAnchorData {
     string* anchor_text;
@@ -51,23 +52,26 @@ private:
 
     const UrlData* findUrlData(const string& url) const;
     UrlData* findUrlData(const string& url);
+    UrlData* findUrlData(string& url);
 
     RPCListener* rpc_listener;      // Listener for client requests
     std::thread listener_thread;    // Thread running the listener loop
+    DomainCarousel* dc;             // Frontier carousel for newly discovered URLs
     void client_handler(int fd);    // Detached handler for client requests
 
     bool addUrl_unlocked(string& url, vector<string>& anchor_texts, const uint16_t seed_distance, const uint16_t domain_distance, const uint32_t num_encountered);
+   // to read urlStore from disk after a crash, each worker thread will read from its corresponding files and update it's urlstore object accordingly
+    void readFromFile(const int worker_number);
     
 public:
-    UrlStore();
+    UrlStore(DomainCarousel* dc, const int worker_num);
     ~UrlStore();
     void persist();
 
-    // to read urlStore from disk after a crash, each worker thread will read from its corresponding files and update it's urlstore object accordingly
-    void readFromFile(const int worker_number);
-
     // bool addUrl(string& url, vector<string>& anchor_texts, const uint16_t seed_distance, const uint16_t domain_distance, const uint16_t eot, const uint16_t eod, const uint32_t num_encountered);
     bool updateUrl(string& url, vector<string>& anchor_texts, const uint16_t seed_distance, const uint16_t domain_distance, const uint32_t num_encountered);
+    void manage_frontier_and_update_url(URLStoreUpdateRequest& req);
+    void batch_manage_frontier_and_update_url(BatchURLStoreUpdateRequest& batch_req);
     bool updateTitleLen(const string& url, const uint16_t eot);
     bool updateBodyLen(const string& url, const uint16_t eod);
 
