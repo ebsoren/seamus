@@ -408,8 +408,59 @@ void test_spawn_crawler_workers_consumes_and_stops() {
 }
 
 
+void test_urlstore_listener_updates_frontier_and_store() {
+    printf("---- test_urlstore_listener_updates_frontier_and_store ----\n");
+
+    DomainCarousel dc;
+    UrlStore store(&dc, URL_STORE_WORKER_NUMBER);
+
+    // Allow the listener thread to start accepting connections
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+    // Build a batch of unique URLs and send via RPC to the urlstore listener
+    BatchURLStoreUpdateRequest batch;
+    size_t num_urls = 5;
+    for (size_t i = 0; i < num_urls; ++i) {
+        char url_buf[64];
+        snprintf(url_buf, sizeof(url_buf), "https://store-test%zu.com/page", i);
+        vector<string> anchors;
+        anchors.push_back(string("anchor"));
+        batch.reqs.push_back(URLStoreUpdateRequest{
+            string(url_buf, strlen(url_buf)),
+            static_cast<vector<string>&&>(anchors),
+            1, 0, 0
+        });
+    }
+
+    string host("127.0.0.1");
+    assert(send_batch_urlstore_update(host, URL_STORE_PORT, batch));
+
+    // Wait for the listener to process
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
+    // Verify all URLs are in the urlstore
+    for (size_t i = 0; i < num_urls; ++i) {
+        char url_buf[64];
+        snprintf(url_buf, sizeof(url_buf), "https://store-test%zu.com/page", i);
+        string url(url_buf, strlen(url_buf));
+        assert(store.getUrlNumEncountered(url) >= 1);
+    }
+
+    // Verify all new URLs were pushed into the frontier (domain carousel buckets)
+    size_t total_in_frontier = 0;
+    for (size_t i = 0; i < PRIORITY_BUCKETS; ++i) {
+        std::lock_guard<std::mutex> lock(dc.buckets[i].bucket_lock);
+        total_in_frontier += dc.buckets[i].urls.size();
+    }
+    assert(total_in_frontier == num_urls);
+
+    printf("PASS\n");
+}
+
+
 int main() {
     printf("\n===== RUNNING CRAWLER TESTS =====\n\n");
+    test_urlstore_listener_updates_frontier_and_store();
     test_crawler_listener_receives_batch();
     test_push_target_fill_and_overflow();
     test_feed_carousel_concurrent();
