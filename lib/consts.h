@@ -20,6 +20,11 @@ inline const char* get_machine_addr(size_t machine_id) {
     return MACHINES[machine_id];
 }
 
+inline const size_t my_machine_id() {
+    // todo(hershey): check an environment variable here when we are ready to deploy
+    return 0;
+}
+
 
 // Crawler
 constexpr uint16_t CRAWLER_LISTENER_PORT = 8080;
