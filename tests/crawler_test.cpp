@@ -506,8 +506,84 @@ void test_bucket_manager_creates_files() {
 }
 
 
+void test_load_disk_buckets() {
+    printf("---- test_load_disk_buckets ----\n");
+
+    // Build file paths
+    vector<string> bucket_files;
+    vector<string> paths;
+    for (size_t i = 0; i < PRIORITY_BUCKETS; i++) {
+        char buf[64];
+        snprintf(buf, sizeof(buf), "/tmp/test_load_bucket_%zu.dat", i);
+        bucket_files.push_back(string(buf, strlen(buf)));
+        paths.push_back(string(buf, strlen(buf)));
+    }
+
+    // Clean up any leftover files
+    for (size_t i = 0; i < paths.size(); i++) {
+        remove(paths[i].data());
+    }
+
+    // Construct BucketManager (creates empty files)
+    DomainCarousel dc;
+    BucketManager bm(static_cast<vector<string>&&>(bucket_files), &dc);
+
+    // Write 3 serialized CrawlTargets per disk bucket file with distinct values per priority level
+    for (size_t p = 0; p < PRIORITY_BUCKETS; p++) {
+        std::ofstream file(paths[p].data(), std::ios::binary | std::ios::trunc);
+
+        for (size_t j = 0; j < 3; j++) {
+            char domain_buf[64], url_buf[128];
+            snprintf(domain_buf, sizeof(domain_buf), "p%zu-d%zu.com", p, j);
+            snprintf(url_buf, sizeof(url_buf), "https://p%zu-d%zu.com/page%zu", p, j, j);
+
+            CrawlTarget ct{
+                string(domain_buf, strlen(domain_buf)),
+                string(url_buf, strlen(url_buf)),
+                static_cast<uint16_t>(p * 10 + j),
+                static_cast<uint16_t>(p + j)
+            };
+
+            size_t sz = crawl_target_serialized_size(ct);
+            char ser_buf[256];
+            serialize_crawl_target(ser_buf, ct);
+            file.write(ser_buf, static_cast<std::streamsize>(sz));
+        }
+    }
+
+    // Load disk buckets into in-memory buckets
+    bm.load_disk_buckets();
+
+    // Verify each priority bucket has exactly 3 targets with correct values
+    for (size_t p = 0; p < PRIORITY_BUCKETS; p++) {
+        std::lock_guard<std::mutex> lock(dc.buckets[p].bucket_lock);
+        assert(dc.buckets[p].urls.size() == 3);
+
+        for (size_t j = 0; j < 3; j++) {
+            char domain_buf[64], url_buf[128];
+            snprintf(domain_buf, sizeof(domain_buf), "p%zu-d%zu.com", p, j);
+            snprintf(url_buf, sizeof(url_buf), "https://p%zu-d%zu.com/page%zu", p, j, j);
+
+            auto& actual = dc.buckets[p].urls[j];
+            assert(actual.domain == string(domain_buf, strlen(domain_buf)));
+            assert(actual.url == string(url_buf, strlen(url_buf)));
+            assert(actual.seed_distance == static_cast<uint16_t>(p * 10 + j));
+            assert(actual.domain_dist == static_cast<uint16_t>(p + j));
+        }
+    }
+
+    // Clean up
+    for (size_t i = 0; i < paths.size(); i++) {
+        remove(paths[i].data());
+    }
+
+    printf("PASS\n");
+}
+
+
 int main() {
     printf("\n===== RUNNING CRAWLER TESTS =====\n\n");
+    test_load_disk_buckets();
     test_bucket_manager_creates_files();
     test_urlstore_listener_updates_frontier_and_store();
     test_crawler_listener_receives_batch();

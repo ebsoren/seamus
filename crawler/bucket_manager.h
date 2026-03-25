@@ -87,8 +87,37 @@ public:
     }
 
 
-    // todo(hershey): write helper to load disk buckets into in-memory buckets
-    // This should run ad-hoc as needed if in-memory buckets are empty
+    // Load disk buckets into in-memory buckets
+    // Should be called ad-hoc by feed_carousel_worker() whenever more crawl targets are needed in memory
+    void load_disk_buckets() {
+        for (size_t i = 0; i < PRIORITY_BUCKETS; ++i) {
+            std::ifstream file(bucket_files[i].data(), std::ios::binary | std::ios::ate);
+            if (!file.good()) continue;
+
+            auto file_size = file.tellg();
+            if (file_size <= 0) continue;
+
+            file.seekg(0, std::ios::beg);
+            size_t size = static_cast<size_t>(file_size);
+            char* buf = new char[size];
+            file.read(buf, static_cast<std::streamsize>(size));
+
+            const char* cursor = buf;
+            size_t remaining = size;
+
+            std::lock_guard<std::mutex> lock(dc->buckets[i].bucket_lock);
+            while (remaining > 0) {
+                CrawlTarget ct{string(""), string(""), 0, 0};
+                const char* next = deserialize_crawl_target(cursor, remaining, ct);
+                if (!next) break;
+                remaining -= static_cast<size_t>(next - cursor);
+                cursor = next;
+                dc->buckets[i].enqueue(std::move(ct));
+            }
+
+            delete[] buf;
+        }
+    }
 
 
     // todo(hershey): write helper to persist in-memory buckets into disk buckets
