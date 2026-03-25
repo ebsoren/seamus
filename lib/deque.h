@@ -39,7 +39,6 @@ public:
     // Push back (fills an element past the right pointer)
     void push_back(const T& val) {
         if (empty()) {
-            alloc_region[deque_left].~T();
             new (alloc_region + deque_left) T(val);
             deque_size++;
             return;
@@ -47,7 +46,6 @@ public:
         if (deque_right == deque_capacity - 1) realloc_();
         deque_right++;
         deque_size++;
-        alloc_region[deque_right].~T();
         new (alloc_region + deque_right) T(val);
     }
 
@@ -55,7 +53,6 @@ public:
     // Push back (move)
     void push_back(T&& val) {
         if (empty()) {
-            alloc_region[deque_left].~T();
             new (alloc_region + deque_left) T(static_cast<T&&>(val));
             deque_size++;
             return;
@@ -63,7 +60,6 @@ public:
         if (deque_right == deque_capacity - 1) realloc_();
         deque_right++;
         deque_size++;
-        alloc_region[deque_right].~T();
         new (alloc_region + deque_right) T(static_cast<T&&>(val));
     }
 
@@ -71,7 +67,6 @@ public:
     // Push front (fills an element before the left pointer)
     void push_front(const T& val) {
         if (empty()) {
-            alloc_region[deque_left].~T();
             new (alloc_region + deque_left) T(val);
             deque_size++;
             return;
@@ -79,7 +74,6 @@ public:
         if (deque_left == 0) realloc_();
         deque_left--;
         deque_size++;
-        alloc_region[deque_left].~T();
         new (alloc_region + deque_left) T(val);
     }
 
@@ -87,7 +81,6 @@ public:
     // Push front (move)
     void push_front(T&& val) {
         if (empty()) {
-            alloc_region[deque_left].~T();
             new (alloc_region + deque_left) T(static_cast<T&&>(val));
             deque_size++;
             return;
@@ -95,7 +88,6 @@ public:
         if (deque_left == 0) realloc_();
         deque_left--;
         deque_size++;
-        alloc_region[deque_left].~T();
         new (alloc_region + deque_left) T(static_cast<T&&>(val));
     }
 
