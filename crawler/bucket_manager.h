@@ -11,6 +11,7 @@
 #include <mutex>
 #include <chrono>
 #include <thread>
+#include <fstream>
 
 
 class BucketManager {
@@ -23,6 +24,12 @@ public:
     BucketManager(vector<string> bucket_files_in, DomainCarousel* dc_in)
         : bucket_files(static_cast<vector<string>&&>(bucket_files_in)), dc(dc_in) {
         assert(bucket_files.size() == PRIORITY_BUCKETS);
+        for (const auto& path : bucket_files) {
+            std::ifstream check(path.data());
+            if (!check.good()) {
+                std::ofstream create(path.data());
+            }
+        }
     }
 
 

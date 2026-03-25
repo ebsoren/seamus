@@ -2,6 +2,7 @@
 #include <cstdio>
 #include <thread>
 #include <chrono>
+#include <fstream>
 #include "../crawler/crawler_listener.h"
 #include "../crawler/crawler_worker.h"
 #include "../crawler/domain_carousel.h"
@@ -458,8 +459,56 @@ void test_urlstore_listener_updates_frontier_and_store() {
 }
 
 
+void test_bucket_manager_creates_files() {
+    printf("---- test_bucket_manager_creates_files ----\n");
+
+    // Build file paths for each priority bucket
+    vector<string> bucket_files;
+    for (size_t i = 0; i < PRIORITY_BUCKETS; i++) {
+        char buf[64];
+        snprintf(buf, sizeof(buf), "/tmp/test_bucket_%zu.dat", i);
+        bucket_files.push_back(string(buf, strlen(buf)));
+    }
+
+    // 1) Make sure the files don't exist yet
+    for (size_t i = 0; i < bucket_files.size(); i++) {
+        remove(bucket_files[i].data());
+        std::ifstream check(bucket_files[i].data());
+        assert(!check.good());
+    }
+
+    // 2) Construct BucketManager — should create the files
+    // Rebuild paths since bucket_files will be moved
+    vector<string> paths;
+    for (size_t i = 0; i < PRIORITY_BUCKETS; i++) {
+        char buf[64];
+        snprintf(buf, sizeof(buf), "/tmp/test_bucket_%zu.dat", i);
+        paths.push_back(string(buf, strlen(buf)));
+    }
+
+    {
+        DomainCarousel dc;
+        BucketManager bm(static_cast<vector<string>&&>(bucket_files), &dc);
+
+        // 3) Assert all files now exist
+        for (size_t i = 0; i < paths.size(); i++) {
+            std::ifstream check(paths[i].data());
+            assert(check.good());
+        }
+    }
+
+    // 4) Clean up — delete the files
+    for (size_t i = 0; i < paths.size(); i++) {
+        remove(paths[i].data());
+    }
+
+    printf("PASS\n");
+}
+
+
 int main() {
     printf("\n===== RUNNING CRAWLER TESTS =====\n\n");
+    test_bucket_manager_creates_files();
     test_urlstore_listener_updates_frontier_and_store();
     test_crawler_listener_receives_batch();
     test_push_target_fill_and_overflow();
