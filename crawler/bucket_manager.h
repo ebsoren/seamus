@@ -48,6 +48,8 @@ public:
     //      3) Persist carousel
     void start() {
         feed_thread = std::thread(&BucketManager::feed_carousel_worker, this);
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        bucket_persist_thread = std::thread(&BucketManager::persist_buckets_worker, this);
     }
 
 
@@ -55,6 +57,8 @@ public:
     ~BucketManager() {
         running.store(false, std::memory_order_relaxed);
         if (feed_thread.joinable()) feed_thread.join();
+        if (bucket_persist_thread.joinable()) bucket_persist_thread.join();
+        persist_buckets();
     }
 
 
@@ -120,8 +124,49 @@ public:
     }
 
 
-    // todo(hershey): write helper to persist in-memory buckets into disk buckets
-    // This should run in a detached thread on an interval (PERSIST_INTERVAL_SEC in consts.h)
+    void persist_buckets() {
+        for (size_t i = 0; i < PRIORITY_BUCKETS; ++i) {
+            size_t total_size = 0;
+            size_t count = 0;
+
+            {
+                std::lock_guard<std::mutex> lock(dc->buckets[i].bucket_lock);
+                count = dc->buckets[i].urls.size();
+                for (size_t j = 0; j < count; ++j) {
+                    total_size += crawl_target_serialized_size(dc->buckets[i].urls[j]);
+                }
+            }
+
+            if (count == 0) {
+                std::ofstream file(bucket_files[i].data(), std::ios::binary | std::ios::trunc);
+                continue;
+            }
+
+            char* buf = new char[total_size];
+            char* cursor = buf;
+
+            {
+                std::lock_guard<std::mutex> lock(dc->buckets[i].bucket_lock);
+                size_t n = dc->buckets[i].urls.size();
+                for (size_t j = 0; j < n; ++j) {
+                    cursor = serialize_crawl_target(cursor, dc->buckets[i].urls[j]);
+                }
+            }
+
+            std::ofstream file(bucket_files[i].data(), std::ios::binary | std::ios::trunc);
+            file.write(buf, static_cast<std::streamsize>(total_size));
+            delete[] buf;
+        }
+    }
+
+
+    void persist_buckets_worker() {
+        while (running) {
+            std::this_thread::sleep_for(std::chrono::seconds(CRAWLER_PERSIST_INTERVAL_SEC));
+            if (!running) break;
+            persist_buckets();
+        }
+    }
 
 
 private:
@@ -138,4 +183,5 @@ private:
 
     // Nameable threads for joining
     std::thread feed_thread;
+    std::thread bucket_persist_thread;
 };

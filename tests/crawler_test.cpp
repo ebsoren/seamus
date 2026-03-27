@@ -581,8 +581,158 @@ void test_load_disk_buckets() {
 }
 
 
+void test_persist_buckets_to_disk() {
+    printf("---- test_persist_buckets_to_disk ----\n");
+
+    // Build file paths
+    vector<string> paths;
+    for (size_t i = 0; i < PRIORITY_BUCKETS; i++) {
+        char buf[64];
+        snprintf(buf, sizeof(buf), "/tmp/test_persist_bucket_%zu.dat", i);
+        paths.push_back(string(buf, strlen(buf)));
+    }
+
+    // Clean up any leftover files
+    for (size_t i = 0; i < paths.size(); i++) {
+        remove(paths[i].data());
+    }
+
+    DomainCarousel dc;
+
+    // Populate priority buckets with known targets
+    // Bucket 0: 5 targets, Bucket 3: 2 targets, rest empty
+    {
+        std::lock_guard<std::mutex> lock(dc.buckets[0].bucket_lock);
+        for (size_t j = 0; j < 5; ++j) {
+            char domain_buf[64], url_buf[128];
+            snprintf(domain_buf, sizeof(domain_buf), "persist%zu.com", j);
+            snprintf(url_buf, sizeof(url_buf), "https://persist%zu.com/page%zu", j, j);
+            dc.buckets[0].urls.push_back(CrawlTarget{
+                string(domain_buf, strlen(domain_buf)),
+                string(url_buf, strlen(url_buf)),
+                static_cast<uint16_t>(j),
+                static_cast<uint16_t>(j + 10)
+            });
+        }
+    }
+    {
+        std::lock_guard<std::mutex> lock(dc.buckets[3].bucket_lock);
+        for (size_t j = 0; j < 2; ++j) {
+            char domain_buf[64], url_buf[128];
+            snprintf(domain_buf, sizeof(domain_buf), "other%zu.org", j);
+            snprintf(url_buf, sizeof(url_buf), "https://other%zu.org/index", j);
+            dc.buckets[3].urls.push_back(CrawlTarget{
+                string(domain_buf, strlen(domain_buf)),
+                string(url_buf, strlen(url_buf)),
+                static_cast<uint16_t>(100 + j),
+                static_cast<uint16_t>(200 + j)
+            });
+        }
+    }
+
+    // Create BucketManager in inner scope — destructor flushes to disk
+    {
+        vector<string> bucket_files;
+        for (size_t i = 0; i < PRIORITY_BUCKETS; i++) {
+            char buf[64];
+            snprintf(buf, sizeof(buf), "/tmp/test_persist_bucket_%zu.dat", i);
+            bucket_files.push_back(string(buf, strlen(buf)));
+        }
+        BucketManager bm(static_cast<vector<string>&&>(bucket_files), &dc);
+    }
+
+    // Read back each disk file and verify contents via deserialization
+    // Bucket 0: 5 targets
+    {
+        std::ifstream file(paths[0].data(), std::ios::binary | std::ios::ate);
+        assert(file.good());
+        auto file_size = file.tellg();
+        assert(file_size > 0);
+        file.seekg(0, std::ios::beg);
+        size_t size = static_cast<size_t>(file_size);
+        char* buf = new char[size];
+        file.read(buf, static_cast<std::streamsize>(size));
+
+        const char* cursor = buf;
+        size_t remaining = size;
+        size_t count = 0;
+        while (remaining > 0) {
+            CrawlTarget ct{string(""), string(""), 0, 0};
+            const char* next = deserialize_crawl_target(cursor, remaining, ct);
+            assert(next != nullptr);
+
+            char domain_buf[64], url_buf[128];
+            snprintf(domain_buf, sizeof(domain_buf), "persist%zu.com", count);
+            snprintf(url_buf, sizeof(url_buf), "https://persist%zu.com/page%zu", count, count);
+            assert(ct.domain == string(domain_buf, strlen(domain_buf)));
+            assert(ct.url == string(url_buf, strlen(url_buf)));
+            assert(ct.seed_distance == static_cast<uint16_t>(count));
+            assert(ct.domain_dist == static_cast<uint16_t>(count + 10));
+
+            remaining -= static_cast<size_t>(next - cursor);
+            cursor = next;
+            count++;
+        }
+        assert(count == 5);
+        delete[] buf;
+    }
+
+    // Bucket 3: 2 targets
+    {
+        std::ifstream file(paths[3].data(), std::ios::binary | std::ios::ate);
+        assert(file.good());
+        auto file_size = file.tellg();
+        assert(file_size > 0);
+        file.seekg(0, std::ios::beg);
+        size_t size = static_cast<size_t>(file_size);
+        char* buf = new char[size];
+        file.read(buf, static_cast<std::streamsize>(size));
+
+        const char* cursor = buf;
+        size_t remaining = size;
+        size_t count = 0;
+        while (remaining > 0) {
+            CrawlTarget ct{string(""), string(""), 0, 0};
+            const char* next = deserialize_crawl_target(cursor, remaining, ct);
+            assert(next != nullptr);
+
+            char domain_buf[64], url_buf[128];
+            snprintf(domain_buf, sizeof(domain_buf), "other%zu.org", count);
+            snprintf(url_buf, sizeof(url_buf), "https://other%zu.org/index", count);
+            assert(ct.domain == string(domain_buf, strlen(domain_buf)));
+            assert(ct.url == string(url_buf, strlen(url_buf)));
+            assert(ct.seed_distance == static_cast<uint16_t>(100 + count));
+            assert(ct.domain_dist == static_cast<uint16_t>(200 + count));
+
+            remaining -= static_cast<size_t>(next - cursor);
+            cursor = next;
+            count++;
+        }
+        assert(count == 2);
+        delete[] buf;
+    }
+
+    // Empty buckets (1, 2, 4, 5, 6, 7) should have empty files
+    size_t empty_buckets[] = {1, 2, 4, 5, 6, 7};
+    for (size_t idx = 0; idx < 6; ++idx) {
+        size_t p = empty_buckets[idx];
+        std::ifstream file(paths[p].data(), std::ios::binary | std::ios::ate);
+        assert(file.good());
+        assert(file.tellg() == 0);
+    }
+
+    // Clean up
+    for (size_t i = 0; i < paths.size(); i++) {
+        remove(paths[i].data());
+    }
+
+    printf("PASS\n");
+}
+
+
 int main() {
     printf("\n===== RUNNING CRAWLER TESTS =====\n\n");
+    test_persist_buckets_to_disk();
     test_load_disk_buckets();
     test_bucket_manager_creates_files();
     test_urlstore_listener_updates_frontier_and_store();
