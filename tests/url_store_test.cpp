@@ -32,7 +32,10 @@ void test_url_store_basic() {
     
     bool added = store.updateUrl(umich_url, anchors1, 2, 1, 1);
     assert(added == true);
+
+    string title("test_title");
     store.updateTitleLen(umich_url, 5);
+    store.updateTitle(umich_url, title);
     store.updateBodyLen(umich_url, 15);
     
     // Verify basic getters
@@ -44,6 +47,7 @@ void test_url_store_basic() {
     assert(store.inTitle(umich_url, 6) == false);  // 6 > eot (5)
     assert(store.inDescription(umich_url, 10) == true); // 5 <= 10 < eod (15)
     assert(store.inDescription(umich_url, 20) == false); // 20 > eod (15)
+    assert(store.getTitle(umich_url) == "test_title");
 
     // Test 2: Updating an existing URL
     vector<string> anchors2;

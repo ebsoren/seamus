@@ -26,13 +26,15 @@ struct UrlData {
     uint16_t seed_distance;                              // Distance from seed list
     uint16_t domain_dist;                                // Domain distance from seed list TODO(charlie): implement this feature
     uint16_t eot;                                        // End of title
+    // TODO(charlie): add title content, not eot
+    string title = string("", 0);
     uint16_t eod;                                        // End of description
 };
 
 
 // Request sent to end server hosting the (sharded) dynamic URL data when a new URL is encountered
 struct URLStoreUpdateRequest {
-    string url = string("");                         // URL: primary identifier
+    string url = string("", 0);                         // URL: primary identifier
 
     vector<string> anchor_text;         // Vector of anchor text strings used to refer to this URL since its last update (potentially size >1)
     uint32_t num_encountered;           // Number of additional times this URL has been encountered since its last update

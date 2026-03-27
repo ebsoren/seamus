@@ -73,6 +73,7 @@ public:
     void manage_frontier_and_update_url(URLStoreUpdateRequest& req);
     void batch_manage_frontier_and_update_url(BatchURLStoreUpdateRequest& batch_req);
     bool updateTitleLen(const string& url, const uint16_t eot);
+    bool updateTitle(const string& url, string& title);
     bool updateBodyLen(const string& url, const uint16_t eod);
 
     size_t findAnchorId(string& anchor_text);
@@ -110,6 +111,14 @@ public:
         std::lock_guard<std::mutex> lock(us.mtx);
         const UrlData* it = us.findUrlData(url);
         return it ? it->seed_distance : UINT16_MAX;
+    }
+
+
+    const string& getTitle(const string& url) {
+        UrlShard& us = get_shard(url);
+        std::lock_guard<std::mutex> lock(us.mtx);
+        const UrlData* it = us.findUrlData(url);
+        return it->title;
     }
 
 

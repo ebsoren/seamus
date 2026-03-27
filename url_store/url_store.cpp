@@ -159,6 +159,16 @@ bool UrlStore::updateTitleLen(const string& url, const uint16_t eot) {
     return true;
 }
 
+bool UrlStore::updateTitle(const string& url, string& title) {
+    UrlShard& us = get_shard(url);
+    std::lock_guard<std::mutex> lg(us.mtx);
+    UrlData* url_data_ptr = us.findUrlData(url);
+    if (!url_data_ptr) return false;
+
+    url_data_ptr->title = ::move(title);
+    return true;
+}
+
 
 bool UrlStore::updateBodyLen(const string& url, const uint16_t eod) {
     UrlShard& us = get_shard(url);
@@ -222,6 +232,11 @@ void UrlStore::persist() {
             fwrite(&data.num_encountered, sizeof(uint32_t), 1, fd);
             fwrite(&data.seed_distance, sizeof(uint16_t), 1, fd);
             fwrite(&data.eot, sizeof(uint16_t), 1, fd);
+
+            size_t title_len = data.title.size();
+            fwrite(&title_len, sizeof(size_t), 1, fd);
+            fwrite(&data.title, sizeof(char), title_len, fd);
+
             fwrite(&data.eod, sizeof(uint16_t), 1, fd);
 
             uint32_t num_freqs = static_cast<uint32_t>(data.anchor_freqs.size());
@@ -288,6 +303,11 @@ void UrlStore::readFromFile(const int worker_number) {
         fread(&url_data[url].num_encountered, sizeof(uint32_t), 1, fd);
         fread(&url_data[url].seed_distance, sizeof(uint16_t), 1, fd);
         fread(&url_data[url].eot, sizeof(uint16_t), 1, fd);
+
+        size_t title_len;
+        fread(&title_len, sizeof(size_t), 1, fd);
+        fread(&url_data[url].title, sizeof(char), title_len, fd);
+        
         fread(&url_data[url].eod, sizeof(uint16_t), 1, fd);
 
         uint32_t num_anchor_freqs;
