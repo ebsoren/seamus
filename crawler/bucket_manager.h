@@ -31,6 +31,13 @@ public:
                 std::ofstream create(path.data());
             }
         }
+
+        // Load seed list into priority bucket 0
+        // todo(hershey): make this conditional--only load seed list if there are no bucket files
+        std::lock_guard<std::mutex> lock(dc->buckets[0].bucket_lock);
+        for (size_t i = 0; i < SEED_LIST_SIZE; ++i) {
+            dc->buckets[0].enqueue(CrawlTarget{string(""), string(SEED_LIST[i]), 0, 0});
+        }
     }
 
 

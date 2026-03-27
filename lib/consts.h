@@ -47,6 +47,13 @@ constexpr size_t NUM_PARSERS = CRAWLER_THREADPOOL_SIZE;
 static_assert(NUM_PARSERS == CRAWLER_THREADPOOL_SIZE);      // TODO(hershey): make sure this assumption is valid
 
 
+// Seed URLs (loaded into priority bucket 0 on startup)
+constexpr size_t SEED_LIST_SIZE = 1;
+constexpr const char* SEED_LIST[SEED_LIST_SIZE] = {
+    "https://en.wikipedia.org",
+};
+
+
 // Parser
 static constexpr int MAX_CONSECUTIVE_NON_ALNUM = 15;
 static constexpr char RETURN_DELIM = '\r';
