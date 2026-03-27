@@ -12,6 +12,7 @@
 #include <chrono>
 #include <thread>
 #include <fstream>
+#include <condition_variable>
 
 
 class BucketManager {
@@ -56,6 +57,7 @@ public:
     // Destructor
     ~BucketManager() {
         running.store(false, std::memory_order_relaxed);
+        shutdown_cv.notify_all();
         if (feed_thread.joinable()) feed_thread.join();
         if (bucket_persist_thread.joinable()) bucket_persist_thread.join();
         persist_buckets();
@@ -162,7 +164,8 @@ public:
 
     void persist_buckets_worker() {
         while (running) {
-            std::this_thread::sleep_for(std::chrono::seconds(CRAWLER_PERSIST_INTERVAL_SEC));
+            std::unique_lock<std::mutex> lock(shutdown_mutex);
+            shutdown_cv.wait_for(lock, std::chrono::seconds(CRAWLER_PERSIST_INTERVAL_SEC));
             if (!running) break;
             persist_buckets();
         }
@@ -180,6 +183,8 @@ private:
 
     // Signal for detached threads to exit (and thus join in the destructor)
     std::atomic<bool> running{true};
+    std::mutex shutdown_mutex;
+    std::condition_variable shutdown_cv;
 
     // Nameable threads for joining
     std::thread feed_thread;
