@@ -194,9 +194,9 @@ inline char *https_get(const char *host, const char *path, size_t *out_len) {
    }
 
    // Read full response into a growable buffer
-   size_t resp_cap = 16384;
+   size_t resp_cap = MAX_HTML_SIZE;
    size_t resp_len = 0;
-   char *response = (char *)malloc(resp_cap);
+   char response[resp_cap];
    if (!response) {
       SSL_shutdown(ssl);
       SSL_free(ssl);
@@ -208,18 +208,8 @@ inline char *https_get(const char *host, const char *path, size_t *out_len) {
    int rcvd;
    while ((rcvd = SSL_read(ssl, response + resp_len, resp_cap - resp_len)) > 0) {
       resp_len += rcvd;
-      if (resp_len == resp_cap) {
-         resp_cap *= 2;
-         char *grown = (char *)realloc(response, resp_cap);
-         if (!grown) {
-            free(response);
-            SSL_shutdown(ssl);
-            SSL_free(ssl);
-            SSL_CTX_free(ctx);
-            close(sock);
-            return nullptr;
-         }
-         response = grown;
+      if (resp_len >= resp_cap) {
+         break;
       }
    }
 
@@ -228,6 +218,7 @@ inline char *https_get(const char *host, const char *path, size_t *out_len) {
    SSL_CTX_free(ctx);
    close(sock);
 
+   /*
    // Strip HTTP headers — find "\r\n\r\n"
    char *header_end = nullptr;
    for (size_t i = 0; i + 3 < resp_len; ++i) {
@@ -253,6 +244,7 @@ inline char *https_get(const char *host, const char *path, size_t *out_len) {
 
    if (out_len)
       *out_len = body_len;
+   */
 
-   return result;
+   return response;
 }

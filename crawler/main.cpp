@@ -34,21 +34,6 @@ int main() {
     DomainCarousel dc;
     logger::info("Domain carousel initialized (%zu hash slots, max %zu per queue)", CRAWLER_CAROUSEL_SIZE, CRAWLER_MAX_QUEUE_SIZE);
 
-    // URL Store
-    UrlStore url_store(&dc, my_machine_id());
-    logger::info("URL store listener started on port %u with %u threads", URL_STORE_PORT, URL_STORE_NUM_THREADS);
-
-    // Parsers and buffer managers
-    OutboundUrlBuffer outbound(machine_id, &url_store);
-    LocalUrlBuffer url_buffers[NUM_PARSERS];
-    HtmlParser parsers[NUM_PARSERS];
-    for (size_t i = 0; i < NUM_PARSERS; i++) {
-        url_buffers[i] = LocalUrlBuffer(machine_id, &outbound);
-        
-        parsers[i] = HtmlParser(i, &url_buffers[i], &url_store);
-    }
-    logger::info("Spawned %u parsers and local URL buffers.", NUM_PARSERS);
-
     // Bucket manager
     vector<string> bucket_files = get_frontier_bucket_files();
     logger::info("Initialized %zu bucket files:", bucket_files.size());
@@ -65,6 +50,6 @@ int main() {
 
     // Crawler workers (multiplexing domain carousel)
     std::atomic<bool> workers_running{true};
-    spawn_crawler_workers(dc, workers_running);
+    spawn_crawler_workers(dc, workers_running, machine_id);
     logger::info("Spawned %zu crawler workers", CRAWLER_THREADPOOL_SIZE);
 }

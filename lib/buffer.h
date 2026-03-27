@@ -60,6 +60,11 @@ public:
         return bytes_read;
     }
 
+    void set_buffer(char* new_data, size_t new_size) {
+        data_ = new_data;
+        size_ = new_size;
+    }
+
 
     void shift_data(size_t n) {
 

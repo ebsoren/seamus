@@ -38,9 +38,8 @@ public:
     // 2. Parse buffer
     // 3. Move anything un-parsed to the front of the buffer
     // General use - call in a loop until processing full page
-    ssize_t parse_page(int in_fd, uint16_t hops, uint16_t domain_hops, const char* link) {
+    ssize_t parse_page(char* page, size_t size, uint16_t hops, uint16_t domain_hops, const char* link) {
         // Set member vars to reflect current page we're parsing
-        in_fd_ = in_fd;
         hops_ = hops;
         domain_hops_ = domain_hops;
         url = string(link);
@@ -50,16 +49,13 @@ public:
 
         // Parse the page contents
         if (killed_) return 0;
-        ssize_t status = buf.read(in_fd_);
-        if (status <= 0) return status;
+        buf.set_buffer(page, size);
 
         size_t consumed = parse_buf();
-        buf.shift_data(consumed);
-        return status;
+        finish();
+        return consumed;
     }
 
-    // TODO: Do we really want to call this after each parse_page()? Presumably no -- less often
-    // Call after parse_page() returns 0. Parses remaining bytes and flushes words.
     void finish() {
         if (buf.size() > 0) {
             parse_buf();
@@ -109,7 +105,6 @@ public:
     }
 
 private:
-    int in_fd_;
     int out_fd_;
     size_t parser_id_;
     size_t file_num_;

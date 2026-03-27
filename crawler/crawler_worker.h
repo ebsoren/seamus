@@ -3,6 +3,7 @@
 #include "domain_carousel.h"
 #include "lib/consts.h"
 #include "network_util.h"
+#include "parser/parser.h"
 #include <atomic>
 #include <mutex>
 #include <optional>
@@ -12,7 +13,7 @@
 // Runs in a detached thread, there are CRAWLER_THREADPOOL_SIZE concurrent instances of these
 // Monitors an interval [carousel_left, carousel_right] inclusive on the domain carousel
 // Makes network call to fetch HTML buffer -> parses -> persists to disk
-inline void crawler_worker(DomainCarousel& dc, size_t carousel_left, size_t carousel_right, std::atomic<bool>& running) {
+inline void crawler_worker(DomainCarousel& dc, size_t carousel_left, size_t carousel_right, std::atomic<bool>& running, HtmlParser* parser) {
     while (running) {
         for (size_t carousel_index = carousel_left; running; carousel_index = (carousel_index < carousel_right) ? carousel_index + 1 : carousel_left) {
             // Try lock on the carousel slot - if contended, skip to next slot
@@ -53,8 +54,7 @@ inline void crawler_worker(DomainCarousel& dc, size_t carousel_left, size_t caro
             size_t out_len = 0;
             char* body = https_get(target->domain.data(), path, &out_len);
             if (body) {
-                // TODO(Esben/David): call inlined parser logic here on the raw body buffer, make sure you free the buffer after the parsed contents are persisted (see below)
-                free(body);
+                parser->parse_page(body, out_len, target->seed_distance, target->domain_dist, target->url.data());
             }
         }
     }
@@ -62,14 +62,32 @@ inline void crawler_worker(DomainCarousel& dc, size_t carousel_left, size_t caro
 
 
 // Spawns CRAWLER_THREADPOOL_SIZE detached crawler worker threads, each monitoring an interval of the domain carousel
-inline void spawn_crawler_workers(DomainCarousel& dc, std::atomic<bool>& running) {
+inline void spawn_crawler_workers(DomainCarousel& dc, std::atomic<bool>& running, size_t machine_id) {
     size_t interval_size = CRAWLER_CAROUSEL_SIZE / CRAWLER_THREADPOOL_SIZE;
     size_t curr_domain_left = 0;
     size_t curr_domain_right = interval_size - 1;
 
+    // URL Store
+    UrlStore url_store(&dc, my_machine_id());
+    logger::info("URL store listener started on port %u with %u threads", URL_STORE_PORT, URL_STORE_NUM_THREADS);
+
+    // Parsers and buffer managers
+    OutboundUrlBuffer outbound(machine_id, &url_store);
+    LocalUrlBuffer url_buffers[NUM_PARSERS];
+    HtmlParser parsers[NUM_PARSERS];
+    for (size_t i = 0; i < NUM_PARSERS; i++) {
+        url_buffers[i] = LocalUrlBuffer(machine_id, &outbound);
+        
+        parsers[i] = HtmlParser(i, &url_buffers[i], &url_store);
+    }
+    logger::info("Spawned %u parsers and local URL buffers.", NUM_PARSERS);
+
+    int i = 0;
+
     while (curr_domain_right < CRAWLER_CAROUSEL_SIZE) {
-        std::thread(crawler_worker, std::ref(dc), curr_domain_left, curr_domain_right, std::ref(running)).detach();
+        std::thread(crawler_worker, std::ref(dc), curr_domain_left, curr_domain_right, std::ref(running), &parsers[i]).detach();
         curr_domain_left = curr_domain_right + 1;
         curr_domain_right = curr_domain_left + interval_size - 1;
+        i++;
     }
 }
