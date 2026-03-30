@@ -10,6 +10,9 @@
 #include "priority_queue.h"
 #include "utils.h"
 #include "consts.h"
+#include <optional>
+
+static const int MAX_SIZE_BUCKET = 16777216;  
 
 bool is_digit(char c) {
     return c >= '0' && c <= '9';
@@ -114,8 +117,12 @@ int calcPriorityScore(const string& u, int seed_list_dist) {
     // points for shortness of overall url
 
     double factor_7 = max((150.0 - url.size()) / 100.0, 0.5);
+
+    double factor_8 = max(1.0 - 0.1 * path_depth, 0.4);
+
+    double factor_9 = (qmarkfound) ? 0.75 : 1.0;
     
-    return int((factor_1 * factor_2 * factor_3 * factor_4 * factor_5 * factor_6 * factor_7) * 10000.0);
+    return int((factor_1 * factor_2 * factor_3 * factor_4 * factor_5 * factor_6 * factor_7 * factor_8 * factor_9) * 1000000.0);
 }
 
 size_t get_priority_bucket(const string& url, int seed_list_dist) {
@@ -141,7 +148,7 @@ struct UncrawledItem {
     string url;
     uint16_t seed_list_dist;
 
-    UncrawledItem(string init_url, uint16_t init_seed_list_dist) : url(static_cast<string&&>(init_url)), seed_list_dist(init_seed_list_dist) { }
+    UncrawledItem(string init_url, uint16_t init_seed_list_dist) : url(std::move(init_url)), seed_list_dist(init_seed_list_dist) { }
 
 };
 
@@ -149,7 +156,7 @@ struct CrawledItem {
     string url;
     uint16_t seed_list_dist;
 
-    CrawledItem(string init_url, uint16_t init_seed_list_dist) : url(static_cast<string&&>(init_url)), seed_list_dist(init_seed_list_dist) { }
+    CrawledItem(string init_url, uint16_t init_seed_list_dist) : url(std::move(init_url)), seed_list_dist(init_seed_list_dist) { }
 };
 
 struct UncrawledComp {
@@ -166,25 +173,36 @@ public:
     Frontier(u_int16_t worker_id_init) 
         : priority_buckets(PRIORITY_BUCKETS), worker_id(worker_id_init) { }
 
-    void push(const UncrawledItem &u) {
+    void push(UncrawledItem u) {
         size_t bucket = get_priority_bucket(u.url, u.seed_list_dist);
         for(size_t i = bucket; i < PRIORITY_BUCKETS; i++) {
             if(priority_buckets[i].size() < MAX_SIZE_BUCKET) {
-                priority_buckets[i].push_back(u);
+                priority_buckets[i].push_back(UncrawledItem(std::move(u.url), std::move(u.seed_list_dist)));
                 return;
             }
         }
     }
 
-    void push(string &&url, int seed_list_dist) {
+    void push(string &url, int seed_list_dist) {
         size_t bucket = get_priority_bucket(url, seed_list_dist);
         for(size_t i = bucket; i < PRIORITY_BUCKETS; i++) {
             if(priority_buckets[i].size() < MAX_SIZE_BUCKET) {
-                priority_buckets[i].push_back(UncrawledItem(static_cast<string&&>(url), seed_list_dist));
+                priority_buckets[i].push_back(UncrawledItem(std::move(url), seed_list_dist));
                 return;
             }
         }
     }
+
+    void push(string &&url, int seed_list_dist)  {
+        size_t bucket = get_priority_bucket(url, seed_list_dist);
+        for(size_t i = bucket; i < PRIORITY_BUCKETS; i++) {
+            if(priority_buckets[i].size() < MAX_SIZE_BUCKET) {
+                priority_buckets[i].push_back(UncrawledItem(std::move(url), seed_list_dist));
+                return;
+            }
+        }
+    }
+
 
     void pop() {
         for(size_t i = 0; i < PRIORITY_BUCKETS; i++) {
@@ -242,7 +260,7 @@ public:
             uint64_t bucket_size = priority_buckets[i].size();
             fwrite(&bucket_size, sizeof(uint64_t), 1, fd);
             for(auto it = priority_buckets[i].begin(); it != priority_buckets[i].end(); it++) {
-                string url = static_cast<string&&>((*it).url);
+                string url = std::move((*it).url);
                 uint16_t seed_dist = (*it).seed_list_dist;
                 uint32_t sz = url.size();
                 fwrite(&sz, sizeof(uint32_t), 1, fd);
