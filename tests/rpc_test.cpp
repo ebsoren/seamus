@@ -145,11 +145,15 @@ void test_batch_urlstore_roundtrip() {
 
     // Build a batch with two requests
     BatchURLStoreUpdateRequest batch;
+    vector<string> anchors1;
+    anchors1.push_back(string("example link"));
     batch.reqs.push_back(URLStoreUpdateRequest{
-        string("https://example.com"), string("example link"), 5, 2, 1
+        string("https://example.com"), std::move(anchors1), 5, 2, 1
     });
+    vector<string> anchors2;
+    anchors2.push_back(string("test anchor"));
     batch.reqs.push_back(URLStoreUpdateRequest{
-        string("https://test.org/page"), string("test anchor"), 10, 3, 4
+        string("https://test.org/page"), std::move(anchors2), 10, 3, 4
     });
 
     string host("127.0.0.1");
@@ -163,14 +167,16 @@ void test_batch_urlstore_roundtrip() {
 
     // First request
     assert(result->reqs[0].url == "https://example.com");
-    assert(result->reqs[0].anchor_text == "example link");
+    assert(result->reqs[0].anchor_text.size() == 1);
+    assert(result->reqs[0].anchor_text[0] == "example link");
     assert(result->reqs[0].num_encountered == 5);
     assert(result->reqs[0].seed_list_url_hops == 2);
     assert(result->reqs[0].seed_list_domain_hops == 1);
 
     // Second request
     assert(result->reqs[1].url == "https://test.org/page");
-    assert(result->reqs[1].anchor_text == "test anchor");
+    assert(result->reqs[1].anchor_text.size() == 1);
+    assert(result->reqs[1].anchor_text[0] == "test anchor");
     assert(result->reqs[1].num_encountered == 10);
     assert(result->reqs[1].seed_list_url_hops == 3);
     assert(result->reqs[1].seed_list_domain_hops == 4);
@@ -413,8 +419,8 @@ void test_batch_urlstore_data_response_roundtrip() {
 
     BatchURLStoreDataResponse batch;
     UrlData d1{};
-    d1.anchor_freqs.push_back(AnchorData{10, 3});
-    d1.anchor_freqs.push_back(AnchorData{20, 7});
+    d1.anchor_freqs[10] = 3;
+    d1.anchor_freqs[20] = 7;
     d1.num_encountered = 42;
     d1.seed_distance = 2;
     d1.domain_dist = 1;
@@ -422,7 +428,7 @@ void test_batch_urlstore_data_response_roundtrip() {
     d1.eod = 120;
 
     UrlData d2{};
-    d2.anchor_freqs.push_back(AnchorData{99, 1});
+    d2.anchor_freqs[99] = 1;
     d2.num_encountered = 5;
     d2.seed_distance = 0;
     d2.domain_dist = 0;
@@ -443,10 +449,8 @@ void test_batch_urlstore_data_response_roundtrip() {
 
     // First UrlData
     assert(result->resps[0].anchor_freqs.size() == 2);
-    assert(result->resps[0].anchor_freqs[0].anchor_id == 10);
-    assert(result->resps[0].anchor_freqs[0].freq == 3);
-    assert(result->resps[0].anchor_freqs[1].anchor_id == 20);
-    assert(result->resps[0].anchor_freqs[1].freq == 7);
+    assert(result->resps[0].anchor_freqs[10] == 3);
+    assert(result->resps[0].anchor_freqs[20] == 7);
     assert(result->resps[0].num_encountered == 42);
     assert(result->resps[0].seed_distance == 2);
     assert(result->resps[0].domain_dist == 1);
@@ -455,8 +459,7 @@ void test_batch_urlstore_data_response_roundtrip() {
 
     // Second UrlData
     assert(result->resps[1].anchor_freqs.size() == 1);
-    assert(result->resps[1].anchor_freqs[0].anchor_id == 99);
-    assert(result->resps[1].anchor_freqs[0].freq == 1);
+    assert(result->resps[1].anchor_freqs[99] == 1);
     assert(result->resps[1].num_encountered == 5);
     assert(result->resps[1].seed_distance == 0);
     assert(result->resps[1].domain_dist == 0);
