@@ -30,6 +30,7 @@ public:
         url = string("");
         localBuffer = rhs.localBuffer;
         urlStore = rhs.urlStore;
+        return *this;
     }
 
     bool killed() const { return killed_; }

@@ -73,8 +73,8 @@ inline void spawn_crawler_workers(DomainCarousel& dc, std::atomic<bool>& running
 
     // Parsers and buffer managers
     OutboundUrlBuffer outbound(machine_id, &url_store);
-    LocalUrlBuffer url_buffers[NUM_PARSERS];
-    HtmlParser parsers[NUM_PARSERS];
+    static LocalUrlBuffer url_buffers[NUM_PARSERS];
+    static HtmlParser parsers[NUM_PARSERS];
     for (size_t i = 0; i < NUM_PARSERS; i++) {
         url_buffers[i] = LocalUrlBuffer(machine_id, &outbound);
         parsers[i] = HtmlParser(i, &url_buffers[i], &url_store);
