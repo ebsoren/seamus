@@ -3,6 +3,7 @@
 #include "consts.h"
 #include <cstdio>
 #include <cstdarg>
+#include <mutex>
 
 enum class LogLevel : uint8_t {
     DEBUG = 0,
@@ -13,6 +14,8 @@ enum class LogLevel : uint8_t {
 };
 
 namespace logger {
+
+inline std::mutex log_mtx;
 
 inline bool enabled(LogLevel level) {
     return static_cast<uint8_t>(level) >= LOG_LEVEL;
@@ -30,6 +33,7 @@ inline void log(LogLevel level, const char* fmt, ...) {
         default: return;
     }
 
+    std::lock_guard<std::mutex> lock(log_mtx);
     fputs(prefix, stderr);
     va_list args;
     va_start(args, fmt);
@@ -40,6 +44,7 @@ inline void log(LogLevel level, const char* fmt, ...) {
 
 inline void debug(const char* fmt, ...) {
     if (!enabled(LogLevel::DEBUG)) return;
+    std::lock_guard<std::mutex> lock(log_mtx);
     fputs("[DEBUG] ", stderr);
     va_list args;
     va_start(args, fmt);
@@ -50,6 +55,7 @@ inline void debug(const char* fmt, ...) {
 
 inline void info(const char* fmt, ...) {
     if (!enabled(LogLevel::INFO)) return;
+    std::lock_guard<std::mutex> lock(log_mtx);
     fputs("[INFO]  ", stderr);
     va_list args;
     va_start(args, fmt);
@@ -60,6 +66,7 @@ inline void info(const char* fmt, ...) {
 
 inline void warn(const char* fmt, ...) {
     if (!enabled(LogLevel::WARN)) return;
+    std::lock_guard<std::mutex> lock(log_mtx);
     fputs("[WARN]  ", stderr);
     va_list args;
     va_start(args, fmt);
@@ -70,6 +77,7 @@ inline void warn(const char* fmt, ...) {
 
 inline void error(const char* fmt, ...) {
     if (!enabled(LogLevel::ERROR)) return;
+    std::lock_guard<std::mutex> lock(log_mtx);
     fputs("[ERROR] ", stderr);
     va_list args;
     va_start(args, fmt);

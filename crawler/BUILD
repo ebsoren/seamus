@@ -3,7 +3,7 @@ load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library")
 cc_library(
     name = "domain_carousel",
     hdrs = ["domain_carousel.h"],
-    deps = ["//lib:consts", "//lib:deque", "//lib:string", "//lib:rpc_crawler"],
+    deps = ["//lib:consts", "//lib:deque", "//lib:string", "//lib:rpc_crawler", "//lib:logger"],
     visibility = ["//visibility:public"],
 )
 

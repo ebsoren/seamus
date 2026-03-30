@@ -3,6 +3,7 @@
 #include "../lib/deque.h"
 #include "../lib/rpc_crawler.h"
 #include "../lib/consts.h"
+#include "../lib/logger.h"
 #include <mutex>
 #include <chrono>
 #include <cstdint>
@@ -65,6 +66,7 @@ public:
             return false;
         }
 
+        logger::debug("Feeder added url to carousel slot %zu: %s", domain_index, target.url.data());
         carousel[domain_index].targets.push_back(std::move(target));
         return true;
     }

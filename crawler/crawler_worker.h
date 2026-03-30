@@ -2,6 +2,7 @@
 #include "cstddef"
 #include "domain_carousel.h"
 #include "lib/consts.h"
+#include "lib/logger.h"
 #include "network_util.h"
 #include "parser/parser.h"
 #include <atomic>
@@ -40,9 +41,7 @@ inline void crawler_worker(DomainCarousel& dc, size_t carousel_left, size_t caro
                 std::this_thread::sleep_for(std::chrono::milliseconds(CRAWLER_WORKER_SLEEP_MS));
                 continue;
             }
-
-            // TODO(hershey): At this point, we know that the url belongs to this machine, so we can update url store with num url hops and num domain hops from the seed list
-            // TODO(Esben/David): Parser needs to send updates to urlstore(s) (potentially on other machines) with anchor text data that it finds
+            logger::debug("Worker [%zu-%zu] pulled url: %s", carousel_left, carousel_right, target->url.data());
 
             // Only crawl HTTPS links
             if (target->url.size() < 8 || memcmp(target->url.data(), "https://", 8) != 0) continue;
@@ -54,6 +53,7 @@ inline void crawler_worker(DomainCarousel& dc, size_t carousel_left, size_t caro
             size_t out_len = 0;
             char* body = https_get(target->domain.data(), path, &out_len);
             if (body) {
+                logger::debug("Worker [%zu-%zu] received %zu bytes from %s", carousel_left, carousel_right, out_len, target->url.data());
                 parser->parse_page(body, out_len, target->seed_distance, target->domain_dist, target->url.data());
             }
         }
@@ -77,13 +77,11 @@ inline void spawn_crawler_workers(DomainCarousel& dc, std::atomic<bool>& running
     HtmlParser parsers[NUM_PARSERS];
     for (size_t i = 0; i < NUM_PARSERS; i++) {
         url_buffers[i] = LocalUrlBuffer(machine_id, &outbound);
-        
         parsers[i] = HtmlParser(i, &url_buffers[i], &url_store);
     }
     logger::info("Spawned %u parsers and local URL buffers.", NUM_PARSERS);
 
     int i = 0;
-
     while (curr_domain_right < CRAWLER_CAROUSEL_SIZE) {
         std::thread(crawler_worker, std::ref(dc), curr_domain_left, curr_domain_right, std::ref(running), &parsers[i]).detach();
         curr_domain_left = curr_domain_right + 1;

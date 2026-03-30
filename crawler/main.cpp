@@ -26,9 +26,6 @@ inline vector<string> get_frontier_bucket_files() {
 int main() {
     logger::info("Crawler started...");
 
-    // TODO: Assign correct machine ID value
-    size_t machine_id = 0;
-
     // Initialize crawler components/modules
     // Domain carousel
     DomainCarousel dc;
@@ -50,6 +47,6 @@ int main() {
 
     // Crawler workers (multiplexing domain carousel)
     std::atomic<bool> workers_running{true};
-    spawn_crawler_workers(dc, workers_running, machine_id);
+    spawn_crawler_workers(dc, workers_running, my_machine_id());
     logger::info("Spawned %zu crawler workers", CRAWLER_THREADPOOL_SIZE);
 }

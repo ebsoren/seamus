@@ -15,6 +15,17 @@ https://bazel.build/install \
 bazel build //...
 ```
 
+### Build a binary to a specific directory
+
+```bash
+bazel build //<package>:<target> && cp bazel-bin/<package>/<target> /path/to/destination/
+```
+
+For example, to build the crawler and place it in `~/bin/`:
+```bash
+bazel build //crawler:crawler && cp bazel-bin/crawler/crawler ~/bin/
+```
+
 ### Tests
 
 Run all tests:

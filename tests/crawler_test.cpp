@@ -7,6 +7,7 @@
 #include "../crawler/crawler_worker.h"
 #include "../crawler/domain_carousel.h"
 #include "../parser/url_buffers.h"
+#include "lib/consts.h"
 
 
 void test_crawler_listener_receives_batch() {
@@ -370,7 +371,7 @@ void test_spawn_crawler_workers_consumes_and_stops() {
     }
 
     // Spawn workers
-    spawn_crawler_workers(dc, running);
+    spawn_crawler_workers(dc, running, 0);
 
     // Wait for workers to consume all targets
     std::this_thread::sleep_for(std::chrono::seconds(CRAWLER_BACKOFF_SEC + 3));

@@ -8,6 +8,7 @@
 #include <sys/socket.h>
 #include <netdb.h>
 #include <openssl/ssl.h>
+#include "../lib/consts.h"
 
 
 // Returns a malloc'd buffer containing the HTTP response body (caller must free),
