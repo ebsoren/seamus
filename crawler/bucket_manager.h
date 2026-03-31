@@ -6,6 +6,7 @@
 #include "../lib/rpc_crawler.h"
 #include "lib/consts.h"
 #include "domain_carousel.h"
+#include "lib/utils.h"
 #include <cassert>
 #include <atomic>
 #include <mutex>
@@ -38,7 +39,7 @@ public:
         if (load_seed_list && dc->buckets[0].urls.empty()) {
             std::lock_guard<std::mutex> lock(dc->buckets[0].bucket_lock);
             for (size_t i = 0; i < SEED_LIST_SIZE; ++i) {
-                dc->buckets[0].enqueue(CrawlTarget{string(""), string(SEED_LIST[i]), 0, 0});
+                dc->buckets[0].enqueue(CrawlTarget{extract_domain(string(SEED_LIST[i])), string(SEED_LIST[i]), 0, 0});
             }
         }
     }

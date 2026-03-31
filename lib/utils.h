@@ -78,6 +78,8 @@ inline char charAt(const string &str, size_t i) {
     return i >= str.size() ? '\0' : str[i];
 }
 
+// Extract domain/host
+
 // Extracts just the domain from a URL
 // e.g. "https://www.example.com/path/page" -> "example.com"
 inline string extract_domain(const string& url) {
@@ -105,15 +107,33 @@ inline string extract_domain(const string& url) {
     return string(p, domain_len);
 }
 
+inline string extract_host(const string& url) {
+    const char* p = url.data();
+    size_t len = url.size();
+
+    // Strip scheme
+    if (len >= 8 && memcmp(p, "https://", 8) == 0) {
+        p += 8; len -= 8;
+    } else if (len >= 7 && memcmp(p, "http://", 7) == 0) {
+        p += 7; len -= 7;
+    }
+
+    // Find end of host (first '/' or end of string)
+    size_t host_len = 0;
+    while (host_len < len && p[host_len] != '/') {
+        host_len++;
+    }
+
+    return string(p, host_len);
+}
+
 // Returns the index into MACHINES[] for the machine responsible for a given URL's domain
 inline size_t get_destination_machine_from_url(const string& url) {
-    string domain = extract_domain(url);
-
     size_t hash = 0xcbf29ce484222325ULL;
     size_t fnv_prime = 0x100000001b3ULL;
 
-    for (size_t i = 0; i < domain.size(); ++i) {
-        hash ^= static_cast<unsigned char>(domain[i]);
+    for (size_t i = 0; i < url.size(); ++i) {
+        hash ^= static_cast<unsigned char>(url[i]);
         hash *= fnv_prime;
     }
 

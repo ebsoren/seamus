@@ -46,15 +46,16 @@ inline void crawler_worker(DomainCarousel& dc, size_t carousel_left, size_t caro
             // Only crawl HTTPS links
             if (target->url.size() < 8 || memcmp(target->url.data(), "https://", 8) != 0) continue;
 
-            // Extract path from URL (everything after the host)
+            // Extract host and path from URL
+            string host = extract_host(target->url);
             const char* slash = static_cast<const char*>(memchr(target->url.data() + 8, '/', target->url.size() - 8));
             const char* path = slash ? slash + 1 : "";
 
-            size_t out_len = 0;
-            char* body = https_get(target->domain.data(), path, &out_len);
-            if (body) {
-                logger::debug("Worker [%zu-%zu] received %zu bytes from %s", carousel_left, carousel_right, out_len, target->url.data());
-                parser->parse_page(body, out_len, target->seed_distance, target->domain_dist, target->url.data());
+            char body[MAX_HTML_SIZE];
+            ssize_t body_len = https_get(host.data(), path, body);
+            if (body_len > 0) {
+                logger::debug("Worker [%zu-%zu] received %zd bytes from %s", carousel_left, carousel_right, body_len, target->url.data());
+                parser->parse_page(body, static_cast<size_t>(body_len), target->seed_distance, target->domain_dist, target->url.data());
             }
         }
     }
