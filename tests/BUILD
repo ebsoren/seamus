@@ -122,27 +122,6 @@ cc_test(
 )
 
 cc_test(
-    name = "http_benchmark",
-    srcs = ["http_benchmark.cpp"],
-    deps = ["//crawler:crawler_lib"],
-)
-
-cc_test(
-    name = "https_benchmark",
-    srcs = ["https_benchmark.cpp"],
-    deps = ["//crawler:crawler_lib"],
-)
-
-cc_test(
-    name = "domain_carousel_test",
-    srcs = ["domain_carousel_test.cpp"],
-    deps = [
-        "//crawler:domain_carousel",
-        "//lib:string",
-    ],
-)
-
-cc_test(
     name = "url_store_test",
     srcs = ["url_store_test.cpp"],
     deps = [

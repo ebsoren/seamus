@@ -733,6 +733,7 @@ void test_persist_buckets_to_disk() {
 
 int main() {
     printf("\n===== RUNNING CRAWLER TESTS =====\n\n");
+    BucketManager::load_seed_list = false;
     test_persist_buckets_to_disk();
     test_load_disk_buckets();
     test_bucket_manager_creates_files();

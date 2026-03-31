@@ -18,6 +18,8 @@
 class BucketManager {
 public:
 
+    static inline bool load_seed_list = true;
+
     std::mutex backoff_lock;
     deque<BackoffEntry> backoff_queue;
 
@@ -32,11 +34,12 @@ public:
             }
         }
 
-        // Load seed list into priority bucket 0
-        // todo(hershey): make this conditional--only load seed list if there are no bucket files
-        std::lock_guard<std::mutex> lock(dc->buckets[0].bucket_lock);
-        for (size_t i = 0; i < SEED_LIST_SIZE; ++i) {
-            dc->buckets[0].enqueue(CrawlTarget{string(""), string(SEED_LIST[i]), 0, 0});
+        // Load seed list into priority bucket 0 if enabled and bucket is empty
+        if (load_seed_list && dc->buckets[0].urls.empty()) {
+            std::lock_guard<std::mutex> lock(dc->buckets[0].bucket_lock);
+            for (size_t i = 0; i < SEED_LIST_SIZE; ++i) {
+                dc->buckets[0].enqueue(CrawlTarget{string(""), string(SEED_LIST[i]), 0, 0});
+            }
         }
     }
 
