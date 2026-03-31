@@ -73,7 +73,7 @@ inline void spawn_crawler_workers(DomainCarousel& dc, std::atomic<bool>& running
     logger::info("URL store listener started on port %u with %u threads", URL_STORE_PORT, URL_STORE_NUM_THREADS);
 
     // Parsers and buffer managers
-    OutboundUrlBuffer outbound(machine_id, &url_store);
+    static OutboundUrlBuffer outbound(machine_id, &url_store);
     static LocalUrlBuffer url_buffers[NUM_PARSERS];
     static HtmlParser parsers[NUM_PARSERS];
     for (size_t i = 0; i < NUM_PARSERS; i++) {
