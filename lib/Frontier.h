@@ -99,7 +99,7 @@ int calcPriorityScore(const string& u, int seed_list_dist) {
 
     // points for closer to seed list
 
-    const double e = 2.718281828459;
+    const double e = 2.718;
     double factor_3 = max(double_pow(e, -0.04 * seed_list_dist), 0.4);  // NOTE: may need to tune the constant here
 
     // points for shortness of domain title
@@ -122,7 +122,7 @@ int calcPriorityScore(const string& u, int seed_list_dist) {
 
     double factor_9 = (qmarkfound) ? 0.75 : 1.0;
     
-    return int((factor_1 * factor_2 * factor_3 * factor_4 * factor_5 * factor_6 * factor_7 * factor_8 * factor_9) * 1000000.0);
+    return int((factor_1 * factor_2 * factor_3 * factor_4 * factor_5 * factor_6 * factor_7 * factor_8 * factor_9) * 1000000);
 }
 
 size_t get_priority_bucket(const string& url, int seed_list_dist) {
@@ -133,7 +133,7 @@ size_t get_priority_bucket(const string& url, int seed_list_dist) {
     // CURRENT FUNCTION WRITTEN WITH 8 EXPECTED BUCKETS, WILL NEED TO CHANGE IF THAT IS CHANGED!!
     int score = calcPriorityScore(url, seed_list_dist);
 
-    if      (score >= 400000) return 0;  // elite
+    if      (score >= 450000) return 0;  // elite
     if      (score >= 300000) return 1;
     if      (score >= 200000) return 2;
     if      (score >= 100000) return 3;

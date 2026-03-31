@@ -1,6 +1,19 @@
 #include "../lib/Frontier.h"
-#include <cassert>
 #include <iostream>
+#include <cassert>
+
+#define PRINT_AND_ASSERT(cond, expected, actual)            \
+    do {                                                    \
+        if (!(cond)) {                                      \
+            std::cerr << "[TEST FAILED]\n";                 \
+            std::cerr << "  Condition: " << #cond << "\n";  \
+            std::cerr << "  Expected: " << (expected) << "\n"; \
+            std::cerr << "  Actual:   " << (actual) << "\n";   \
+            std::cerr << "  File: " << __FILE__ << "\n";    \
+            std::cerr << "  Line: " << __LINE__ << "\n";    \
+            assert(cond);                                   \
+        }                                                   \
+    } while (0)
 
 using std::cout;
 
@@ -8,20 +21,19 @@ void test_string_basic() {
     string a("hello");
     string b("world");
 
-    assert(a.size() == 5);
-    assert(a[0] == 'h');
-    assert(a.str_view(0, 5) == "hello");
+    PRINT_AND_ASSERT(a.size() == 5, 5, a.size());
+    PRINT_AND_ASSERT(a[0] == 'h', 'h', a[0]);
+    PRINT_AND_ASSERT(a.str_view(0, 5) == "hello", "hello", a.str_view(0, 5));
 
     cout << "test_string_basic passed\n";
 }
 
 void test_string_move() {
     string a("hello");
+    string b = std::move(a);
 
-    string b = std::move(a);  // move constructor
-
-    assert(b == "hello");
-    assert(b.size() == 5);
+    PRINT_AND_ASSERT(b == "hello", "hello", b);
+    PRINT_AND_ASSERT(b.size() == 5, 5, b.size());
 
     cout << "test_string_move passed\n";
 }
@@ -29,7 +41,7 @@ void test_string_move() {
 void test_string_join() {
     string s = string::join("-", "a", "b", "c");
 
-    assert(s == "a-b-c");
+    PRINT_AND_ASSERT(s == "a-b-c", "a-b-c", s);
 
     cout << "test_string_join passed\n";
 }
@@ -39,11 +51,11 @@ void test_string_view() {
 
     auto view = s.str_view(8, 7);
 
-    assert(view == "example");
+    PRINT_AND_ASSERT(view == "example", "example", view);
 
     string rebuilt = view.to_string();
 
-    assert(rebuilt == "example");
+    PRINT_AND_ASSERT(rebuilt == "example", "example", rebuilt);
 
     cout << "test_string_view passed\n";
 }
@@ -55,13 +67,15 @@ void test_frontier_push_front_pop() {
 
     f.push(std::move(url), 0);
 
-    assert(f.size() == 1);
+    PRINT_AND_ASSERT(f.size() == 1, 1, f.size());
 
     CrawledItem item = f.front();
-    assert(item.url.str_view(0, item.url.size()) == "https://example.com");
+    PRINT_AND_ASSERT(item.url.str_view(0, item.url.size()) == "https://example.com",
+                     "https://example.com",
+                     item.url.str_view(0, item.url.size()));
 
     f.pop();
-    assert(f.size() == 0);
+    PRINT_AND_ASSERT(f.size() == 0, 0, f.size());
 
     cout << "test_frontier_push_front_pop passed\n";
 }
@@ -72,14 +86,14 @@ void test_frontier_move_only() {
     f.push(string("https://a.com"), 0);
     f.push(string("https://b.com"), 0);
 
-    assert(f.size() == 2);
+    PRINT_AND_ASSERT(f.size() == 2, 2, f.size());
 
     CrawledItem item1 = f.front();
     f.pop();
 
     CrawledItem item2 = f.front();
 
-    assert(!(item1.url == item2.url));
+    PRINT_AND_ASSERT(!(item1.url == item2.url), "different URLs", "equal URLs");
 
     cout << "test_frontier_move_only passed\n";
 }
@@ -87,14 +101,18 @@ void test_frontier_move_only() {
 void test_priority_ranking() {
     Frontier f(1);
 
-    f.push(string("https://harvard.edu"), 0);  // high
-    f.push(string("http://example123.biz"), 50); // low
-    f.push(string("https://mit.edu"), 1);       // high
+    f.push(string("https://harvard.edu"), 0);
+    f.push(string("http://example123.biz"), 50);
+    f.push(string("https://mit.edu"), 1);
 
     CrawledItem first = f.front();
 
-    assert(first.url.str_view(0, first.url.size()) == "https://harvard.edu"
-        || first.url.str_view(0, first.url.size()) == "https://mit.edu");
+    PRINT_AND_ASSERT(
+        (first.url.str_view(0, first.url.size()) == "https://harvard.edu" ||
+         first.url.str_view(0, first.url.size()) == "https://mit.edu"),
+        "high-quality URL",
+        first.url.str_view(0, first.url.size())
+    );
 
     cout << "test_priority_ranking passed\n";
 }
@@ -106,8 +124,12 @@ void test_seed_distance_effect() {
     f.push(string("https://a.com"), 100);
 
     CrawledItem first = f.front();
+    f.pop();
+    CrawledItem second = f.front();
 
-    assert(first.seed_list_dist == 0);
+
+    PRINT_AND_ASSERT(second.seed_list_dist == 100, 100, second.seed_list_dist);
+    PRINT_AND_ASSERT(first.seed_list_dist == 0, 0, first.seed_list_dist);
 
     cout << "test_seed_distance_effect passed\n";
 }
@@ -119,13 +141,13 @@ void test_many_push_pop() {
         f.push(string::join("", "https://site", string(i), ".com"), i % 10);
     }
 
-    assert(f.size() == 5000);
+    PRINT_AND_ASSERT(f.size() == 5000, 5000, f.size());
 
     for (int i = 0; i < 5000; i++) {
         f.pop();
     }
 
-    assert(f.size() == 0);
+    PRINT_AND_ASSERT(f.size() == 0, 0, f.size());
 
     cout << "test_many_push_pop passed\n";
 }
@@ -139,7 +161,9 @@ void test_url_parsing() {
 
     string_view view = item.url.str_view(8, item.url.size() - 8);
 
-    assert(view == "sub.domain123.example.com/path/to/page?x=1");
+    PRINT_AND_ASSERT(view == "sub.domain123.example.com/path/to/page?x=1",
+                     "parsed URL",
+                     view);
 
     cout << "test_url_parsing passed\n";
 }
@@ -149,7 +173,7 @@ void test_edge_case_empty_frontier() {
 
     try {
         f.front();
-        assert(false); // should not reach
+        PRINT_AND_ASSERT(false, "exception expected", "no exception");
     } catch (...) {
         cout << "test_edge_case_empty_frontier passed\n";
     }
@@ -163,8 +187,9 @@ void test_digits_and_subdomains_penalty() {
 
     CrawledItem first = f.front();
 
-    // cleaner URL should rank higher
-    assert(first.url == "https://example.com");
+    PRINT_AND_ASSERT(first.url == "https://example.com",
+                     "https://example.com",
+                     first.url);
 
     cout << "test_digits_and_subdomains_penalty passed\n";
 }
