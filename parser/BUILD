@@ -16,3 +16,17 @@ cc_library(
     ],
     visibility = ["//visibility:public"]
 )
+
+cc_library(
+    name = "robots_manager",
+    srcs = ["RobotsManager.cpp"],
+    hdrs = ["RobotsManager.h"],
+    deps = [
+        ":parser",
+        "//lib:consts",
+        "//lib:string",
+        "//lib:unordered_map",
+        "//crawler:network_util",
+    ],
+    visibility = ["//visibility:public"]
+)
