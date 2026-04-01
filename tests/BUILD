@@ -140,3 +140,13 @@ cc_test(
         "//index:index_lib"
     ]
 )
+
+cc_test(
+    name = "https_benchmark",
+    srcs = ["https_benchmark.cpp"],
+    deps = [
+        "//crawler:crawler_lib",
+        "//lib:utils",
+        "//lib:string",
+    ],
+)

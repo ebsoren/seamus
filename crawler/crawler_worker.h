@@ -57,6 +57,10 @@ inline void crawler_worker(DomainCarousel& dc, size_t carousel_left, size_t caro
             if (body_len > 0) {
                 logger::debug("Worker [%zu-%zu] received %zd bytes from %s", carousel_left, carousel_right, body_len, target->url.data());
                 parser->parse_page(body, static_cast<size_t>(body_len), target->seed_distance, target->domain_dist, target->url.data());
+            } else if (body_len == 0) {
+                logger::debug("Worker [%zu-%zu] received empty body from %s", carousel_left, carousel_right, target->url.data());
+            } else {
+                logger::debug("Worker [%zu-%zu] errored on %s", carousel_left, carousel_right, target->url.data());
             }
         }
     }
