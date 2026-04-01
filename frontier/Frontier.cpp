@@ -12,24 +12,11 @@
 #include "../lib/consts.h"
 #include "Frontier.h"
 
-// TODO: Create 5 queue buckets with given cutoffs instead of a PQ
-// TODO: Store each bucket in a separate document and when we pull back, just take from the higest bucket with data present 
-// TODO: Our goal is to clear out our top 3-4 buckets. Keep track of when we clear out the buckets to see the effectiveness 
+// ATTENTION! THIS IS OLD CODE FOR THE FRONTIER THAT I AM STILL USING AS REFERENCE TO BUILD THE NEW ONE! MAKE SURE TO USE lib/Frontier.h 
+// NOT THIS SHITTY CODE RIGHT HERE. THANK YOU FOR YOUR ATTENTION!
 
 size_t get_priority_bucket(const string& url, int seed_list_dist) {
-    // TODO(Erik): write this function
-    // 0 is the index of the highest priority bucket, PRIORITY_BUCKETS - 1 is the index of the lowest priority bucket
-    // PRIORITY_BUCKETS defined in ~/lib/consts.h
-    int score = calcPriorityScore(url, seed_list_dist);
-
-    if      (score >= 500000) return 0;  // elite
-    if      (score >= 400000) return 1;
-    if      (score >= 300000) return 2;
-    if      (score >= 200000) return 3;
-    if      (score >= 100000) return 4;
-    if      (score >=   8000) return 5;
-    if      (score >=   2500) return 6;
-    else                      return 7;  // deprioritize
+    return 0;
 }
 
 unordered_map<string,double> makeTldWeight() {
