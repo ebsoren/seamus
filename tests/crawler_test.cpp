@@ -371,7 +371,7 @@ void test_spawn_crawler_workers_consumes_and_stops() {
     }
 
     // Spawn workers
-    spawn_crawler_workers(dc, running, 0);
+    auto workers = spawn_crawler_workers(dc, running, 0);
 
     // Wait for workers to consume all targets
     std::this_thread::sleep_for(std::chrono::seconds(CRAWLER_BACKOFF_SEC + 3));
@@ -384,7 +384,9 @@ void test_spawn_crawler_workers_consumes_and_stops() {
 
     // Shut down workers
     running.store(false, std::memory_order_relaxed);
-    std::this_thread::sleep_for(std::chrono::seconds(1));
+    for (size_t i = 0; i < workers.size(); ++i) {
+        if (workers[i].joinable()) workers[i].join();
+    }
 
     // Repopulate every slot
     for (size_t i = 0; i < CRAWLER_CAROUSEL_SIZE; ++i) {

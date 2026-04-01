@@ -47,6 +47,11 @@ int main() {
 
     // Crawler workers (multiplexing domain carousel)
     std::atomic<bool> workers_running{true};
-    spawn_crawler_workers(dc, workers_running, my_machine_id());
+    auto workers = spawn_crawler_workers(dc, workers_running, my_machine_id());
     logger::info("Spawned %zu crawler workers", CRAWLER_THREADPOOL_SIZE);
+
+    // Join all worker threads so stack objects stay alive
+    for (size_t i = 0; i < workers.size(); ++i) {
+        if (workers[i].joinable()) workers[i].join();
+    }
 }
