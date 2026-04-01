@@ -7,6 +7,7 @@
 #include "unordered_map.h"
 
 #include <cstdint>
+#include <memory>
 #include <optional>
 
 /*
@@ -81,12 +82,12 @@ inline bool send_batch_urlstore_update(const string& host, uint16_t port, const 
                + sizeof(uint32_t) * 3;
     }
 
-    char* buf = new char[total];
+    auto buf = std::make_unique<char[]>(total);
     size_t off = 0;
 
     // Write request count
     uint32_t count = htonl(static_cast<uint32_t>(batch.reqs.size()));
-    std::memcpy(buf + off, &count, sizeof(uint32_t));
+    std::memcpy(buf.get() + off, &count, sizeof(uint32_t));
     off += sizeof(uint32_t);
 
     for (size_t i = 0; i < batch.reqs.size(); i++) {
@@ -94,43 +95,41 @@ inline bool send_batch_urlstore_update(const string& host, uint16_t port, const 
 
         // url (length-prefixed)
         uint32_t url_len = htonl(static_cast<uint32_t>(req.url.size()));
-        std::memcpy(buf + off, &url_len, sizeof(uint32_t));
+        std::memcpy(buf.get() + off, &url_len, sizeof(uint32_t));
         off += sizeof(uint32_t);
-        std::memcpy(buf + off, req.url.data(), req.url.size());
+        std::memcpy(buf.get() + off, req.url.data(), req.url.size());
         off += req.url.size();
 
         // anchor_text (length-prefixed)
         // send length of vector first then have recv read in this size and loop for that
         uint32_t anchor_count = htonl(static_cast<uint32_t>(req.anchor_text.size()));
-        std::memcpy(buf + off, &anchor_count, sizeof(uint32_t));
+        std::memcpy(buf.get() + off, &anchor_count, sizeof(uint32_t));
         off += sizeof(uint32_t);
         for (const string& anchor : req.anchor_text) {
             uint32_t anchor_len = htonl(static_cast<uint32_t>(anchor.size()));
-            std::memcpy(buf + off, &anchor_len, sizeof(uint32_t));
+            std::memcpy(buf.get() + off, &anchor_len, sizeof(uint32_t));
             off += sizeof(uint32_t);
-            std::memcpy(buf + off, anchor.data(), anchor.size());
+            std::memcpy(buf.get() + off, anchor.data(), anchor.size());
             off += anchor.size();
         }
 
         // num_encountered
         uint32_t enc = htonl(req.num_encountered);
-        std::memcpy(buf + off, &enc, sizeof(uint32_t));
+        std::memcpy(buf.get() + off, &enc, sizeof(uint32_t));
         off += sizeof(uint32_t);
 
         // seed_list_url_hops
         uint16_t url_hops = htons(req.seed_list_url_hops);
-        std::memcpy(buf + off, &url_hops, sizeof(uint16_t));
+        std::memcpy(buf.get() + off, &url_hops, sizeof(uint16_t));
         off += sizeof(uint16_t);
 
         // seed_list_domain_hops
         uint16_t domain_hops = htons(req.seed_list_domain_hops);
-        std::memcpy(buf + off, &domain_hops, sizeof(uint16_t));
+        std::memcpy(buf.get() + off, &domain_hops, sizeof(uint16_t));
         off += sizeof(uint16_t);
     }
 
-    bool ok = send_buffer(host, port, buf, total);
-    delete[] buf;
-    return ok;
+    return send_buffer(host, port, buf.get(), total);
 }
 
 
@@ -141,24 +140,22 @@ inline bool send_batch_urlstore_data_request(const string& host, uint16_t port, 
         total += sizeof(uint32_t) + batch.urls[i].size();
     }
 
-    char* buf = new char[total];
+    auto buf = std::make_unique<char[]>(total);
     size_t off = 0;
 
     uint32_t count = htonl(static_cast<uint32_t>(batch.urls.size()));
-    std::memcpy(buf + off, &count, sizeof(uint32_t));
+    std::memcpy(buf.get() + off, &count, sizeof(uint32_t));
     off += sizeof(uint32_t);
 
     for (size_t i = 0; i < batch.urls.size(); i++) {
         uint32_t url_len = htonl(static_cast<uint32_t>(batch.urls[i].size()));
-        std::memcpy(buf + off, &url_len, sizeof(uint32_t));
+        std::memcpy(buf.get() + off, &url_len, sizeof(uint32_t));
         off += sizeof(uint32_t);
-        std::memcpy(buf + off, batch.urls[i].data(), batch.urls[i].size());
+        std::memcpy(buf.get() + off, batch.urls[i].data(), batch.urls[i].size());
         off += batch.urls[i].size();
     }
 
-    bool ok = send_buffer(host, port, buf, total);
-    delete[] buf;
-    return ok;
+    return send_buffer(host, port, buf.get(), total);
 }
 
 
@@ -206,11 +203,11 @@ inline bool send_batch_urlstore_data_response(const string& host, uint16_t port,
                + sizeof(uint16_t) * 4;
     }
 
-    char* buf = new char[total];
+    auto buf = std::make_unique<char[]>(total);
     size_t off = 0;
 
     uint32_t count = htonl(static_cast<uint32_t>(batch.resps.size()));
-    std::memcpy(buf + off, &count, sizeof(uint32_t));
+    std::memcpy(buf.get() + off, &count, sizeof(uint32_t));
     off += sizeof(uint32_t);
 
     for (size_t i = 0; i < batch.resps.size(); i++) {
@@ -218,44 +215,42 @@ inline bool send_batch_urlstore_data_response(const string& host, uint16_t port,
 
         // anchor_freqs (count-prefixed)
         uint32_t anchor_count = htonl(static_cast<uint32_t>(d.anchor_freqs.size()));
-        std::memcpy(buf + off, &anchor_count, sizeof(uint32_t));
+        std::memcpy(buf.get() + off, &anchor_count, sizeof(uint32_t));
         off += sizeof(uint32_t);
 
         for (auto it = d.anchor_freqs.begin(); it != d.anchor_freqs.end(); ++it) {
             const auto& tuple = *it;
             uint32_t aid = htonl(tuple.key);
-            std::memcpy(buf + off, &aid, sizeof(uint32_t));
+            std::memcpy(buf.get() + off, &aid, sizeof(uint32_t));
             off += sizeof(uint32_t);
 
             uint32_t freq = htonl(tuple.value);
-            std::memcpy(buf + off, &freq, sizeof(uint32_t));
+            std::memcpy(buf.get() + off, &freq, sizeof(uint32_t));
             off += sizeof(uint32_t);
         }
 
         uint32_t enc = htonl(d.num_encountered);
-        std::memcpy(buf + off, &enc, sizeof(uint32_t));
+        std::memcpy(buf.get() + off, &enc, sizeof(uint32_t));
         off += sizeof(uint32_t);
 
         uint16_t sd = htons(d.seed_distance);
-        std::memcpy(buf + off, &sd, sizeof(uint16_t));
+        std::memcpy(buf.get() + off, &sd, sizeof(uint16_t));
         off += sizeof(uint16_t);
 
         uint16_t dd = htons(d.domain_dist);
-        std::memcpy(buf + off, &dd, sizeof(uint16_t));
+        std::memcpy(buf.get() + off, &dd, sizeof(uint16_t));
         off += sizeof(uint16_t);
 
         uint16_t eot = htons(d.eot);
-        std::memcpy(buf + off, &eot, sizeof(uint16_t));
+        std::memcpy(buf.get() + off, &eot, sizeof(uint16_t));
         off += sizeof(uint16_t);
 
         uint16_t eod = htons(d.eod);
-        std::memcpy(buf + off, &eod, sizeof(uint16_t));
+        std::memcpy(buf.get() + off, &eod, sizeof(uint16_t));
         off += sizeof(uint16_t);
     }
 
-    bool ok = send_buffer(host, port, buf, total);
-    delete[] buf;
-    return ok;
+    return send_buffer(host, port, buf.get(), total);
 }
 
 
