@@ -14,7 +14,7 @@
 
 // struct WordPos {
 //     size_t word_num; // 0-indexed for ordering of words in the query
-//     size_t word_pos; // 0-indexed from start of page
+//     size_t word_pos; // 1-indexed from start of page
 // };
 
 struct RankedPage {
