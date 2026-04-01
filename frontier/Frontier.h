@@ -10,6 +10,9 @@
 #include "../lib/priority_queue.h"
 #include "../lib/utils.h"
 
+// ATTENTION! THIS IS OLD CODE FOR THE FRONTIER THAT I AM STILL USING AS REFERENCE TO BUILD THE NEW ONE! MAKE SURE TO USE lib/Frontier.h 
+// NOT THIS SHITTY CODE RIGHT HERE. THANK YOU FOR YOUR ATTENTION!
+
 unordered_map<string,double> makeTldWeight();
 
 bool is_digit(char c);
