@@ -10,6 +10,7 @@
 #include "../parser/parser.h"
 #include "../parser/url_buffers.h"
 #include "../url_store/url_store.h"
+#include "../parser/RobotsManager.h"
 
 
 inline vector<string> get_frontier_bucket_files() {
@@ -40,6 +41,9 @@ int main() {
     BucketManager bm(static_cast<vector<string>&&>(bucket_files), &dc);
     bm.start();
 
+    RobotsManager rm(ROBOTS_CACHE_SIZE);
+    logger::info("Robots.txt manager initialized with cache capacity %zu", ROBOTS_CACHE_SIZE);
+
     // Crawler listener
     CrawlerListener cl(&bm, &dc);
     cl.start();
@@ -47,6 +51,6 @@ int main() {
 
     // Crawler workers (multiplexing domain carousel)
     std::atomic<bool> workers_running{true};
-    spawn_crawler_workers(dc, workers_running, my_machine_id());
+    spawn_crawler_workers(dc, rm, workers_running, my_machine_id());
     logger::info("Spawned %zu crawler workers", CRAWLER_THREADPOOL_SIZE);
 }

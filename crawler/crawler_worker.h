@@ -5,6 +5,7 @@
 #include "lib/logger.h"
 #include "network_util.h"
 #include "parser/parser.h"
+#include "../parser/RobotsManager.h"
 #include <atomic>
 #include <mutex>
 #include <optional>
@@ -14,7 +15,7 @@
 // Runs in a detached thread, there are CRAWLER_THREADPOOL_SIZE concurrent instances of these
 // Monitors an interval [carousel_left, carousel_right] inclusive on the domain carousel
 // Makes network call to fetch HTML buffer -> parses -> persists to disk
-inline void crawler_worker(DomainCarousel& dc, size_t carousel_left, size_t carousel_right, std::atomic<bool>& running, HtmlParser* parser) {
+inline void crawler_worker(DomainCarousel& dc, RobotsManager& rm, size_t carousel_left, size_t carousel_right, std::atomic<bool>& running, HtmlParser* parser) {
     while (running) {
         for (size_t carousel_index = carousel_left; running; carousel_index = (carousel_index < carousel_right) ? carousel_index + 1 : carousel_left) {
             // Try lock on the carousel slot - if contended, skip to next slot
@@ -47,7 +48,20 @@ inline void crawler_worker(DomainCarousel& dc, size_t carousel_left, size_t caro
             if (target->url.size() < 8 || memcmp(target->url.data(), "https://", 8) != 0) continue;
 
             // Extract host and path from URL
-            string host = extract_host(target->url);
+            const string host = extract_host(target->url);
+            CrawlStatus status = rm.checkStatus(host, target->url); // TODO: handle disallowed and pending cases
+            if (status == CrawlStatus::DISALLOWED) {
+                logger::debug("Worker [%zu-%zu] skipping disallowed url: %s", carousel_left, carousel_right, target->url.data());
+                continue;
+            } else if (status == CrawlStatus::PENDING) {
+                logger::debug("Worker [%zu-%zu] pending url (robots.txt fetch in progress): %s", carousel_left, carousel_right, target->url.data());
+                // Re-enqueue the target to be checked again later
+                std::lock_guard<std::mutex> lock(dc.carousel[carousel_index].domain_queue_lock);
+                dc.carousel[carousel_index].targets.push_back(std::move(*target));
+                continue;
+            } else {
+                logger::debug("Worker [%zu-%zu] allowed url: %s", carousel_left, carousel_right, target->url.data());
+            }
             const char* slash = static_cast<const char*>(memchr(target->url.data() + 8, '/', target->url.size() - 8));
             const char* path = slash ? slash + 1 : "";
 
@@ -63,7 +77,7 @@ inline void crawler_worker(DomainCarousel& dc, size_t carousel_left, size_t caro
 
 
 // Spawns CRAWLER_THREADPOOL_SIZE detached crawler worker threads, each monitoring an interval of the domain carousel
-inline void spawn_crawler_workers(DomainCarousel& dc, std::atomic<bool>& running, size_t machine_id) {
+inline void spawn_crawler_workers(DomainCarousel& dc, RobotsManager& rm, std::atomic<bool>& running, size_t machine_id) {
     size_t interval_size = CRAWLER_CAROUSEL_SIZE / CRAWLER_THREADPOOL_SIZE;
     size_t curr_domain_left = 0;
     size_t curr_domain_right = interval_size - 1;
@@ -84,7 +98,7 @@ inline void spawn_crawler_workers(DomainCarousel& dc, std::atomic<bool>& running
 
     int i = 0;
     while (curr_domain_right < CRAWLER_CAROUSEL_SIZE) {
-        std::thread(crawler_worker, std::ref(dc), curr_domain_left, curr_domain_right, std::ref(running), &parsers[i]).detach();
+        std::thread(crawler_worker, std::ref(dc), std::ref(rm), curr_domain_left, curr_domain_right, std::ref(running), &parsers[i]).detach();
         curr_domain_left = curr_domain_right + 1;
         curr_domain_right = curr_domain_left + interval_size - 1;
         i++;
