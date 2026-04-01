@@ -3,52 +3,49 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
-#include <iostream>
+#include <functional>
 #include <initializer_list>
+#include <iostream>
+
 #include <stdlib.h>
 
 #include "../lib/io.h"
+#include "../lib/logger.h"
 
 
 // Array specifically for storing words with added method push_back providing easy use
-template<size_t MAX_MEMORY>
-class word_array {
+template <size_t MAX_MEMORY>
+class buffer_array {
 public:
-    int fd_ = -1;
     static constexpr char DEFAULT_DELIM = '\n';
-    word_array()
-        : fd_(-1) {}
-
-    word_array(int fd)
-        : fd_(fd) {}
+    buffer_array() {}
 
     void push_back(const char *start, size_t len, char delim = DEFAULT_DELIM) {
-        if (len >= MAX_MEMORY - size_ - 1) {
-            seamus_write(fd_, data_, size_);
-            size_ = 0;
+        if (len >= MAX_MEMORY - this->size_ - 10) { // 10 to have space for /doc
+            logger::debug("buffer_array flush triggered: size_=%zu, incoming len=%zu, capacity=%zu", this->size_, len,
+                          MAX_MEMORY);
+            flush();
+
+            // After flush, if the single item still can't fit, truncate to avoid overflow
+            if (len >= MAX_MEMORY - 1) {
+                logger::warn("buffer_array: item too large for buffer (len=%zu, max=%zu), truncating", len, MAX_MEMORY);
+                len = MAX_MEMORY - 2;
+            }
         }
-        memcpy(data_ + size_, start, len);
-        size_ += len;
+        if (start && len > 0) {
+            memcpy(data_ + size_, start, len);
+        }
+        this->size_ += len;
         if (delim != '\0') {
             data_[size_++] = delim;
         }
     }
-
-    void flush() { flush(fd_); }
-
-    void flush(int fd) {
-        if (size_ > 0) {
-            seamus_write(fd, data_, size_);
-            size_ = 0;
-        }
-    }
+    virtual void flush() = 0;
 
     // Resets a word_array to be "dataless" without requiring reallocation of data_
-    // TODO: Esben, am I correct that this works as intended/is sufficient? 
-    // Don't need to reset the actual data_ array, I believe
-    inline void reset() {
-        size_ = 0;
-    }
+    // TODO: Esben, am I correct that this works as intended/is sufficient?
+    // Don't need to reset the actual data_ array, I believe. YES - Esben
+    inline void reset() { this->size_ = 0; }
 
     // Convert the contents of a given segment of the data array to lowercase
     // Converts the entire array if no args are given
@@ -73,7 +70,52 @@ public:
 
     const char &operator[](size_t i) const { return data_[i]; }
 
-private:
+
+protected:
     char data_[MAX_MEMORY];
     size_t size_ = 0;
+};
+
+template <size_t MAX_MEMORY>
+class word_array : public buffer_array<MAX_MEMORY> {
+public:
+    int fd_ = -1;
+
+    word_array() = default;
+
+    word_array(int fd)
+        : fd_(fd) {}
+    void flush() override {
+        if (this->size_ > 0) {
+            seamus_write(fd_, this->data_, this->size_);
+            this->size_ = 0;
+        }
+    }
+};
+
+template <size_t MAX_MEMORY>
+class link_array : public buffer_array<MAX_MEMORY> {
+public:
+    void set_callback(std::function<void(link_array &)> func) { provided_flush_func = func; }
+    link_array() = default;
+    void flush() override {
+        if (this->size_ > 0 && provided_flush_func) {
+            provided_flush_func(*this);
+        }
+    }
+
+    void push_docend() {
+        constexpr const char tag[] = "\n</doc>\n";
+        constexpr size_t tag_len = 8;
+        if (this->size_ + tag_len <= MAX_MEMORY) {
+            memcpy(this->data_ + this->size_, tag, tag_len);
+            this->size_ += tag_len;
+        } else {
+            logger::warn("push_docend: no room in buffer (size_=%zu, capacity=%zu)", this->size_, MAX_MEMORY);
+        }
+    }
+
+
+private:
+    std::function<void(link_array &)> provided_flush_func;
 };

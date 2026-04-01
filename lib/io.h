@@ -35,5 +35,6 @@ inline ssize_t seamus_write(int fd, const char *buf, size_t len) {
         }
         written += w;
     }
+    logger::debug("seamus_write: wrote %zd bytes to fd %d", written, fd);
     return written;
 }

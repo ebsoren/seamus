@@ -1,16 +1,17 @@
 #pragma once
 
-#include "consts.h"
-#include <cstdio>
 #include <cstdarg>
+#include <cstdio>
 #include <mutex>
+
+#include "consts.h"
 
 enum class LogLevel : uint8_t {
     DEBUG = 0,
-    INFO  = 1,
-    WARN  = 2,
+    INFO = 1,
+    WARN = 2,
     ERROR = 3,
-    NONE  = 4,
+    NONE = 4,
 };
 
 namespace logger {
@@ -21,16 +22,25 @@ inline bool enabled(LogLevel level) {
     return static_cast<uint8_t>(level) >= LOG_LEVEL;
 }
 
-inline void log(LogLevel level, const char* fmt, ...) {
+inline void log(LogLevel level, const char *fmt, ...) {
     if (!enabled(level)) return;
 
-    const char* prefix;
+    const char *prefix;
     switch (level) {
-        case LogLevel::DEBUG: prefix = "[DEBUG] "; break;
-        case LogLevel::INFO:  prefix = "[INFO]  "; break;
-        case LogLevel::WARN:  prefix = "[WARN]  "; break;
-        case LogLevel::ERROR: prefix = "[ERROR] "; break;
-        default: return;
+    case LogLevel::DEBUG:
+        prefix = "[DEBUG] ";
+        break;
+    case LogLevel::INFO:
+        prefix = "[INFO]  ";
+        break;
+    case LogLevel::WARN:
+        prefix = "[WARN]  ";
+        break;
+    case LogLevel::ERROR:
+        prefix = "[ERROR] ";
+        break;
+    default:
+        return;
     }
 
     std::lock_guard<std::mutex> lock(log_mtx);
@@ -42,7 +52,7 @@ inline void log(LogLevel level, const char* fmt, ...) {
     fputc('\n', stderr);
 }
 
-inline void debug(const char* fmt, ...) {
+inline void debug(const char *fmt, ...) {
     if (!enabled(LogLevel::DEBUG)) return;
     std::lock_guard<std::mutex> lock(log_mtx);
     fputs("[DEBUG] ", stderr);
@@ -53,7 +63,7 @@ inline void debug(const char* fmt, ...) {
     fputc('\n', stderr);
 }
 
-inline void info(const char* fmt, ...) {
+inline void info(const char *fmt, ...) {
     if (!enabled(LogLevel::INFO)) return;
     std::lock_guard<std::mutex> lock(log_mtx);
     fputs("[INFO]  ", stderr);
@@ -64,7 +74,7 @@ inline void info(const char* fmt, ...) {
     fputc('\n', stderr);
 }
 
-inline void warn(const char* fmt, ...) {
+inline void warn(const char *fmt, ...) {
     if (!enabled(LogLevel::WARN)) return;
     std::lock_guard<std::mutex> lock(log_mtx);
     fputs("[WARN]  ", stderr);
@@ -75,7 +85,7 @@ inline void warn(const char* fmt, ...) {
     fputc('\n', stderr);
 }
 
-inline void error(const char* fmt, ...) {
+inline void error(const char *fmt, ...) {
     if (!enabled(LogLevel::ERROR)) return;
     std::lock_guard<std::mutex> lock(log_mtx);
     fputs("[ERROR] ", stderr);
@@ -86,4 +96,4 @@ inline void error(const char* fmt, ...) {
     fputc('\n', stderr);
 }
 
-} // namespace logger
+}   // namespace logger

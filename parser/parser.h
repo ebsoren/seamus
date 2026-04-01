@@ -5,36 +5,45 @@
 
 #include <cstring>
 
-#include "../url_store/url_store.h"
+#include <fcntl.h>
+
+#include <sys/stat.h>
+
 #include "../lib/buffer.h"
 #include "../lib/consts.h"
 #include "../lib/string.h"
 #include "../lib/utils.h"
+#include "../url_store/url_store.h"
 #include "HtmlTags.h"
+#include "lib/logger.h"
 #include "url_buffers.h"
 #include "word_array.h"
 
 class HtmlParser {
 public:
-    HtmlParser() : parser_id_(-1), url("") {}
+    HtmlParser()
+        : parser_id_(-1)
+        , url("") {}
 
-    HtmlParser(size_t parser_id, LocalUrlBuffer* url_buff, UrlStore* url_store)
+    HtmlParser(size_t parser_id, LocalUrlBuffer *url_buff, UrlStore *url_store)
         : parser_id_(parser_id)
         , file_num_(0)
         , url("")
         , urlStore(url_store)
-        , localBuffer(url_buff) { init_fd(); }
-    
-    HtmlParser& operator=(HtmlParser&& rhs) noexcept {
+        , localBuffer(url_buff) {
+        init();
+    }
+
+    HtmlParser &operator=(HtmlParser &&rhs) noexcept {
         parser_id_ = rhs.parser_id_;
         file_num_ = rhs.file_num_;
         out_fd_ = rhs.out_fd_;
         rhs.out_fd_ = -1;
         url = string("");
         words.fd_ = out_fd_;
-        links.fd_ = out_fd_;
         localBuffer = rhs.localBuffer;
         urlStore = rhs.urlStore;
+        setup_link_callback();
         return *this;
     }
 
@@ -44,35 +53,42 @@ public:
     // 2. Parse buffer
     // 3. Move anything un-parsed to the front of the buffer
     // General use - call in a loop until processing full page
-    ssize_t parse_page(char* page, size_t size, uint16_t hops, uint16_t domain_hops, const char* link) {
+    ssize_t parse_page(char *page, size_t size, uint16_t hops, uint16_t domain_hops, const char *link) {
         // Set member vars to reflect current page we're parsing
         hops_ = hops;
         domain_hops_ = domain_hops;
         url = string(link);
 
+        logger::debug("HtmlParser writing headers");
         // Write headers to links & doc for a new page
         write_headers();
 
         // Parse the page contents
         if (killed_) return 0;
+        logger::debug("HtmlParser setting buffer");
         buf.set_buffer(page, size);
 
+
+        logger::debug("HtmlParser parsing buffer");
         size_t consumed = parse_buf();
+
+        logger::debug("HtmlParser finishing");
         finish();
         return consumed;
     }
 
     void finish() {
-        if (buf.size() > 0) {
-            parse_buf();
-            buf.clear();
-        }
+        // if (buf.size() > 0) {
+        //     parse_buf();
+        //     buf.clear();
+        // }
+        buf.clear();
         // Mark that this doc is done
         write_footers();
 
         // Flush any data remaining in buffer
         words.case_convert();
-        words.flush(out_fd_);
+        words.flush();
 
         // Pass the links buffer to local URL buffer to disseminate
         /**
@@ -90,13 +106,13 @@ public:
 
         // Create a new file descriptor to write to
         close(out_fd_);
-        init_fd();
+        init();
     }
 
     void inline write_headers() {
         words.push_back("<doc>", 5);
         words.push_back(url.data(), url.size());
-        
+
         // Add hops info and domain to header in links so it can be easily accessed in URL manager
         links.push_back("<doc>", 5);
         links.push_back(string(hops_).data(), string(hops_).size(), SPACE_DELIM);
@@ -105,7 +121,7 @@ public:
         links.push_back(domain.data(), domain.size());
     }
 
-    void inline write_footers() { 
+    void inline write_footers() {
         words.push_back("</doc>", 6);
         links.push_back("</doc>", 6);
     }
@@ -121,13 +137,32 @@ private:
     char base[MAX_BASE_LEN] = {};
     size_t base_len = 0;
     word_array<MAX_WORD_MEMORY> words;
-    word_array<MAX_LINK_MEMORY> links;
-    UrlStore* urlStore;
-    LocalUrlBuffer* localBuffer;
+    link_array<MAX_LINK_MEMORY> links;
+    UrlStore *urlStore;
+    LocalUrlBuffer *localBuffer;
 
-    inline void init_fd() {
-        string file_name = string::join("parser_", string(parser_id_), "out_", string(file_num_++), ".txt");
-        out_fd_ = open(file_name.data(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    void setup_link_callback() {
+        links.set_callback([this](link_array<MAX_LINK_MEMORY> &arr) {
+            logger::debug("link_array callback: flushing %zu bytes to add_urls", arr.size());
+            links.push_docend();
+            localBuffer->add_urls(arr);
+            links.reset();
+            write_headers();
+        });
+    }
+
+    inline void init() {
+        mkdir(PARSER_OUTPUT_DIR, 0755);   // no-op if already exists
+        char file_name[128];
+        snprintf(file_name, sizeof(file_name), "%s/parser_%zu_out_%zu.txt", PARSER_OUTPUT_DIR, parser_id_, file_num_++);
+        out_fd_ = open(file_name, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+        if (out_fd_ < 0) {
+            logger::error("init: open failed for '%s' (errno=%d)", file_name, errno);
+        } else {
+            logger::info("init: fd %d -> '%s'", out_fd_, file_name);
+        }
+        words.fd_ = out_fd_;
+        setup_link_callback();
     }
 
     // Internal parse that operates on the current buffer contents
@@ -197,6 +232,8 @@ private:
             // If no '>' found after parse_start, parse everything (plain text chunk)
         }
 
+
+        logger::debug("Parser parsing HTML chunk");
         // Parse region after fixing any split-buffer issues
         parse_chunk(parse_start, safe_end - parse_start);
 
@@ -248,12 +285,20 @@ private:
             || c == ')' || c == '"' || c == '[' || c == ']' || c == '{' || c == '}' || c == '-' || c == '+';
     }
 
-    static bool comma_in_number(const char* p, const char* end) {
-        return (*p == ',' || *p == '.') && (p + 1 < end && *(p + 1) - '0' >= 0 && *(p + 1) - '0' <= 9) && (*(p - 1) - '0' >= 0 && *(p - 1) - '0' <= 9);
+    static bool comma_in_number(const char *p, const char *end) {
+        return (*p == ',' || *p == '.') && (p + 1 < end && *(p + 1) - '0' >= 0 && *(p + 1) - '0' <= 9)
+            && (*(p - 1) - '0' >= 0 && *(p - 1) - '0' <= 9);
     }
 
     // Core parsing logic, man i'm glad David did most of this
     void parse_chunk(const char *buffer, size_t length) {
+        if (!buffer || length == 0) {
+            logger::warn("parse_chunk called with %s buffer, length=%zu", buffer ? "valid" : "null", length);
+            return;
+        }
+        logger::debug("parse_chunk: parsing %zu bytes, words.size=%zu, links.size=%zu", length, words.size(),
+                      links.size());
+
         const char *end = buffer + length;
         const char *p = buffer;
         const char *word_start = p;
@@ -266,14 +311,16 @@ private:
                 if (p > word_start) {
                     size_t word_len = p - word_start;
                     if (in_a_) {
-                        !comma_in_number(p, end) ? links.push_back(word_start, word_len, SPACE_DELIM) : links.push_back(word_start, word_len, NULL_DELIM);
+                        !comma_in_number(p, end) ? links.push_back(word_start, word_len, SPACE_DELIM)
+                                                 : links.push_back(word_start, word_len, NULL_DELIM);
 
                         // Convert just the anchor text, not the URL (since URLs case sensitive)
                         links.case_convert(links.size() - (word_len + 1), links.size());
                     }
-                    
+
                     // If a comma in between two ints, treat the whole number as a single word
-                    !comma_in_number(p, end) ? words.push_back(word_start, word_len) : words.push_back(word_start, word_len, NULL_DELIM);
+                    !comma_in_number(p, end) ? words.push_back(word_start, word_len)
+                                             : words.push_back(word_start, word_len, NULL_DELIM);
                     num_words++;
                     word_start = ++p;
                 } else {   // Not tracking a word, just continue
@@ -394,7 +441,8 @@ private:
                 case DesiredAction::Anchor:
                     if (is_closing) {
                         in_a_ = false;
-                        links.push_back(nullptr, 0);
+                        // Write just a newline delimiter to mark end of anchor text
+                        links.push_back("", 0);
                         while (p < end && *p != '>') p++;
                     } else {
                         while (p < end && *p != '>') {
@@ -537,6 +585,8 @@ private:
             else if (!isalnum((unsigned char) *p)) {
                 non_alnum_run_++;
                 if (non_alnum_run_ >= MAX_CONSECUTIVE_NON_ALNUM) {
+                    logger::warn("parse_chunk: killed parser %zu — hit %d consecutive non-alnum chars", parser_id_,
+                                 non_alnum_run_);
                     killed_ = true;
                     return;
                 }

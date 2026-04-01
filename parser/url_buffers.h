@@ -33,6 +33,7 @@ public:
     void add_url(size_t machine_id, URLStoreUpdateRequest&& target) {
         buffers[machine_id].push_back(move(target));
         if (buffers[machine_id].size() >= CRAWLER_OUTBOUND_BATCH_SIZE) {
+            logger::info("pushing urls to machine %zd", machine_id);
             flush(machine_id);
         }
     }
@@ -76,10 +77,10 @@ public:
     LocalUrlBuffer(size_t machine_id, OutboundUrlBuffer* outbound_buff)
     : outboundBuffer(outbound_buff), ME(machine_id) {}
 
-    bool add_urls(word_array<MAX_LINK_MEMORY> &urls) {
+    bool add_urls(buffer_array<MAX_LINK_MEMORY> &urls) {
         /**
          * URL array should have a list of docs of format:
-         * 
+         *
          * <doc>
          * [old hops] [old domain hops]
          * [domain]
@@ -97,19 +98,27 @@ public:
 
         const char* p = urls.data();
         const char* const end = p + urls.size();
+        bool ok = true;
+        logger::debug("add_urls: parsing %zu bytes of link data", urls.size());
 
         while (p < end) {
             uint16_t hops = 0;
             uint16_t domain_hops = 0;
 
             // Expect start of document token
-            if (memcmp(p, "<doc>", 5)!=0) {
-                // Didn't find expected token
-                logger::warn("Missing expected start of document token.");
-                return false;
+            if (p + 5 > end || memcmp(p, "<doc>", 5) != 0) {
+                logger::warn("add_urls: missing <doc> token at offset %zu (remaining=%zu)",
+                             (size_t)(p - urls.data()), (size_t)(end - p));
+                ok = false;
+                break;
             }
 
             p += 6; // Skip <doc>\n
+            if (p >= end) {
+                logger::warn("add_urls: truncated data after <doc> tag");
+                ok = false;
+                break;
+            }
 
             // Read number (TODO: Test this use of strtol)
             char* next;
@@ -118,28 +127,55 @@ public:
 
             // Advance p to point past the nums and the new line
             p = next + 1;
+            if (p >= end) {
+                logger::warn("add_urls: truncated data after hops fields");
+                ok = false;
+                break;
+            }
 
             // Read the domain of the page the URLs were found on
             const char* word_start = p;
-            while (*(++p) != '\n') {}
+            while (p < end && *p != '\n') p++;
+            if (p >= end) {
+                logger::warn("add_urls: truncated data while reading domain");
+                ok = false;
+                break;
+            }
             string domain = string(word_start, p - word_start);
             p++;
 
             // Parse URLs until </doc> is reached
-            while (memcmp(p, "</doc>", 6) != 0) {
+            while (p + 6 <= end && memcmp(p, "</doc>", 6) != 0) {
+                // Skip blank lines (can appear when flush terminates a partial line)
+                if (*p == '\n') { p++; continue; }
                 // Get the URL itself
                 word_start = p;
-                while(*(++p) != '\n') {}
+                while (p < end && *p != '\n') p++;
+                if (p >= end) {
+                    logger::warn("add_urls: truncated data while reading URL");
+                    ok = false;
+                    break;
+                }
                 string url(word_start, p - word_start);
                 uint16_t dhop = extract_domain(url) != domain ? 1 : 0;
                 vector<string> anchor_words;
 
                 // Parse space-separated anchor texts
-                while (*(++p) != '\n') {
+                p++;
+                while (p < end && *p != '\n') {
                     word_start = p;
-                    while(*(++p) != ' ') {}
-                    anchor_words.push_back(string(word_start, p - word_start));
+                    while (p < end && *p != ' ') p++;
+                    if (p > word_start) {
+                        anchor_words.push_back(string(word_start, p - word_start));
+                    }
+                    if (p < end && *p == ' ') p++;
                 }
+                if (p >= end) {
+                    logger::warn("add_urls: truncated data while reading anchor text");
+                    ok = false;
+                    break;
+                }
+                p++; // skip the '\n' after anchor text line
 
                 size_t recipient = get_destination_machine_from_url(url);
 
@@ -154,11 +190,21 @@ public:
                 url_updates[recipient].push_back(move(rpc));
             }
 
+            if (!ok) break;
+
+            if (p + 6 > end) {
+                logger::warn("add_urls: truncated data, missing </doc> tag");
+                ok = false;
+                break;
+            }
+
             p += 7; // Skip </doc>\n
         }
 
+        // Always dispatch parsed URLs — even on truncation, the complete
+        // entries before the bad data are valid and must be sent
         pass_rpcs();
-        return true;
+        return ok;
     }
 
 private:

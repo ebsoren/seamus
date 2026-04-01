@@ -41,21 +41,23 @@ constexpr size_t CRAWLER_PERSIST_INTERVAL_SEC = 60;         // Time (seconds) to
 constexpr size_t CRAWLER_FEED_INTERVAL_SEC = 1;             // Time (seconds) to wait between feeding in-memory priority buckets -> domain carousel
 constexpr size_t CRAWLER_WORKER_SLEEP_MS = 10;              // Time (milliseconds) for the crawler worker to sleep before moving to a new slot
 
-constexpr size_t CRAWLER_OUTBOUND_BATCH_SIZE = 1000;         // Number of crawl targets to buffer per machine before sending
+constexpr size_t CRAWLER_OUTBOUND_BATCH_SIZE = 100;         // Number of crawl targets to buffer per machine before sending
 constexpr size_t PRIORITY_BUCKETS = 8;
 constexpr size_t NUM_PARSERS = CRAWLER_THREADPOOL_SIZE;
 static_assert(NUM_PARSERS == CRAWLER_THREADPOOL_SIZE);      // TODO(hershey): make sure this assumption is valid
 
 
 // Seed URLs (loaded into priority bucket 0 on startup)
-constexpr size_t SEED_LIST_SIZE = 1;
+constexpr size_t SEED_LIST_SIZE = 2;
 constexpr const char* SEED_LIST[SEED_LIST_SIZE] = {
     "https://en.wikipedia.org",
+    "https://apple.com",
 };
 
 
 // Parser
-static constexpr int MAX_CONSECUTIVE_NON_ALNUM = 15;
+static constexpr const char* PARSER_OUTPUT_DIR = "/tmp/seamus_parser_output";
+static constexpr int MAX_CONSECUTIVE_NON_ALNUM = 100;
 static constexpr char RETURN_DELIM = '\r';
 static constexpr char NULL_DELIM = '\0';
 static constexpr char SPACE_DELIM = ' ';
