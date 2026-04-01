@@ -14,6 +14,7 @@
 #include <thread>
 #include <fstream>
 #include <condition_variable>
+#include <memory>
 
 
 class BucketManager {
@@ -116,10 +117,10 @@ public:
 
             file.seekg(0, std::ios::beg);
             size_t size = static_cast<size_t>(file_size);
-            char* buf = new char[size];
-            file.read(buf, static_cast<std::streamsize>(size));
+            auto buf = std::make_unique<char[]>(size);
+            file.read(buf.get(), static_cast<std::streamsize>(size));
 
-            const char* cursor = buf;
+            const char* cursor = buf.get();
             size_t remaining = size;
 
             std::lock_guard<std::mutex> lock(dc->buckets[i].bucket_lock);
@@ -131,8 +132,6 @@ public:
                 cursor = next;
                 dc->buckets[i].enqueue(std::move(ct));
             }
-
-            delete[] buf;
         }
     }
 
@@ -155,8 +154,8 @@ public:
                 continue;
             }
 
-            char* buf = new char[total_size];
-            char* cursor = buf;
+            auto buf = std::make_unique<char[]>(total_size);
+            char* cursor = buf.get();
 
             {
                 std::lock_guard<std::mutex> lock(dc->buckets[i].bucket_lock);
@@ -167,8 +166,7 @@ public:
             }
 
             std::ofstream file(bucket_files[i].data(), std::ios::binary | std::ios::trunc);
-            file.write(buf, static_cast<std::streamsize>(total_size));
-            delete[] buf;
+            file.write(buf.get(), static_cast<std::streamsize>(total_size));
         }
     }
 
