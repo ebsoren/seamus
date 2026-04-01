@@ -75,6 +75,8 @@ public:
         heapify(heap.begin(), heap.end(), comp);
     }
 
+    priority_queue(const Compare& compare) : heap(), comp(compare) {}
+
 
     // constructs from a range and optional container + comparator
     template <class InputIter>
@@ -102,6 +104,24 @@ public:
         if(!heap.empty()) {
             heap_sort_down(0); 
         }
+    }
+
+    T pop_move() {
+        assert(!empty());
+
+        T top_elem = std::move(heap[0]);
+
+        heap[0] = std::move(heap.back());
+        heap.pop_back();
+
+        if (!heap.empty()) {
+            heap_sort_down(0);
+        }
+        return top_elem;
+    }
+
+    void clear() {
+        heap.clear();
     }
 
 

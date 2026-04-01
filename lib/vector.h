@@ -59,6 +59,13 @@ public:
         }
     }
 
+    void clear() {
+        for (size_t i = 0; i < vec_size; ++i) {
+            alloc_region[i].~T();
+        }
+        vec_size = 0;
+    }
+
 
     // Copy Constructor
     // REQUIRES: Nothing

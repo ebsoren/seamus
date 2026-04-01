@@ -236,40 +236,69 @@ public:
     }
 
     void persist() {
-            // Create a file (if it already exists, fail -- don't want to overwrite)
-        string path = string::join("frontier_", string(worker_id), ".txt");
-        FILE* fd = fopen(path.data(), "wx");
+        for (uint16_t i = 0; i < PRIORITY_BUCKETS; i++) {
+            if (priority_buckets[i].empty()) continue;
 
-        if (fd == nullptr) perror("Error opening frontier file for writing.");
+            string path = string::join("frontier_", string(worker_id), "_bucket_", string(i), ".txt");
 
-        // <url_len (32 bits)><url (variable)><distance from seed list (16 bits)>
-        uint64_t total_bytes = 0;
-        for(size_t i = 0; i < PRIORITY_BUCKETS; i++) {
-            for(auto it = priority_buckets[i].begin(); it != priority_buckets[i].end(); it++) {
-                total_bytes += (*it).url.size();
+            FILE* fd = fopen(path.data(), "ab");
+            if (fd == nullptr) {
+                perror("Error opening bucket file for writing.");
+                continue;
             }
-        }
 
-        // Write the size
-        fwrite(&total_bytes, sizeof(total_bytes), 1, fd);
-        fwrite("\n", sizeof(char), 1, fd);
-
-        // write the file
-        for(uint16_t i = 0; i < PRIORITY_BUCKETS; i++) {
-            fwrite(&i, sizeof(uint16_t), 1, fd);
-            uint64_t bucket_size = priority_buckets[i].size();
-            fwrite(&bucket_size, sizeof(uint64_t), 1, fd);
-            for(auto it = priority_buckets[i].begin(); it != priority_buckets[i].end(); it++) {
-                string url = std::move((*it).url);
+            for (auto it = priority_buckets[i].begin(); it != priority_buckets[i].end(); ++it) {
+                const string& url = (*it).url;
                 uint16_t seed_dist = (*it).seed_list_dist;
                 uint32_t sz = url.size();
+
                 fwrite(&sz, sizeof(uint32_t), 1, fd);
-                fwrite(url.data(), sizeof(char), url.size(), fd);
+                fwrite(url.data(), sizeof(char), sz, fd);
                 fwrite(&seed_dist, sizeof(uint16_t), 1, fd);
             }
-        }
 
-        fclose(fd);
+            fclose(fd);
+            // Clear after persisting?? (if we need to flush here idk)
+            // priority_buckets[i].clear();
+        }
     }
 
+    void load_from_disk() {
+        for (uint16_t i = 0; i < PRIORITY_BUCKETS; i++) {
+            string path = string::join("frontier_", string(worker_id), "_bucket_", string(i), ".txt");
+
+            FILE* fd = fopen(path.data(), "rb");
+            if (fd == nullptr) {
+                continue;
+            }
+
+            while (true) {
+                uint32_t sz;
+
+                if (fread(&sz, sizeof(uint32_t), 1, fd) != 1) break;
+
+                char* buffer = static_cast<char*>(malloc(sz + 1));
+                if (buffer == nullptr) break;
+
+                if (fread(buffer, sizeof(char), sz, fd) != sz) {
+                    free(buffer);
+                    break;
+                }
+
+                buffer[sz] = '\0'; 
+
+                string url(buffer, sz);
+
+                free(buffer);
+
+                // Read seed distance
+                uint16_t seed_dist;
+                if (fread(&seed_dist, sizeof(uint16_t), 1, fd) != 1) break;
+
+                priority_buckets[i].push_back(UncrawledItem(std::move(url), seed_dist));
+            }
+
+            fclose(fd);
+        }
+    }
 };
