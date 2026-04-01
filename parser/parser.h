@@ -25,9 +25,14 @@ public:
         , urlStore(url_store)
         , localBuffer(url_buff) { init_fd(); }
     
-    HtmlParser& operator=(const HtmlParser& rhs) {
+    HtmlParser& operator=(HtmlParser&& rhs) noexcept {
         parser_id_ = rhs.parser_id_;
+        file_num_ = rhs.file_num_;
+        out_fd_ = rhs.out_fd_;
+        rhs.out_fd_ = -1;
         url = string("");
+        words.fd_ = out_fd_;
+        links.fd_ = out_fd_;
         localBuffer = rhs.localBuffer;
         urlStore = rhs.urlStore;
         return *this;
