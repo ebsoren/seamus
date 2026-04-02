@@ -448,7 +448,7 @@ class Wildcard
          }
       }
 
-      return true;
+      return !endsInDollarSign || *path == '\0';
       }
 
    public:
@@ -557,7 +557,8 @@ bool TakesPriority( Directive* const &a, Directive* const &b )
    // or less restrictive than b.
 
    return  MoreSpecific( &a->wildcard, &b->wildcard ) ||
-            a->type == AllowStatement && b->type == DisallowStatement;
+            (!MoreSpecific( &b->wildcard, &a->wildcard ) &&
+             a->type == AllowStatement && b->type == DisallowStatement);
    }
 
 class Rule

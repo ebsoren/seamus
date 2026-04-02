@@ -78,8 +78,10 @@ inline bool send_batch_urlstore_update(const string& host, uint16_t port, const 
     for (size_t i = 0; i < batch.reqs.size(); i++) {
         const auto& req = batch.reqs[i];
         total += sizeof(uint32_t) + req.url.size()
-               + sizeof(uint32_t) + sizeof(uint32_t) + anchor_text_total_size(req.anchor_text)
-               + sizeof(uint32_t) * 3;
+               + sizeof(uint32_t)
+               + req.anchor_text.size() * sizeof(uint32_t) + anchor_text_total_size(req.anchor_text)
+               + sizeof(uint32_t)
+               + sizeof(uint16_t) * 2;
     }
 
     auto buf = std::make_unique<char[]>(total);

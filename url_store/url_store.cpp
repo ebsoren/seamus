@@ -79,23 +79,6 @@ void UrlStore::client_handler(int fd) {
     batch_manage_frontier_and_update_url(*req);
 }
 
-const UrlData* UrlStore::findUrlData(const string& url) const {
-    const UrlShard& us = get_shard(url);
-    std::lock_guard<std::mutex> lock(us.mtx);
-    return us.findUrlData(url);
-}
-
-UrlData* UrlStore::findUrlData(const string& url) {
-    UrlShard& us = get_shard(url);
-    std::lock_guard<std::mutex> lock(us.mtx);
-    return us.findUrlData(url);
-}
-
-UrlData* UrlStore::findUrlData(string& url) {
-    UrlShard& us = get_shard(url);
-    std::lock_guard<std::mutex> lock(us.mtx);
-    return us.findUrlData(url);
-}
 
 size_t UrlStore::findAnchorId(string& anchor_text) {
     std::lock_guard<std::mutex> lock(global_mtx);
@@ -235,7 +218,7 @@ void UrlStore::persist() {
 
             size_t title_len = data.title.size();
             fwrite(&title_len, sizeof(size_t), 1, fd);
-            fwrite(&data.title, sizeof(char), title_len, fd);
+            fwrite(data.title.data(), sizeof(char), title_len, fd);
 
             fwrite(&data.eod, sizeof(uint16_t), 1, fd);
 
@@ -306,7 +289,9 @@ void UrlStore::readFromFile(const int worker_number) {
 
         size_t title_len;
         fread(&title_len, sizeof(size_t), 1, fd);
-        fread(&url_data[url].title, sizeof(char), title_len, fd);
+        char title_buf[title_len];
+        fread(title_buf, sizeof(char), title_len, fd);
+        url_data[url].title = string(title_buf, title_len);
         
         fread(&url_data[url].eod, sizeof(uint16_t), 1, fd);
 

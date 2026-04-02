@@ -35,6 +35,12 @@ public:
     // EFFECTS: Constructs a vector with size num_elements,
     //    all default constructed
     vector(size_t num_elements) {
+        if (num_elements == 0) {
+            alloc_region = nullptr;
+            alloc_capacity = 0;
+            vec_size = 0;
+            return;
+        }
         alloc_region = static_cast<T*>(::operator new(num_elements * sizeof(T)));
         alloc_capacity = num_elements;
         vec_size = 0;
@@ -50,6 +56,12 @@ public:
     // MODIFIES *this
     // EFFECTS: Creates a vector with size num_elements, all assigned to val
     vector(size_t num_elements, const T &val) {
+        if (num_elements == 0) {
+            alloc_region = nullptr;
+            alloc_capacity = 0;
+            vec_size = 0;
+            return;
+        }
         alloc_region = static_cast<T*>(::operator new(num_elements * sizeof(T)));
         alloc_capacity = num_elements;
         vec_size = 0;

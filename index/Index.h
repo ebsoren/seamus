@@ -31,8 +31,8 @@ public:
     void persist();
 };
 
-deque<string> files;
-std::mutex file_lock;
-uint32_t WORKER_NUMBER;
-uint32_t chunk = 0;
+inline deque<string> files;
+inline std::mutex file_lock;
+inline uint32_t WORKER_NUMBER;
+inline uint32_t chunk = 0;
 void init_index();

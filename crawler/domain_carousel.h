@@ -83,7 +83,13 @@ public:
                     while (buckets[plevel].urls.size() > 0) {
                         CrawlTarget target = std::move(buckets[plevel].urls.front());
                         buckets[plevel].urls.pop_front();
-                        if (!push_target(std::move(target))) {
+
+                        const size_t domain_index = hash_domain(target.domain) % CRAWLER_CAROUSEL_SIZE;
+                        std::unique_lock<std::mutex> dq_lock(carousel[domain_index].domain_queue_lock, std::try_to_lock);
+
+                        if (dq_lock.owns_lock() && carousel[domain_index].targets.size() < CRAWLER_MAX_QUEUE_SIZE) {
+                            carousel[domain_index].targets.push_back(std::move(target));
+                        } else {
                             std::lock_guard<std::mutex> bl(backoff_lock);
                             backoff_queue.push_back(BackoffEntry{std::move(target), std::chrono::steady_clock::now()});
                         }

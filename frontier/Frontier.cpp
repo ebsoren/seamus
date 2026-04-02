@@ -41,9 +41,9 @@ bool is_digit(char c) {
 
 double max(double i, double j) {
     if(i > j) {
-        return j;
-    } else {
         return i;
+    } else {
+        return j;
     }
 }
 
@@ -70,7 +70,6 @@ double calcPriorityScore(const string& u, int seed_list_dist) {
     int subdomain_count = 0;
     int digit_count_domain = 0;
     double domain_size = 0.0;
-    string extension = string("");
     size_t start = 0;
     size_t len_ext = 0;
     int path_depth = 0;
@@ -156,9 +155,9 @@ void Frontier::push(const UncrawledItem &u) {
     }
 }
 
-void Frontier::push(string &url, int seed_list_dist) {
+void Frontier::push(string &&url, int seed_list_dist) {
     uint32_t& count = curr_urls[url];
-    
+
     if (count++ == 0) {
         pq.push(UncrawledItem(static_cast<string&&>(url), seed_list_dist));
     }
@@ -178,7 +177,8 @@ CrawledItem Frontier::front() {
         const_cast<UncrawledItem&>(pq.front())
     );
 
-    return CrawledItem(static_cast<string&&>(front.url), front.seed_list_dist, curr_urls[front.url]);
+    uint32_t times = curr_urls[front.url];
+    return CrawledItem(static_cast<string&&>(front.url), front.seed_list_dist, times);
 }
 
 size_t Frontier::size() {

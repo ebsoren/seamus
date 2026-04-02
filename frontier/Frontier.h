@@ -22,12 +22,14 @@ double max(double i, double j);
 double calcPriorityScore(const string& url, int seed_list_dist);
 
 struct UncrawledItem {
+    uint16_t priority_score;
     string url;
     uint16_t seed_list_dist;
-    uint16_t priority_score; // only to be set once inserted
 
-    UncrawledItem(string init_url, uint16_t init_seed_list_dist) : url(static_cast<string&&>(init_url)), seed_list_dist(init_seed_list_dist),
-        priority_score(calcPriorityScore(init_url, init_seed_list_dist)) { }
+    UncrawledItem(string init_url, uint16_t init_seed_list_dist)
+        : priority_score(calcPriorityScore(init_url, init_seed_list_dist)),
+          url(static_cast<string&&>(init_url)),
+          seed_list_dist(init_seed_list_dist) { }
 };
 
 struct CrawledItem {
@@ -54,7 +56,7 @@ public:
 
     void push(const UncrawledItem &u);
 
-    void push(string &url, int seed_list_dist);
+    void push(string &&url, int seed_list_dist);
 
     void pop();
 

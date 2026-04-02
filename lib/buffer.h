@@ -19,9 +19,10 @@ public:
 
     buffer()
         : size_(0)
-        , data_(new char[CAPACITY]) {}
+        , data_(new char[CAPACITY])
+        , owned_data_(data_) {}
 
-    ~buffer() { delete[] data_; }
+    ~buffer() { delete[] owned_data_; }
 
     buffer(const buffer &) = delete;
     buffer &operator=(const buffer &) = delete;
@@ -47,7 +48,10 @@ public:
     const char *begin() const { return data_; }
     const char *end() const { return data_ + size_; }
 
-    void clear() { size_ = 0; }
+    void clear() {
+        data_ = owned_data_;
+        size_ = 0;
+    }
 
     // Read from fd, appending after any existing data. Returns bytes read
     // on success, 0 on empty read, -1 on error.
@@ -82,4 +86,5 @@ public:
 private:
     size_t size_;
     char *data_;
+    char *owned_data_;
 };

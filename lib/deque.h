@@ -22,7 +22,40 @@ public:
     }
 
 
-    // Destructor
+    deque(const deque&) = delete;
+    deque& operator=(const deque&) = delete;
+
+    deque(deque&& other) noexcept
+        : alloc_region(other.alloc_region),
+          deque_capacity(other.deque_capacity),
+          deque_size(other.deque_size),
+          deque_left(other.deque_left),
+          deque_right(other.deque_right) {
+        other.alloc_region = nullptr;
+        other.deque_capacity = 0;
+        other.deque_size = 0;
+    }
+
+    deque& operator=(deque&& other) noexcept {
+        if (this == &other) return *this;
+        if (deque_capacity > 0) {
+            if (deque_size > 0) {
+                for (size_t i = deque_left; i <= deque_right; i++)
+                    alloc_region[i].~T();
+            }
+            ::operator delete(alloc_region);
+        }
+        alloc_region = other.alloc_region;
+        deque_capacity = other.deque_capacity;
+        deque_size = other.deque_size;
+        deque_left = other.deque_left;
+        deque_right = other.deque_right;
+        other.alloc_region = nullptr;
+        other.deque_capacity = 0;
+        other.deque_size = 0;
+        return *this;
+    }
+
     ~deque() {
         if (deque_capacity > 0) {
             // Destroy live elements
@@ -94,6 +127,7 @@ public:
 
     void pop_back() {
         assert(!empty());
+        alloc_region[deque_right].~T();
 
         if (deque_left == deque_right) {
             deque_size--;
@@ -107,6 +141,7 @@ public:
 
     void pop_front() {
         assert(!empty());
+        alloc_region[deque_left].~T();
 
         if (deque_left == deque_right) {
             deque_size--;

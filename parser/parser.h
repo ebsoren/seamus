@@ -59,6 +59,15 @@ public:
         domain_hops_ = domain_hops;
         url = string(link);
 
+        killed_ = false;
+        non_alnum_run_ = 0;
+        in_a_ = false;
+        in_title_ = false;
+        in_comment_ = false;
+        in_discard_ = false;
+        base_found_ = false;
+        discard_tag_len_ = 0;
+
         logger::debug("HtmlParser writing headers");
         // Write headers to links & doc for a new page
         write_headers();
@@ -115,8 +124,10 @@ public:
 
         // Add hops info and domain to header in links so it can be easily accessed in URL manager
         links.push_back("<doc>", 5);
-        links.push_back(string(hops_).data(), string(hops_).size(), SPACE_DELIM);
-        links.push_back(string(domain_hops_).data(), string(domain_hops_).size());
+        string hops_str(hops_);
+        string dhops_str(domain_hops_);
+        links.push_back(hops_str.data(), hops_str.size(), SPACE_DELIM);
+        links.push_back(dhops_str.data(), dhops_str.size());
         string domain = extract_domain(string(url.data(), url.size()));
         links.push_back(domain.data(), domain.size());
     }
@@ -285,9 +296,10 @@ private:
             || c == ')' || c == '"' || c == '[' || c == ']' || c == '{' || c == '}' || c == '-' || c == '+';
     }
 
-    static bool comma_in_number(const char *p, const char *end) {
-        return (*p == ',' || *p == '.') && (p + 1 < end && *(p + 1) - '0' >= 0 && *(p + 1) - '0' <= 9)
-            && (*(p - 1) - '0' >= 0 && *(p - 1) - '0' <= 9);
+    static bool comma_in_number(const char *p, const char *start, const char *end) {
+        return (*p == ',' || *p == '.')
+            && (p + 1 < end && *(p + 1) >= '0' && *(p + 1) <= '9')
+            && (p > start && *(p - 1) >= '0' && *(p - 1) <= '9');
     }
 
     // Core parsing logic, man i'm glad David did most of this
@@ -311,16 +323,16 @@ private:
                 if (p > word_start) {
                     size_t word_len = p - word_start;
                     if (in_a_) {
-                        !comma_in_number(p, end) ? links.push_back(word_start, word_len, SPACE_DELIM)
-                                                 : links.push_back(word_start, word_len, NULL_DELIM);
+                        !comma_in_number(p, buffer, end) ? links.push_back(word_start, word_len, SPACE_DELIM)
+                                                         : links.push_back(word_start, word_len, NULL_DELIM);
 
                         // Convert just the anchor text, not the URL (since URLs case sensitive)
                         links.case_convert(links.size() - (word_len + 1), links.size());
                     }
 
                     // If a comma in between two ints, treat the whole number as a single word
-                    !comma_in_number(p, end) ? words.push_back(word_start, word_len)
-                                             : words.push_back(word_start, word_len, NULL_DELIM);
+                    !comma_in_number(p, buffer, end) ? words.push_back(word_start, word_len)
+                                                     : words.push_back(word_start, word_len, NULL_DELIM);
                     num_words++;
                     word_start = ++p;
                 } else {   // Not tracking a word, just continue
@@ -452,11 +464,18 @@ private:
 
                                 if (p != end && p > a_start) {
                                     if (*a_start == '/') {
-                                        // Relative link -- prepend to root URL
-                                        size_t full_size = url.size() + (p - a_start);
+                                        // Relative link -- prepend scheme+host only
+                                        const char* s = url.data();
+                                        const char* s_end = s + url.size();
+                                        while (s < s_end && *s != ':') s++;
+                                        if (s + 2 < s_end) s += 3; // skip "://"
+                                        while (s < s_end && *s != '/') s++;
+                                        size_t host_len = s - url.data();
+
+                                        size_t full_size = host_len + (p - a_start);
                                         char full_link[full_size];
-                                        memcpy(full_link, url.data(), url.size());
-                                        memcpy(full_link + url.size(), a_start, p - a_start);
+                                        memcpy(full_link, url.data(), host_len);
+                                        memcpy(full_link + host_len, a_start, p - a_start);
 
                                         links.push_back(full_link, full_size, RETURN_DELIM);
                                     } else {

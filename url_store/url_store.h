@@ -50,9 +50,6 @@ private:
         return shards[hasher(url) % URL_NUM_SHARDS];
     }
 
-    const UrlData* findUrlData(const string& url) const;
-    UrlData* findUrlData(const string& url);
-    UrlData* findUrlData(string& url);
 
     RPCListener* rpc_listener;      // Listener for client requests
     std::thread listener_thread;    // Thread running the listener loop
@@ -118,6 +115,8 @@ public:
         UrlShard& us = get_shard(url);
         std::lock_guard<std::mutex> lock(us.mtx);
         const UrlData* it = us.findUrlData(url);
+        static const string empty("", 0);
+        if (!it) return empty;
         return it->title;
     }
 

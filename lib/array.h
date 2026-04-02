@@ -29,9 +29,9 @@ struct array {
 
     constexpr std::size_t size() const { return N; }
 
-    T &operator[](std::size_t i) { return &(data_ + i); }
+    T &operator[](std::size_t i) { return data_[i]; }
 
-    const T &operator[](size_t i) const { return &(data_ + i); }
+    const T &operator[](size_t i) const { return data_[i]; }
 
     private: 
 

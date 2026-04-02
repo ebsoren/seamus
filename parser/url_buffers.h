@@ -51,17 +51,13 @@ private:
         buffers[machine_id] = vector<URLStoreUpdateRequest>();
 
         if (machine_id == ME && urlStore) {
-            // Local machine: call directly instead of RPC
             urlStore->batch_manage_frontier_and_update_url(batch);
         } else {
-            // Send RPC in a separate thread so we can return & release the lock ASAP
-            // Safe to release the lock bc we copied and reset the buffer
-            std::thread(&OutboundUrlBuffer::flush_async, this, machine_id, std::ref(batch)).detach();
+            std::thread(&OutboundUrlBuffer::flush_async, this, machine_id, std::move(batch)).detach();
         }
     }
 
-    // Send the copied contents of an RPC buffer to the correct machine
-    void flush_async(size_t machine_id, BatchURLStoreUpdateRequest& batch){
+    void flush_async(size_t machine_id, BatchURLStoreUpdateRequest batch){
         const char* addr = get_machine_addr(machine_id);
         string host(addr, strlen(addr));
         if (!send_batch_urlstore_update(host, CRAWLER_LISTENER_PORT, batch)) {
@@ -215,16 +211,16 @@ private:
     // Once all URLs have been parsed into update requests, pass to outbound buffer
     void pass_rpcs() {
         for (size_t i = 0; i < NUM_MACHINES; i++) {
-            std::thread(&LocalUrlBuffer::pass_rpc, this, i).detach();
+            if (url_updates[i].empty()) continue;
+            vector<URLStoreUpdateRequest> batch = std::move(url_updates[i]);
+            url_updates[i] = vector<URLStoreUpdateRequest>();
+            std::thread([this, i, b = std::move(batch)]() mutable {
+                outboundBuffer->locks[i].lock();
+                for (URLStoreUpdateRequest& req : b) {
+                    outboundBuffer->add_url(i, std::move(req));
+                }
+                outboundBuffer->locks[i].unlock();
+            }).detach();
         }
-    }
-
-    // Pass a single machine's RPCs to the outbound buffer
-    void pass_rpc(size_t id) {
-        outboundBuffer->locks[id].lock();
-        for (URLStoreUpdateRequest& req : url_updates[id]) {
-            outboundBuffer->add_url(id, move(req));
-        }
-        outboundBuffer->locks[id].unlock();
     }
 };
