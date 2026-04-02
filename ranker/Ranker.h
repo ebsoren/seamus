@@ -29,6 +29,7 @@ struct RankedPage {
     vector<vector<size_t>> word_positions;
     size_t doc_len;
     size_t description_len;
+    double score;
 };
 
 bool is_digit(char c) {
@@ -195,6 +196,10 @@ double calc_dynamic_score(RankedPage &r, size_t unique_words_in_query) {
     return(factor_1);
 }
 
+void input_total_score(RankedPage &r, double dynamic_weight, size_t unique_words_in_query) {
+    r.score = calc_static_score(r.url, r.seed_list_dist) * (1-dynamic_weight) + calc_dynamic_score(r, unique_words_in_query) * dynamic_weight;
+}
+
 struct RankedCompare {
     double dynamic_weight;
     size_t unique_words_in_query;
@@ -202,9 +207,7 @@ struct RankedCompare {
     RankedCompare(double f, size_t s) : dynamic_weight(f), unique_words_in_query(s) {}
 
     bool operator()(RankedPage a, RankedPage b) const {
-        double a_score = calc_static_score(a.url, a.seed_list_dist) * (1-dynamic_weight) + calc_dynamic_score(b, unique_words_in_query) * dynamic_weight;
-        double b_score = calc_static_score(b.url, b.seed_list_dist) * (1-dynamic_weight) + calc_dynamic_score(a, unique_words_in_query) * dynamic_weight;
-        return a_score < b_score; 
+        return a.score < b.score; 
     }
 };
 
@@ -232,9 +235,19 @@ public:
     }
 
     void rank(vector<RankedPage> v) {
+        auto end_it = v.end();
+        // limit the amount of pages being ranked 
+        for(size_t i = 0; i < v.size(); i++) {
+            if(i >= size_lim) {
+                end_it = v.begin() + i;
+                break;
+            } else {
+                input_total_score(v[i], dynamic_weight, unique_words_in_query);
+            }
+        }
         pq = priority_queue<RankedPage, vector<RankedPage>, RankedCompare>(
             v.begin(),
-            v.end(),
+            end_it,
             RankedCompare(dynamic_weight, unique_words_in_query),
             vector<RankedPage>()
         );
