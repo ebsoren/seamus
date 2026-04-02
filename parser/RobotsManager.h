@@ -323,49 +323,5 @@ private:
     Node *head, *tail; // Dummy head and tail for LRU list
     unordered_map<string, Node*> cache_map;
     // Helper to perform the actual HTTP fetch and parse
-    Node* fetchAndParse(const string& domain) {
-        // if capacity is full, evict first
-        auto it = cache_map.find(domain);
-        if (it != cache_map.end()) return (*it).value;
-
-        if (cache_map.size() == capacity) {
-            Node* lru = tail->prev;
-            lru->prev->next = tail;
-            tail->prev = lru->prev;
-
-            cache_map.erase(lru->domain);
-            delete lru->rules;
-            delete lru;
-            capacity--;
-        }
-
-        // fetch robots.txt, parse and make node
-        RobotsTxt* rules = nullptr;
-        char body[MAX_HTML_SIZE];
-        ssize_t body_len = https_get(domain.data(), "robots.txt", body);
-
-        if (body_len > 0) {
-            logger::debug("Fetched robots.txt for domain: %s", domain.data());
-            rules = new RobotsTxt(reinterpret_cast<const Utf8*>(body), static_cast<size_t>(body_len));
-
-            
-        } else {
-            logger::debug("Failed to fetch robots.txt for domain: %s, treating as empty ruleset", domain.data());
-            rules = new RobotsTxt(reinterpret_cast<const Utf8*>(""), 0); // Treat as empty ruleset, which allows all
-        }
-
-        Node* node = new Node();
-        node->domain = string(domain.data(), domain.size()); // explicit str copy is needed here as domain might be used by crawler after robots.txt fetch
-        node->rules = rules;
-        
-        // insert to head
-        node->next = head->next;
-        node->prev = head;
-        head->next->prev = node;
-        head->next = node;
-
-        cache_map[node->domain] = node;
-        capacity++;
-        return node;
-    }
+    Node* fetchAndParse(const string& domain);
 };
