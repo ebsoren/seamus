@@ -6,7 +6,7 @@
 
 
 // Logging (0=DEBUG, 1=INFO, 2=WARN, 3=ERROR, 4=NONE)
-constexpr uint8_t LOG_LEVEL = 0;
+constexpr uint8_t LOG_LEVEL = 1;
 constexpr const char* USER_AGENT = "Seamus the Search Engine (web crawler for university course)";
 
 // Global

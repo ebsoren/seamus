@@ -167,6 +167,7 @@ public:
                     if (p < end && *p == ' ') p++;
                 }
                 if (p >= end) {
+
                     logger::warn("add_urls: truncated data while reading anchor text");
                     ok = false;
                     break;

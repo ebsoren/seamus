@@ -476,10 +476,9 @@ private:
                                         char full_link[full_size];
                                         memcpy(full_link, url.data(), host_len);
                                         memcpy(full_link + host_len, a_start, p - a_start);
-
-                                        links.push_back(full_link, full_size, RETURN_DELIM);
+                                        links.push_back(full_link, full_size);
                                     } else {
-                                        links.push_back(a_start, p - a_start, RETURN_DELIM);
+                                        links.push_back(a_start, p - a_start);
                                     }
                                     in_a_ = true;
                                 }
@@ -522,7 +521,7 @@ private:
                             const char *embed_start = (p += 5);
                             while (p < end && *p != '"') p++;
 
-                            links.push_back(embed_start, p - embed_start, RETURN_DELIM);
+                            links.push_back(embed_start, p - embed_start);
                         } else
                             p++;
                     }

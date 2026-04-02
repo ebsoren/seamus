@@ -11,6 +11,7 @@
 #include "../parser/url_buffers.h"
 #include "../url_store/url_store.h"
 #include "../parser/RobotsManager.h"
+#include <csignal>
 
 
 inline vector<string> get_frontier_bucket_files() {
@@ -25,6 +26,7 @@ inline vector<string> get_frontier_bucket_files() {
 
 
 int main() {
+    signal(SIGPIPE, SIG_IGN);
     logger::info("Crawler started...");
 
     // Initialize crawler components/modules
