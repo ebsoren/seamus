@@ -20,7 +20,7 @@ bool binary_search(It first, It last, T& value) {
     return false;
 }
 
-void radix_sort(vector<string> &vec, size_t l, size_t h, size_t idx) {
+inline void radix_sort(vector<string> &vec, size_t l, size_t h, size_t idx) {
     if (h <= l) return;
 
     size_t lt = l, gt = h;
@@ -66,4 +66,40 @@ constexpr const T& max(const T& a, const T& b) {
     // If b is strictly greater than a, return b.
     // Otherwise, return a. 
     return (b > a) ? b : a;
+}
+
+template <class T>
+size_t partition(vector<T> &vec, size_t low, size_t high, bool (*comp)(const T&, const T&)) {
+    // std::sort often uses "Median-of-Three" for the pivot, but 
+    // for now, we'll pick the middle element to avoid O(N^2) on sorted data.
+    T pivot = move(vec[low + (high - low) / 2]);
+    size_t i = low - 1;
+    size_t j = high + 1;
+
+    while (true) {
+        do { i++; } while (comp(vec[i], pivot));
+        do { j--; } while (comp(pivot, vec[j]));
+
+        if (i >= j) return j;
+        
+        // Swap elements to their correct sides
+        T temp = move(vec[i]);
+        vec[i] = move(vec[j]);
+        vec[j] = move(temp);
+    }
+}
+
+template <class T>
+void quickSort(vector<T> &vec, size_t low, size_t high, bool (*comp)(const T&, const T&)) {
+    if (low < high) {
+        size_t p = partition(vec, low, high, comp);
+        quickSort(vec, low, p, comp);
+        quickSort(vec, p + 1, high, comp);
+    }
+}
+
+template <class T>
+void sort(vector<T> &vec, bool (*comp)(const T&, const T&)) {
+    if (vec.size() <= 1) return;
+    quickSort(vec, 0, vec.size() - 1, comp);
 }

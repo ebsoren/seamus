@@ -10,6 +10,7 @@
 #include "../parser/parser.h"
 #include "../parser/url_buffers.h"
 #include "../url_store/url_store.h"
+#include "../parser/RobotsManager.h"
 
 
 inline vector<string> get_frontier_bucket_files() {

@@ -7,7 +7,7 @@
 
 // Logging (0=DEBUG, 1=INFO, 2=WARN, 3=ERROR, 4=NONE)
 constexpr uint8_t LOG_LEVEL = 0;
-
+constexpr const char* USER_AGENT = "Seamus the Search Engine (web crawler for university course)";
 
 // Global
 constexpr size_t NUM_MACHINES = 1;                                  // todo(hershey): obviously, change when we deploy on more machines
@@ -76,3 +76,33 @@ constexpr uint32_t URL_STORE_PORT = 9000;
 constexpr uint32_t URL_STORE_MAX_URL_LEN = 4096;           // 4 KB max url length
 constexpr uint32_t URL_STORE_MAX_ANCHOR_TEXT_LEN = 512;     // 0.5 KB max anchor text length
 constexpr size_t URL_NUM_SHARDS = 64;
+
+// Robots.txt Manager
+constexpr size_t ROBOTS_CACHE_SIZE = 65536;
+
+
+typedef uint32_t Unicode;
+typedef uint8_t  Utf8;
+typedef uint16_t Utf16;
+//
+// Byte Order Marks (BOMs)
+//
+// Utf16 text files are are required to start with a Byte Order Mark (BOM) to
+// indicate whether they are big-endian (high byte first) or little-endian
+// (low byte first).
+//
+// If you read a correct BOM as the first 16-bit character in a file, it confirms
+// you are reading it with the correct "endian-ness".  All Windows and Apple
+// computers are little-endian, so that is what we will support.
+const Unicode  ByteOrderMark = 0xfeff;
+// If it's actually a big endian file, that first 16-bit character will have
+// the two bytes flipped.  (To read big-endian text, simply flip the bytes
+// before decoding.)
+const Unicode  BigEndianBOM = 0xfffe;
+// Utf8 text files do not need a BOM because they're written as a sequence
+// of bytes.  Adding BOM to the start of a Utf8 file is permitted but
+// discouraged.
+
+// The Utf8 byte order mark is the same 0xfeff Unicode character value
+// but written out as Utf8.
+const Utf8     Utf8BOMString[ ] = { 0xef, 0xbb, 0xbf };
