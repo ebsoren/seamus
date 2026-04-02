@@ -55,12 +55,6 @@ inline void crawler_worker(DomainCarousel& dc, size_t carousel_left, size_t caro
             if (status == CrawlStatus::DISALLOWED) {
                 logger::debug("Worker [%zu-%zu] skipping disallowed url: %s", carousel_left, carousel_right, target->url.data());
                 continue;
-            } else if (status == CrawlStatus::PENDING) {
-                logger::debug("Worker [%zu-%zu] pending url (robots.txt fetch in progress): %s", carousel_left, carousel_right, target->url.data());
-                // Re-enqueue the target to be checked again later
-                std::lock_guard<std::mutex> lock(dc.carousel[carousel_index].domain_queue_lock);
-                dc.carousel[carousel_index].targets.push_back(std::move(*target));
-                continue;
             } else {
                 logger::debug("Worker [%zu-%zu] allowed url: %s", carousel_left, carousel_right, target->url.data());
             }
@@ -108,7 +102,7 @@ inline vector<std::thread> spawn_crawler_workers(DomainCarousel& dc, std::atomic
     vector<std::thread> workers;
     int i = 0;
     while (curr_domain_right < CRAWLER_CAROUSEL_SIZE) {
-        workers.push_back(std::thread(crawler_worker, std::ref(dc), curr_domain_left, curr_domain_right, std::ref(running), &parsers[i]));
+        workers.push_back(std::thread(crawler_worker, std::ref(dc), curr_domain_left, curr_domain_right, std::ref(running), &parsers[i], &robot_managers[i]));
         curr_domain_left = curr_domain_right + 1;
         curr_domain_right = curr_domain_left + interval_size - 1;
         i++;
