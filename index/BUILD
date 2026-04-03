@@ -9,7 +9,6 @@ cc_library(
         "//lib:algorithm",
         "//lib:consts",
         "//lib:deque",
-        "//lib:logger",
         "//lib:string",
         "//lib:unordered_map",
         "//lib:utf8",
