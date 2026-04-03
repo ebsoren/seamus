@@ -94,6 +94,13 @@ public:
     }
 
 
+    bool hasUrl(const string& url) {
+        UrlShard& us = get_shard(url);
+        std::lock_guard<std::mutex> lock(us.mtx);
+        return us.findUrlData(url) != nullptr;
+    }
+
+
     uint32_t getUrlNumEncountered(const string& url) {
         UrlShard& us = get_shard(url);
         std::lock_guard<std::mutex> lock(us.mtx);

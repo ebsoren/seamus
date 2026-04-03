@@ -12,6 +12,7 @@
 #include <optional>
 #include <thread>
 #include "../lib/vector.h"
+#include "url_store/url_store.h"
 
 
 static std::atomic<uint64_t> pages_crawled{0};
@@ -19,7 +20,7 @@ static std::atomic<uint64_t> pages_crawled{0};
 // Runs in a detached thread, there are CRAWLER_THREADPOOL_SIZE concurrent instances of these
 // Monitors an interval [carousel_left, carousel_right] inclusive on the domain carousel
 // Makes network call to fetch HTML buffer -> parses -> persists to disk
-inline void crawler_worker(DomainCarousel& dc, size_t carousel_left, size_t carousel_right, std::atomic<bool>& running, HtmlParser* parser, RobotsManager* rm) {
+inline void crawler_worker(DomainCarousel& dc, size_t carousel_left, size_t carousel_right, std::atomic<bool>& running, HtmlParser* parser, RobotsManager* rm, UrlStore* url_store) {
     while (running) {
         for (size_t carousel_index = carousel_left; running; carousel_index = (carousel_index < carousel_right) ? carousel_index + 1 : carousel_left) {
             // Try lock on the carousel slot - if contended, skip to next slot
@@ -50,6 +51,12 @@ inline void crawler_worker(DomainCarousel& dc, size_t carousel_left, size_t caro
 
             // Only crawl HTTPS links
             if (target->url.size() < 8 || memcmp(target->url.data(), "https://", 8) != 0) continue;
+
+            // Skip URLs we've already crawled
+            if (url_store->hasUrl(target->url)) {
+                logger::debug("Worker [%zu-%zu] skipping already seen url: %s", carousel_left, carousel_right, target->url.data());
+                continue;
+            }
 
             // Extract host and path from URL
             const string host = extract_host(target->url);
@@ -108,7 +115,7 @@ inline vector<std::thread> spawn_crawler_workers(DomainCarousel& dc, std::atomic
     vector<std::thread> workers;
     int i = 0;
     while (curr_domain_right < CRAWLER_CAROUSEL_SIZE) {
-        workers.push_back(std::thread(crawler_worker, std::ref(dc), curr_domain_left, curr_domain_right, std::ref(running), &parsers[i], &robot_managers[i]));
+        workers.push_back(std::thread(crawler_worker, std::ref(dc), curr_domain_left, curr_domain_right, std::ref(running), &parsers[i], &robot_managers[i], &url_store));
         curr_domain_left = curr_domain_right + 1;
         curr_domain_right = curr_domain_left + interval_size - 1;
         i++;
