@@ -272,6 +272,36 @@ void test_url_store_concurrent_anchors() {
     cout << string("-> Passed test_url_store_concurrent_anchors\n") << endl;
 }
 
+void test_has_url() {
+    cout << string("Running test_has_url...") << endl;
+    UrlStore store(nullptr, URL_STORE_WORKER_NUMBER);
+
+    string url1("https://example.com/page1");
+    string url2("https://example.com/page2");
+
+    // Neither URL should be in the store initially
+    assert(!store.hasUrl(url1));
+    assert(!store.hasUrl(url2));
+
+    // Add url1
+    vector<string> anchors;
+    anchors.push_back(string("link text"));
+    store.updateUrl(url1, anchors, 1, 0, 1);
+
+    // hasUrl should return true only for the added URL
+    assert(store.hasUrl(url1));
+    assert(!store.hasUrl(url2));
+
+    // Adding url1 again (duplicate encounter) should still return true
+    vector<string> anchors2;
+    anchors2.push_back(string("other text"));
+    store.updateUrl(url1, anchors2, 2, 1, 1);
+    assert(store.hasUrl(url1));
+
+    cout << string("-> Passed test_has_url\n") << endl;
+}
+
+
 void test_url_store_massive_stress() {
     cout << string("Running test_url_store_massive_stress (This might take a second)...") << endl;
     UrlStore store(nullptr, URL_STORE_WORKER_NUMBER);
@@ -365,6 +395,8 @@ int main() {
     test_url_store_concurrent_different_urls();
 
     test_url_store_concurrent_anchors();
+
+    test_has_url();
 
     test_url_store_massive_stress();
 
