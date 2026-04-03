@@ -34,6 +34,7 @@ void UrlStore::manage_frontier_and_update_url(URLStoreUpdateRequest& req) {
         };
 
         size_t priority = get_priority_bucket(req.url, req.seed_list_url_hops);
+        if (priority >= PRIORITY_BUCKETS) return; // Don't add to frontier if doesn't meet priority threshold
         std::lock_guard<std::mutex> lock(dc->buckets[priority].bucket_lock);
         dc->buckets[priority].urls.push_back(std::move(target));
     }
