@@ -1,3 +1,5 @@
+#pragma once
+
 #include <cstddef>    // for size_t
 #include <cassert>
 #include <cstdint>
@@ -141,7 +143,7 @@ size_t get_priority_bucket(const string& url, int seed_list_dist) {
     if      (score >= 40000) return 5;
     if      (score >= 30000) return 6;
     if      (score >= 20000) return 7;
-    else                     return 8;  // don't add to the buckets (bad url)
+    else                     return PRIORITY_BUCKETS;  // don't add to the buckets (bad url)
 }
 
 struct UncrawledItem {

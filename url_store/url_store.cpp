@@ -3,6 +3,7 @@
 #include "../lib/rpc_urlstore.h"
 #include "../lib/utils.h"
 #include "../lib/algorithm.h"
+#include "../lib/Frontier.h"
 #include <optional>
 
 
@@ -32,8 +33,7 @@ void UrlStore::manage_frontier_and_update_url(URLStoreUpdateRequest& req) {
             req.seed_list_domain_hops,
         };
 
-        // TODO: Use real priority once frontier scoring is implemented
-        size_t priority = 0;
+        size_t priority = get_priority_bucket(req.url, req.seed_list_url_hops);
         std::lock_guard<std::mutex> lock(dc->buckets[priority].bucket_lock);
         dc->buckets[priority].urls.push_back(std::move(target));
     }
@@ -49,7 +49,7 @@ void UrlStore::batch_manage_frontier_and_update_url(BatchURLStoreUpdateRequest& 
 
         if (is_new && dc) {
             string domain = extract_domain(req.url);
-            size_t priority = 0;                                    // TODO: Use real priority once frontier scoring is implemented
+            size_t priority = get_priority_bucket(req.url, req.seed_list_url_hops);
             if (priority < PRIORITY_BUCKETS) {
                 bucket_targets[priority].push_back(CrawlTarget{
                     std::move(domain),
@@ -278,9 +278,7 @@ void UrlStore::readFromFile(const int worker_number) {
         
         string url(url_buff, url_len);
 
-        // TODO: is locking needed here? supposedly readFromFile should only be called on startup before requests are sent right
         UrlShard& shard = get_shard(url);
-        // std::lock_guard<std::mutex> lock(shard.mtx);
         auto& url_data = shard.url_data;
 
         fread(&url_data[url].num_encountered, sizeof(uint32_t), 1, fd);
