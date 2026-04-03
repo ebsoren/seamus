@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include "lib/consts.h"
 
 
 //
@@ -20,7 +21,7 @@ const   Unicode  ReplacementCharacter = 0xfffd;
 
 // The Utf8 byte order mark is the same 0xfeff Unicode character value
 // but written out as Utf8.
-const Utf8     Utf8BOMString[ ] = { 0xef, 0xbb, 0xbf };
+// const Utf8     Utf8BOMString[ ] = { 0xef, 0xbb, 0xbf };
 
 
 // SizeOfUtf8 tells the number of bytes it will take to encode the

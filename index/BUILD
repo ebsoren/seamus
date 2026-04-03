@@ -7,16 +7,18 @@ cc_library(
     visibility = ["//visibility:public"],
     deps = [
         "//lib:algorithm",
+        "//lib:consts",
+        "//lib:deque",
         "//lib:string",
         "//lib:unordered_map",
         "//lib:utf8",
         "//lib:utils",
-        "//lib:vector"
-    ]
+        "//lib:vector",
+    ],
 )
 
 cc_binary(
     name = "index",
     srcs = ["main.cpp"],
-    deps = [":index_lib"]
+    deps = [":index_lib"],
 )

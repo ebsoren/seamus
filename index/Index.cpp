@@ -1,27 +1,18 @@
 #include "Index.h"
-
+#include "lib/consts.h"
 #include "lib/algorithm.h"
 #include "lib/string.h"
-#include "lib/thread_pool.h"
 #include "lib/utf8.h"
 #include "lib/utils.h"
+#include "lib/logger.h"
 
-void init_index() {
-    file_lock.lock();
 
-    // Find the latest chunk ID
-    if (chunk == 0) {
-        while (file_exists(string::join("index_chunk_", string(WORKER_NUMBER), "_", string(chunk), ".txt"))) chunk++;
-    }
-
-    // Fill the file queue
-    uint32_t i = 0;
-    while (file_exists(string::join("parsed_docs_", string(i), ".txt"))) {
-        files.push_back(string::join("parsed_docs_", string(i++), ".txt"));
-    }
-
-    file_lock.unlock();
+IndexChunk::IndexChunk(uint32_t worker_number) : curr_doc_(1), chunk(0), posts_count(0), WORKER_NUMBER(worker_number){
+    // Important: Init curr_doc_ to 1 to allow for 00 to be used as new doc flag
+    // Find the latest chunk ID for this thread
+    while (file_exists(string::join("index_chunk_", string(WORKER_NUMBER), "_", string(chunk), ".txt"))) chunk++;
 }
+
 
 void IndexChunk::persist() {
     // Create a file (if it already exists, fail -- don't want to overwrite)
@@ -46,7 +37,7 @@ void IndexChunk::persist() {
         
         fwrite(&id, sizeof(id), 1, fd);
         fwrite(" ", sizeof(char), 1, fd);
-        fwrite(&urls[i], sizeof(char), urls[i].size(), fd);
+        fwrite(urls[i].data(), sizeof(char), urls[i].size(), fd);
         fwrite("\n", sizeof(char), 1, fd);
     }
 
@@ -60,8 +51,9 @@ void IndexChunk::persist() {
      * Calculate dictionary lookup table values (bytes from start of dict to first word of each letter)
      * Calculate posting list sizes/locations
      * Caclulate internal index sizes (part of posting list sizes) and locations
-     *  */ 
-    uint64_t posting_list_locations[N];
+     *  */
+
+    vector<uint64_t> posting_list_locations(N);
     uint64_t posting_list_size = 0;
 
     uint64_t dict_offsets[26];
@@ -70,7 +62,7 @@ void IndexChunk::persist() {
     char curr_char = 'a';
 
     vector<vector<uint64_t>> doc_offsets(N, vector<uint64_t>(curr_doc_ + 1, UINT32_MAX));
-    uint64_t internal_index_sizes[N];
+    vector<uint64_t> internal_index_sizes(N);
 
     for (uint32_t i = 0; i < N; i++) {
         // First word starting with this letter -- add its offset to the dict lookup table
@@ -143,7 +135,7 @@ void IndexChunk::persist() {
     // Write the dictionary itself
     // <varlen WORD> <64b OFFSET>\n
     for (uint32_t i = 0; i < N; i++) {
-        fwrite(&alphabetized_entries[i], sizeof(char), alphabetized_entries[i].size(), fd);
+        fwrite(alphabetized_entries[i].data(), sizeof(char), alphabetized_entries[i].size(), fd);
         fwrite(" ", sizeof(char), 1, fd);
         fwrite(&posting_list_locations[i], sizeof(uint64_t), 1, fd);
         fwrite("\n", sizeof(char), 1, fd);
@@ -215,10 +207,23 @@ void IndexChunk::persist() {
     
     fclose(fd);
 
-    file_lock.lock();
     chunk++;
-    file_lock.unlock();
 }
+
+void IndexChunk::reset() {
+    index = unordered_map<string, postings>();
+    urls = vector<string>();
+    posts_count = 0;
+    curr_doc_ = 1; // Curr_doc must start at 1, 0 reserved for flag
+}
+
+
+void IndexChunk::flush() {
+    persist();
+    reset();
+    logger::info("Worker %u: flush chunk: %u", WORKER_NUMBER, chunk-1);
+}
+
 
 vector<string> IndexChunk::sort_entries() {
     vector<string> res;
@@ -257,10 +262,8 @@ bool IndexChunk::index_file(const string &path) {
         fgets(url, sizeof(url), fd);
 
         // Increment the doc count
-        doc_lock_.lock();
         uint32_t doc = curr_doc_++;
         urls.push_back(string(url, strlen(url) - 1)); // -1 bc of \n at the end
-        doc_lock_.unlock();
 
         // Start a counter for word locations
         uint32_t loc = 0;
@@ -280,12 +283,22 @@ bool IndexChunk::index_file(const string &path) {
                 }
 
                 index[word_view].posts.push_back({doc, ++loc});
+                posts_count++;
             }
         }
 
-        if (feof(fd)) return true;
-        else if (ferror(fd)) return false;
-    }
+        if (feof(fd)) {
+            logger::info("Worker %u: indexed file: %s", WORKER_NUMBER, path.data());
 
+            if (posts_count > INDEX_POSTS_COUNT_FLUSH_THRESHOLD) {
+                flush();
+            }
+            return true;
+        }
+        else if (ferror(fd)) {
+            logger::error("Worker %u: file read error on file: %s, with error: %s", WORKER_NUMBER, path.data(), strerror(errno));
+            return false;
+        }
+    }
     return true;
 }
