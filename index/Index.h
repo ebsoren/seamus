@@ -20,19 +20,25 @@ class IndexChunk {
 private:
     unordered_map<string, postings> index;
     vector<string> urls;
-    std::mutex doc_lock_;
+
     uint32_t curr_doc_;
+    uint32_t chunk;
+
+    size_t posts_count;
+
+    const uint32_t WORKER_NUMBER;
 
     vector<string> sort_entries();
+    void persist();
+    void reset();
+
 public:
-    IndexChunk() : curr_doc_ (1) {}
+
+    IndexChunk(uint32_t worker_number);
+    IndexChunk() = delete;
 
     bool index_file(const string &path);
-    void persist();
+    void flush();
+
 };
 
-inline deque<string> files;
-inline std::mutex file_lock;
-inline uint32_t WORKER_NUMBER;
-inline uint32_t chunk = 0;
-void init_index();

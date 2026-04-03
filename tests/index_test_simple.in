@@ -1,10 +1,12 @@
+<doc>
+https://example.com
 <title>
-This
+this
 is
 the
 title
-<\title>
-And
+</title>
+and
 this
 is
 the
@@ -12,3 +14,4 @@ body
 of
 the
 page
+</doc>

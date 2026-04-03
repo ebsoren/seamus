@@ -3,7 +3,7 @@
 #include "../index/Index.h"
 
 void test_add_page_simple() {
-    IndexChunk idx;
+    IndexChunk idx(0);
 
     assert(idx.index_file(string("tests/index_test_simple.in")));
 }

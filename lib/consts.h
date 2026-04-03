@@ -11,6 +11,7 @@ constexpr const char* USER_AGENT = "Seamus the Search Engine (web crawler for un
 
 // Global
 constexpr size_t NUM_MACHINES = 1;                                  // todo(hershey): obviously, change when we deploy on more machines
+constexpr size_t NUM_CORES = 16;                                    // todo(Aiden): change depending on number of cores we end up renting per machine
 constexpr const char* MACHINES[NUM_MACHINES] = {"127.0.0.1"};       // todo(hershey): replace localhost ip (127.0.0.1) with global ip of machines once we deploy on multiple machines -- store machine ID as an environment variable
 
 inline const char* get_machine_addr(size_t machine_id) {
@@ -82,6 +83,9 @@ constexpr size_t URL_NUM_SHARDS = 64;
 // Robots.txt Manager
 constexpr size_t ROBOTS_CACHE_SIZE = 65536;
 
+
+// Indexer
+constexpr size_t INDEX_POSTS_COUNT_FLUSH_THRESHOLD = 1<<27;
 
 typedef uint32_t Unicode;
 typedef uint8_t  Utf8;
