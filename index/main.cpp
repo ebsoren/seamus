@@ -27,13 +27,6 @@ void worker(uint32_t worker_number) {
 
 
 int main(int argc, char* argv[]) {
-
-    if (argc != 2) {
-        perror("Usage: ./index <worker number>");
-        exit(1);
-    }
-
-
     vector<std::thread> workers;
     for (size_t i = 0; i < NUM_CORES; i++) {
         workers.push_back(std::thread(worker, i));
