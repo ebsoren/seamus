@@ -41,6 +41,8 @@ int main() {
         logger::info("  bucket[%zu] = %.*s", i, static_cast<int>(bucket_files[i].size()), bucket_files[i].data());
     }
     BucketManager bm(static_cast<vector<string>&&>(bucket_files), &dc);
+    bm.load_disk_buckets();
+    logger::info("Loaded disk buckets into memory");
     bm.start();
 
     // Crawler listener

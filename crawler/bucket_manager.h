@@ -29,6 +29,8 @@ public:
     BucketManager(vector<string> bucket_files_in, DomainCarousel* dc_in)
         : bucket_files(static_cast<vector<string>&&>(bucket_files_in)), dc(dc_in) {
         assert(bucket_files.size() == PRIORITY_BUCKETS);
+
+        // Create bucket files if they don't exist, otherwise don't overwrite existing bucket files
         for (const auto& path : bucket_files) {
             std::ifstream check(path.data());
             if (!check.good()) {
@@ -36,8 +38,8 @@ public:
             }
         }
 
-        // Load seed list into priority bucket 0 if enabled and bucket is empty
-        if (load_seed_list && dc->buckets[0].urls.empty()) {
+        // Load seed list into priority bucket 0 if flag is set (true in non-testing environments) 
+        if (load_seed_list) {
             std::lock_guard<std::mutex> lock(dc->buckets[0].bucket_lock);
             for (size_t i = 0; i < SEED_LIST_SIZE; ++i) {
                 dc->buckets[0].enqueue(CrawlTarget{extract_domain(string(SEED_LIST[i])), string(SEED_LIST[i]), 0, 0});
@@ -105,8 +107,7 @@ public:
     }
 
 
-    // Load disk buckets into in-memory buckets
-    // Should be called ad-hoc by feed_carousel_worker() whenever more crawl targets are needed in memory
+    // Load disk buckets into in-memory buckets, should be called on startup
     void load_disk_buckets() {
         for (size_t i = 0; i < PRIORITY_BUCKETS; ++i) {
             std::ifstream file(bucket_files[i].data(), std::ios::binary | std::ios::ate);
@@ -136,6 +137,7 @@ public:
     }
 
 
+    // Helper routine for persist_buckets_worker()
     void persist_buckets() {
         for (size_t i = 0; i < PRIORITY_BUCKETS; ++i) {
             size_t total_size = 0;
@@ -171,6 +173,7 @@ public:
     }
 
 
+    // Detached thread, persists frontier buckets on an interval
     void persist_buckets_worker() {
         while (running) {
             std::unique_lock<std::mutex> lock(shutdown_mutex);

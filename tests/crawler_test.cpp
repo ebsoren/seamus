@@ -733,6 +733,90 @@ void test_persist_buckets_to_disk() {
 }
 
 
+void test_disk_buckets_reach_carousel() {
+    printf("---- test_disk_buckets_reach_carousel ----\n");
+
+    // Build file paths
+    vector<string> paths;
+    for (size_t i = 0; i < PRIORITY_BUCKETS; i++) {
+        char buf[64];
+        snprintf(buf, sizeof(buf), "/tmp/test_disk_carousel_%zu.dat", i);
+        paths.push_back(string(buf, strlen(buf)));
+    }
+
+    // Clean up any leftover files
+    for (size_t i = 0; i < paths.size(); i++) {
+        remove(paths[i].data());
+    }
+
+    // Write a single non-seed-list target to bucket 0's disk file
+    const char* domain = "disk-loaded.org";
+    const char* url = "https://disk-loaded.org/from-disk";
+    uint16_t seed_dist = 42;
+    uint16_t domain_dist = 7;
+
+    {
+        std::ofstream file(paths[0].data(), std::ios::binary | std::ios::trunc);
+        CrawlTarget ct{
+            string(domain, strlen(domain)),
+            string(url, strlen(url)),
+            seed_dist,
+            domain_dist
+        };
+        size_t sz = crawl_target_serialized_size(ct);
+        char ser_buf[256];
+        serialize_crawl_target(ser_buf, ct);
+        file.write(ser_buf, static_cast<std::streamsize>(sz));
+    }
+
+    // Create empty files for the remaining buckets
+    for (size_t i = 1; i < PRIORITY_BUCKETS; i++) {
+        std::ofstream file(paths[i].data(), std::ios::binary | std::ios::trunc);
+    }
+
+    // Construct BucketManager (seed list disabled), load disk, and feed carousel
+    DomainCarousel dc;
+    {
+        vector<string> bucket_files;
+        for (size_t i = 0; i < PRIORITY_BUCKETS; i++) {
+            char buf[64];
+            snprintf(buf, sizeof(buf), "/tmp/test_disk_carousel_%zu.dat", i);
+            bucket_files.push_back(string(buf, strlen(buf)));
+        }
+        BucketManager bm(static_cast<vector<string>&&>(bucket_files), &dc);
+        bm.load_disk_buckets();
+        bm.start();
+
+        // Wait for the feed thread to move targets from buckets into the carousel
+        std::this_thread::sleep_for(std::chrono::seconds(CRAWLER_FEED_INTERVAL_SEC + 1));
+    }
+
+    // Scan the carousel for our target
+    size_t expected_slot = DomainCarousel::hash_domain(string(domain, strlen(domain))) % CRAWLER_CAROUSEL_SIZE;
+    bool found = false;
+    {
+        std::lock_guard<std::mutex> lock(dc.carousel[expected_slot].domain_queue_lock);
+        for (size_t i = 0; i < dc.carousel[expected_slot].targets.size(); i++) {
+            auto& t = dc.carousel[expected_slot].targets[i];
+            if (t.url == string(url, strlen(url))) {
+                assert(t.domain == string(domain, strlen(domain)));
+                assert(t.seed_distance == seed_dist);
+                assert(t.domain_dist == domain_dist);
+                found = true;
+            }
+        }
+    }
+    assert(found);
+
+    // Clean up
+    for (size_t i = 0; i < paths.size(); i++) {
+        remove(paths[i].data());
+    }
+
+    printf("PASS\n");
+}
+
+
 int main() {
     printf("\n===== RUNNING CRAWLER TESTS =====\n\n");
     BucketManager::load_seed_list = false;
@@ -747,6 +831,7 @@ int main() {
     test_bucket_manager_feeds_carousel();
     test_backoff_queue_drains_after_slot_cleared();
     test_bucket_manager_empty_buckets();
+    test_disk_buckets_reach_carousel();
     test_spawn_crawler_workers_consumes_and_stops();
     printf("\n===== ALL CRAWLER TESTS PASSED =====\n");
     return 0;
