@@ -25,7 +25,6 @@ struct RankedPage {
     int num_words_found_anchor;
     int num_words_found_title;
     int num_words_found_descr;
-    int num_anchors;
     int times_seen;
     vector<vector<size_t>> word_positions;
     size_t doc_len;
@@ -200,7 +199,9 @@ double word_pos_score(const vector<vector<size_t>> &positions, int unique_words_
 double calc_dynamic_score(RankedPage &r, size_t unique_words_in_query) {
     double factor_1 = word_pos_score(r.word_positions, r.doc_len, unique_words_in_query);
 
-    return(factor_1);
+    double factor_2 = r.times_seen;
+
+    return(factor_1 * factor_2);
 }
 
 // LeanPage input_total_score(RankedPage r, double dynamic_weight, size_t unique_words_in_query) {
