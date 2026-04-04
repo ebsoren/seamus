@@ -140,29 +140,26 @@ public:
     // Helper routine for persist_buckets_worker()
     void persist_buckets() {
         for (size_t i = 0; i < PRIORITY_BUCKETS; ++i) {
+            std::unique_ptr<char[]> buf;
             size_t total_size = 0;
-            size_t count = 0;
 
             {
                 std::lock_guard<std::mutex> lock(dc->buckets[i].bucket_lock);
-                count = dc->buckets[i].urls.size();
+                size_t count = dc->buckets[i].urls.size();
+
+                if (count == 0) {
+                    std::ofstream file(bucket_files[i].data(), std::ios::binary | std::ios::trunc);
+                    continue;
+                }
+
                 for (size_t j = 0; j < count; ++j) {
                     total_size += crawl_target_serialized_size(dc->buckets[i].urls[j]);
                 }
-            }
 
-            if (count == 0) {
-                std::ofstream file(bucket_files[i].data(), std::ios::binary | std::ios::trunc);
-                continue;
-            }
+                buf = std::make_unique<char[]>(total_size);
+                char* cursor = buf.get();
 
-            auto buf = std::make_unique<char[]>(total_size);
-            char* cursor = buf.get();
-
-            {
-                std::lock_guard<std::mutex> lock(dc->buckets[i].bucket_lock);
-                size_t n = dc->buckets[i].urls.size();
-                for (size_t j = 0; j < n; ++j) {
+                for (size_t j = 0; j < count; ++j) {
                     cursor = serialize_crawl_target(cursor, dc->buckets[i].urls[j]);
                 }
             }
