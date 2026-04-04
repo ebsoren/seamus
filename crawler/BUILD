@@ -10,13 +10,7 @@ cc_library(
 cc_library(
     name = "network_util",
     hdrs = ["network_util.h"],
-    copts = ["-I/opt/homebrew/opt/openssl@3/include"],
-    linkopts = [                                                        # todo(hershey): add proper linkopts when we build for linux
-        "-L/opt/homebrew/opt/openssl@3/lib",
-        "-lssl",
-        "-lcrypto",
-    ],
-    deps = ["//lib:consts", "//lib:string", "//lib:utils"],
+    deps = ["//lib:consts", "//lib:string", "//lib:utils", "@openssl//:ssl"],
     visibility = ["//visibility:public"],
 )
 
@@ -28,12 +22,6 @@ cc_library(
         "network_util.h",
         "crawler_worker.h",
         "crawler_instrumentation.h",
-    ],
-    copts = ["-I/opt/homebrew/opt/openssl@3/include"],
-    linkopts = [                                                        # todo(hershey): add proper linkopts when we build for linux
-        "-L/opt/homebrew/opt/openssl@3/lib",
-        "-lssl",
-        "-lcrypto",
     ],
     deps = [":domain_carousel", ":network_util", "//lib:consts", "//lib:vector", "//lib:deque", "//lib:string", "//lib:utils", "//lib:rpc_listener", "//lib:rpc_crawler", "//lib:logger", "//parser:parser", "//parser:robots_manager"],
     visibility = ["//visibility:public"],
