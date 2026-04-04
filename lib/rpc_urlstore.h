@@ -30,6 +30,7 @@ struct UrlData {
     // TODO(charlie): add title content, not eot
     string title = string("", 0);
     uint16_t eod;                                        // End of description
+    bool crawled = false;                                // Whether this URL has actually been fetched
 };
 
 
