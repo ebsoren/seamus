@@ -242,7 +242,7 @@ public:
         for (uint16_t i = 0; i < PRIORITY_BUCKETS; i++) {
             if (priority_buckets[i].empty()) continue;
 
-            string path = string::join("frontier_", string(worker_id), "_bucket_", string(i), ".txt");
+            string path = string::join("", "frontier_", string(worker_id), "_bucket_", string(i), ".txt");
 
             FILE* fd = fopen(path.data(), "ab");
             if (fd == nullptr) {
@@ -268,7 +268,7 @@ public:
 
     void load_from_disk() {
         for (uint16_t i = 0; i < PRIORITY_BUCKETS; i++) {
-            string path = string::join("frontier_", string(worker_id), "_bucket_", string(i), ".txt");
+            string path = string::join("", "frontier_", string(worker_id), "_bucket_", string(i), ".txt");
 
             FILE* fd = fopen(path.data(), "rb");
             if (fd == nullptr) {

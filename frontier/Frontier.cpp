@@ -187,7 +187,7 @@ size_t Frontier::size() {
 
 void Frontier::persist() {
         // Create a file (if it already exists, fail -- don't want to overwrite)
-    string path = string::join("frontier_", string(worker_id), ".txt");
+    string path = string::join("", "frontier_", string(worker_id), ".txt");
     FILE* fd = fopen(path.data(), "wx");
 
     if (fd == nullptr) perror("Error opening frontier file for writing.");
