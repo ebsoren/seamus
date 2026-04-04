@@ -30,9 +30,9 @@ inline const size_t my_machine_id() {
 // Crawler
 constexpr uint16_t CRAWLER_LISTENER_PORT = 8080;
 constexpr size_t CRAWLER_LISTENER_THREADS = 16;
-constexpr size_t CRAWLER_CAROUSEL_SIZE = 8192;
+constexpr size_t CRAWLER_THREADPOOL_SIZE = 1<<8;
+constexpr size_t CRAWLER_CAROUSEL_SIZE = CRAWLER_THREADPOOL_SIZE*16;
 static constexpr size_t CRAWLER_CAROUSEL_QUEUE_SIZE = 32;
-constexpr size_t CRAWLER_THREADPOOL_SIZE = 512;
 constexpr size_t CRAWLER_MAX_QUEUE_SIZE = 32;
 static_assert(CRAWLER_CAROUSEL_SIZE % CRAWLER_THREADPOOL_SIZE == 0, "[consts.h]: CRAWLER_CAROUSEL_SIZE must be a multiple of CRAWLER_THREADPOOL_SIZE");
 static_assert(CRAWLER_CAROUSEL_SIZE >= CRAWLER_THREADPOOL_SIZE, "[consts.h]: CRAWLER_THREADPOOL_SIZE cannot be greater than CRAWLER_CAROUSEL_SIZE");
@@ -42,7 +42,7 @@ constexpr size_t CRAWLER_PERSIST_INTERVAL_SEC = 60;         // Time (seconds) to
 constexpr size_t CRAWLER_FEED_INTERVAL_SEC = 1;             // Time (seconds) to wait between feeding in-memory priority buckets -> domain carousel
 constexpr size_t CRAWLER_WORKER_SLEEP_MS = 10;              // Time (milliseconds) for the crawler worker to sleep before moving to a new slot
 constexpr size_t CRAWLER_INSTRUMENTATION_INTERVAL_SEC = 20; // Time (seconds) between instrumentation drain cycles
-constexpr size_t CRAWLER_INSTRUMENTATION_BATCH_SIZE = 10;   // Number of successful crawls before submitting a batched metric update
+constexpr size_t CRAWLER_INSTRUMENTATION_BATCH_SIZE = 1;    // Number of successful crawls before submitting a batched metric update
 
 constexpr size_t CRAWLER_OUTBOUND_BATCH_SIZE = 100;         // Number of crawl targets to buffer per machine before sending
 constexpr size_t PRIORITY_BUCKETS = 8;
