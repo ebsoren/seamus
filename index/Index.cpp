@@ -5,6 +5,7 @@
 #include "lib/utf8.h"
 #include "lib/utils.h"
 #include "lib/logger.h"
+#include <sys/stat.h>
 
 
 string IndexChunk::get_index_chunk_path() const {
@@ -20,11 +21,15 @@ IndexChunk::IndexChunk(uint32_t worker_number) : curr_doc_(1), chunk(0), posts_c
 
 
 void IndexChunk::persist() {
+    mkdir(INDEX_OUTPUT_DIR, 0755); // no-op if already exists
     // Create a file (if it already exists, fail -- don't want to overwrite)
     string path = get_index_chunk_path();
     FILE* fd = fopen(path.data(), "wx");
 
-    if (fd == nullptr) perror("Error opening index chunk file for writing.");
+    if (fd == nullptr) {
+        logger::error("Worker %u: failed to open '%s' for writing (errno=%d: %s)", WORKER_NUMBER, path.data(), errno, strerror(errno));
+        return;
+    }
 
     // 4 bytes for each uint32_t ID, one byte for each char in string, one byte for each new line char
     uint64_t urls_bytes = urls.size() * 4;
@@ -258,15 +263,16 @@ bool IndexChunk::index_file(const string &path) {
         // Set of words already encountered in the document to track number of documents word appears in
         unordered_map<string, bool> word_set;
 
-        // Check doc header
-        fgets(buff, sizeof(buff), fd);
+        // Check doc header (or EOF between documents)
+        if (!fgets(buff, sizeof(buff), fd)) break;
         if (strcmp(buff, "<doc>\n")) {
-            perror("Expected document header missing.\n");
+            logger::error("Worker %u: expected <doc> header, got: %s in file: %s", WORKER_NUMBER, buff, path.data());
+            fclose(fd);
             return false;
         }
 
         // Read in the URL (will end with \n\0)
-        fgets(url, sizeof(url), fd);
+        if (!fgets(url, sizeof(url), fd)) break;
 
         // Increment the doc count
         uint32_t doc = curr_doc_++;
@@ -278,11 +284,13 @@ bool IndexChunk::index_file(const string &path) {
         // Parse title and body words
         while(fgets(buff, sizeof(buff), fd)) {
             if (!strcmp(buff, "</doc>\n")) {
-                // Doc ended, go back to top of loop
-                continue;
+                // Doc ended, go back to outer loop
+                break;
             } else if (strcmp(buff, "</title>\n") && strcmp(buff, "<title>\n")) { // Don't push the title tags
                 // -1 because all words have new line at the end from fgets
-                string_view word_view = string_view(buff, strlen(buff) - 1);
+                size_t len = strlen(buff);
+                if (len <= 1) continue; // skip empty lines
+                string_view word_view = string_view(buff, len - 1);
 
                 if (!word_set[word_view]) {
                     word_set[word_view] = true;
@@ -294,18 +302,18 @@ bool IndexChunk::index_file(const string &path) {
             }
         }
 
-        if (feof(fd)) {
-            logger::info("Worker %u: indexed file: %s", WORKER_NUMBER, path.data());
-
-            if (posts_count > INDEX_POSTS_COUNT_FLUSH_THRESHOLD) {
-                flush();
-            }
-            return true;
-        }
-        else if (ferror(fd)) {
+        if (ferror(fd)) {
             logger::error("Worker %u: file read error on file: %s, with error: %s", WORKER_NUMBER, path.data(), strerror(errno));
+            fclose(fd);
             return false;
         }
+    }
+
+    fclose(fd);
+    logger::info("Worker %u: indexed file: %s", WORKER_NUMBER, path.data());
+
+    if (posts_count > INDEX_POSTS_COUNT_FLUSH_THRESHOLD) {
+        flush();
     }
     return true;
 }
