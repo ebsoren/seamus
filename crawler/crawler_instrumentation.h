@@ -32,7 +32,7 @@ struct MetricUpdate {
 class CrawlerInstrumentation {
 public:
     CrawlerInstrumentation(size_t num_workers, size_t drain_interval_sec = CRAWLER_INSTRUMENTATION_INTERVAL_SEC)
-        : drain_interval_sec(drain_interval_sec), queues(num_workers), locks(num_workers) {}
+        : drain_interval_sec(drain_interval_sec), queues(num_workers), locks(num_workers), start_time(std::chrono::steady_clock::now()) {}
 
     ~CrawlerInstrumentation() {
         running.store(false, std::memory_order_relaxed);
@@ -74,6 +74,7 @@ private:
     std::mutex shutdown_mutex;
     std::condition_variable shutdown_cv;
     std::thread drain_thread;
+    std::chrono::steady_clock::time_point start_time;
 
     void process_metric_updates() {
         for (size_t i = 0; i < queues.size(); i++) {
@@ -121,8 +122,13 @@ private:
             double docs_per_sec = drain_interval_sec > 0 ? static_cast<double>(interval_docs) / drain_interval_sec : 0;
             prev_documents_crawled = current;
 
-            logger::info("Instrumentation | total docs: %llu | docs/sec: %.1f | avg page len: %.1f bytes | avg priority: %.2f",
-                current, docs_per_sec, get_avg_page_length(), get_avg_page_priority());
+            auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - start_time).count();
+            long hrs = elapsed / 3600;
+            long mins = (elapsed % 3600) / 60;
+            long secs = elapsed % 60;
+
+            logger::info("Instrumentation | %02ld:%02ld:%02ld | total docs: %llu | docs/sec: %.1f | avg page len: %.1f bytes | avg priority: %.2f",
+                hrs, mins, secs, current, docs_per_sec, get_avg_page_length(), get_avg_page_priority());
         }
     }
 };
