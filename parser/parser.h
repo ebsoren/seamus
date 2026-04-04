@@ -362,8 +362,9 @@ private:
 
                 if (act != DesiredAction::OrdinaryText) {
                     // If the tag was immediately after a word, add it to our list
-                    if ((!is_closing && word_start < tag_start - 1) || word_start < tag_start - 2) {
-                        size_t word_len = is_closing ? (tag_start - 2) - word_start : (tag_start - 1) - word_start;
+                    const char *word_end = is_closing ? tag_start - 2 : tag_start - 1;
+                    if (word_end > word_start && word_end >= buffer) {
+                        size_t word_len = word_end - word_start;
                         if (in_a_) {
                             links.push_back(word_start, word_len, SPACE_DELIM);
                             links.case_convert(links.size() - (word_len + 1), links.size());
