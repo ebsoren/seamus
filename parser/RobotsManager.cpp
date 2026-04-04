@@ -2,6 +2,7 @@
 #include <cctype>
 #include <cstring>
 #include <cstdlib>
+#include <memory>
 
 #include "lib/string.h"
 #include "lib/vector.h"
@@ -829,12 +830,13 @@ RobotsManager::Node* RobotsManager::fetchAndParse(const string& domain) {
 
    // fetch robots.txt, parse and make node
    RobotsTxt* rules = nullptr;
-   char body[MAX_HTML_SIZE];
-   ssize_t body_len = https_get(domain.data(), "robots.txt", body);
+   //TODO : Changed this to heap allocated to fix stack limit issues, maybe change back?
+   auto body = std::make_unique<char[]>(MAX_HTML_SIZE);
+   ssize_t body_len = https_get(domain.data(), "robots.txt", body.get());
 
    if (body_len > 0) {
       logger::debug("Fetched robots.txt for domain: %s", domain.data());
-      rules = new RobotsTxt(reinterpret_cast<const Utf8*>(body), static_cast<size_t>(body_len));
+      rules = new RobotsTxt(reinterpret_cast<const Utf8*>(body.get()), static_cast<size_t>(body_len));
 
       
    } else {
