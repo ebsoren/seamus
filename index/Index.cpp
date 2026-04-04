@@ -71,7 +71,6 @@ void IndexChunk::persist() {
     uint64_t curr_offset = 0;
     char curr_char = 'a';
 
-    vector<vector<uint64_t>> doc_offsets(N, vector<uint64_t>(curr_doc_ + 1, UINT32_MAX));
     vector<uint64_t> internal_index_sizes(N);
 
     for (uint32_t i = 0; i < N; i++) {
@@ -95,7 +94,6 @@ void IndexChunk::persist() {
         uint32_t last_loc = 0;
 
         // Used to fill the internal index at the top of a posting list, which maps doc ID to byte offset from start of index
-        uint64_t internal_offset = 0;
         postings& entry = index[alphabetized_entries[i].str_view(0, alphabetized_entries[i].size())];
         uint32_t num_docs = entry.posts[0].doc == 0 ? 1 : 0;
 
@@ -113,7 +111,6 @@ void IndexChunk::persist() {
                 last_doc = p.doc;
                 last_loc = 0;
 
-                doc_offsets[i][p.doc] = internal_offset;
                 num_docs++;
             } else {
                 last_loc = p.loc;
@@ -121,7 +118,6 @@ void IndexChunk::persist() {
 
             // Add to sizes
             posting_list_size += post_size;
-            internal_offset += post_size;
         }
 
         // Calculate size of internal index itself
@@ -168,20 +164,36 @@ void IndexChunk::persist() {
         // <64b NUM POSTS> <64b NUM DOCS>\n
         fwrite(&size, sizeof(uint64_t), 1, fd);
         fwrite(" ", sizeof(char), 1, fd);
-        fwrite(&entry.n_docs, sizeof(uint64_t), 1, fd);
+        fwrite(&entry.n_docs, sizeof(uint32_t), 1, fd);
         fwrite("\n", sizeof(char), 1, fd);
 
-        // Write the internal index
+        // Compute doc offsets on the fly and write internal index
         // For each document that appears in this posting list: <32b DOC ID> <64b BYTE OFFSET FROM START OF INTERNAL INDEX>\n
-        for (uint32_t j = 0; j < curr_doc_ + 1; j++) {
-            // Skip docs that don't appear
-            if (doc_offsets[i][j] == UINT32_MAX) continue;
+        {
+            uint32_t scan_last_doc = 0;
+            uint32_t scan_last_loc = 0;
+            uint64_t scan_offset = 0;
 
-            uint64_t total_offset = doc_offsets[i][j] + internal_index_sizes[i];
-            fwrite(&j, sizeof(uint32_t), 1, fd);
-            fwrite(" ", sizeof(char), 1, fd);
-            fwrite(&total_offset, sizeof(uint64_t), 1, fd);
-            fwrite("\n", sizeof(char), 1, fd);
+            for (size_t pi = 0; pi < entry.posts.size(); ++pi) {
+                post p = entry.posts[pi];
+                uint64_t post_size = SizeOfUtf8(p.loc - scan_last_loc);
+
+                if (p.doc > scan_last_doc) {
+                    post_size += 1 + SizeOfUtf8(p.doc - scan_last_doc);
+                    scan_last_doc = p.doc;
+                    scan_last_loc = 0;
+
+                    uint64_t total_offset = scan_offset + internal_index_sizes[i];
+                    fwrite(&p.doc, sizeof(uint32_t), 1, fd);
+                    fwrite(" ", sizeof(char), 1, fd);
+                    fwrite(&total_offset, sizeof(uint64_t), 1, fd);
+                    fwrite("\n", sizeof(char), 1, fd);
+                } else {
+                    scan_last_loc = p.loc;
+                }
+
+                scan_offset += post_size;
+            }
         }
 
         // Write posts
