@@ -80,11 +80,11 @@ constexpr uint32_t URL_STORE_MAX_ANCHOR_TEXT_LEN = 512;     // 0.5 KB max anchor
 constexpr size_t URL_NUM_SHARDS = 64;
 
 // Robots.txt Manager
-constexpr size_t ROBOTS_CACHE_SIZE = 65536;
+constexpr size_t ROBOTS_CACHE_SIZE = 256;
 
 
 // Indexer
-constexpr size_t INDEX_POSTS_COUNT_FLUSH_THRESHOLD = 1<<27;
+constexpr size_t INDEX_POSTS_COUNT_FLUSH_THRESHOLD = 1<<21;
 static constexpr const char* INDEX_OUTPUT_DIR = "/tmp/seamus_index_output";
 constexpr size_t NUM_INDEXER_THREADS = 16; // Should be then number of cores     // todo(Aiden): change depending on number of cores we end up renting per machine
 
