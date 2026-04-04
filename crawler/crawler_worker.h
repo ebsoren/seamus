@@ -27,7 +27,9 @@ inline void crawler_worker(DomainCarousel& dc, size_t carousel_left, size_t caro
     double batch_page_priority = 0;
 
     while (running) {
-        for (size_t carousel_index = carousel_left; running; carousel_index = (carousel_index < carousel_right) ? carousel_index + 1 : carousel_left) {
+        bool found_any = false;
+        auto min_ready_time = std::chrono::steady_clock::time_point::max();
+        for (size_t carousel_index = carousel_left; running && carousel_index <= carousel_right; carousel_index++) {
             // Try lock on the carousel slot - if contended, skip to next slot
             std::optional<CrawlTarget> target;
             {
@@ -43,23 +45,24 @@ inline void crawler_worker(DomainCarousel& dc, size_t carousel_left, size_t caro
                         target.emplace(std::move(slot.targets.front()));
                         slot.targets.pop_front();
                         slot.request_last_sent = now;
+                    } else {
+                        // Track when the earliest backed-off slot becomes ready
+                        auto ready_at = slot.request_last_sent + std::chrono::seconds(CRAWLER_BACKOFF_SEC);
+                        if (ready_at < min_ready_time) min_ready_time = ready_at;
                     }
                 }
             }
 
-            // Sleep if we couldn't acquire a target (empty slot or backoff not elapsed)
-            if (!target) {
-                std::this_thread::sleep_for(std::chrono::milliseconds(CRAWLER_WORKER_SLEEP_MS));
-                continue;
-            }
+            if (!target) continue;
+            found_any = true;
             logger::debug("Worker [%zu-%zu] pulled url: %s", carousel_left, carousel_right, target->url.data());
 
             // Only crawl HTTPS links
             if (target->url.size() < 8 || memcmp(target->url.data(), "https://", 8) != 0) continue;
 
             // Skip URLs we've already crawled
-            if (url_store->hasUrl(target->url)) {
-                logger::debug("Worker [%zu-%zu] skipping already seen url: %s", carousel_left, carousel_right, target->url.data());
+            if (url_store->hasCrawled(target->url)) {
+                logger::debug("Worker [%zu-%zu] skipping already crawled url: %s", carousel_left, carousel_right, target->url.data());
                 continue;
             }
 
@@ -75,11 +78,12 @@ inline void crawler_worker(DomainCarousel& dc, size_t carousel_left, size_t caro
             const char* slash = static_cast<const char*>(memchr(target->url.data() + 8, '/', target->url.size() - 8));
             const char* path = slash ? slash + 1 : "";
 
-            char body[MAX_HTML_SIZE];
-            ssize_t body_len = https_get(host.data(), path, body);
+            auto body = std::make_unique<char[]>(MAX_HTML_SIZE); // TODO : Switched to heap allocation due to stack overflow, switch back maybe?
+            ssize_t body_len = https_get(host.data(), path, body.get());
+            url_store->markCrawled(target->url);
             if (body_len > 0) {
                 logger::debug("Worker [%zu-%zu] received %zd bytes from %s", carousel_left, carousel_right, body_len, target->url.data());
-                parser->parse_page(body, static_cast<size_t>(body_len), target->seed_distance, target->domain_dist, target->url.data());
+                parser->parse_page(body.get(), static_cast<size_t>(body_len), target->seed_distance, target->domain_dist, target->url.data());
 
                 // Instrumentation calls after parsing
                 batch_count++;
@@ -93,6 +97,18 @@ inline void crawler_worker(DomainCarousel& dc, size_t carousel_left, size_t caro
                     batch_page_length = 0;
                     batch_page_priority = 0;
                 }
+            }
+        }
+        // Only sleep after a full scan found nothing to do
+        if (!found_any) {
+            if (min_ready_time != std::chrono::steady_clock::time_point::max()) {
+                // Sleep until the earliest backed-off slot is ready
+                auto wait = min_ready_time - std::chrono::steady_clock::now();
+                if (wait > std::chrono::milliseconds(0))
+                    std::this_thread::sleep_for(wait);
+            } else {
+                // All slots empty, no pending backoffs — use default sleep
+                std::this_thread::sleep_for(std::chrono::milliseconds(CRAWLER_WORKER_SLEEP_MS));
             }
         }
     }
