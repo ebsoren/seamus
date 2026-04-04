@@ -12,7 +12,7 @@ using std::endl;
 // Helper to clean up the test file so tests don't pollute each other across runs
 void cleanup_test_file(int worker_number) {
     // join natively accepts raw C-string literals, so this remains safe
-    string fileName = string::join("urlstore_", string(worker_number), ".txt");
+    string fileName = string::join("", "urlstore_", string(worker_number), ".txt");
     remove(fileName.data());
 }
 
@@ -98,7 +98,7 @@ void test_url_store_persistence() {
     store.persist();
     
     // Basic sanity check that the file can be opened
-    string fileName = string::join("urlstore_", string(URL_STORE_WORKER_NUMBER), ".txt");
+    string fileName = string::join("", "urlstore_", string(URL_STORE_WORKER_NUMBER), ".txt");
     string read_mode("r");
     FILE* fd = fopen(fileName.data(), read_mode.data());
     assert(fd != nullptr);
@@ -209,7 +209,7 @@ void test_url_store_concurrent_different_urls() {
     // Tests that the hash router and multiple shards can be accessed at the same time without crashing.
     for (int i = 0; i < num_threads; ++i) {
         threads.push_back(std::thread([&store, i]() {
-            string url(string::join("http://node-", string(i), ".com"));
+            string url(string::join("", "http://node-", string(i), ".com"));
             vector<string> anchors;
             anchors.push_back(string("unique link"));
             store.updateUrl(url, anchors, 1, 1, 1);
@@ -220,7 +220,7 @@ void test_url_store_concurrent_different_urls() {
 
     // Verify all URLs were safely inserted
     for (int i = 0; i < num_threads; ++i) {
-        string url(string::join("http://node-", string(i), ".com"));
+        string url(string::join("", "http://node-", string(i), ".com"));
         assert(store.getUrlNumEncountered(url) == 1);
     }
 
@@ -240,7 +240,7 @@ void test_url_store_concurrent_anchors() {
             string url("http://anchor-aggregator.com");
             vector<string> anchors;
             anchors.push_back(string("shared anchor"));
-            anchors.push_back(string::join("unique anchor ", string(i)));
+            anchors.push_back(string::join("", "unique anchor ", string(i)));
             
             store.updateUrl(url, anchors, 1, 1, 1);
         }));
@@ -330,8 +330,8 @@ void test_url_store_massive_stress() {
                 
                 // --- PHASE 2: Hammer the global router and map memory ---
                 // Every thread creates a globally unique URL, forcing the maps to constantly rehash and resize
-                string unique_url = string::join("http://unique-", string(i), "-", string(j), ".com");
-                string unique_anchor = string::join("anchor-", string(i), "-", string(j));
+                string unique_url = string::join("", "http://unique-", string(i), "-", string(j), ".com");
+                string unique_anchor = string::join("", "anchor-", string(i), "-", string(j));
                 
                 vector<string> unique_anchors;
                 unique_anchors.push_back(string(unique_anchor.data(), unique_anchor.size()));
@@ -369,8 +369,8 @@ void test_url_store_massive_stress() {
     assert(actual_encounters == expected_shared_encounters);
     
     // 2. Verify random unique URLs survived the map rehashing
-    string sample_unique_1 = string::join("http://unique-", string(static_cast<uint32_t>(0)), "-", string(ops_per_thread / 2), ".com");
-    string sample_unique_2 = string::join("http://unique-", string(num_threads - 1), "-", string(ops_per_thread - 1), ".com");
+    string sample_unique_1 = string::join("", "http://unique-", string(static_cast<uint32_t>(0)), "-", string(ops_per_thread / 2), ".com");
+    string sample_unique_2 = string::join("", "http://unique-", string(num_threads - 1), "-", string(ops_per_thread - 1), ".com");
     
     assert(store.getUrlNumEncountered(sample_unique_1) == 1);
     assert(store.getUrlNumEncountered(sample_unique_2) == 1);
