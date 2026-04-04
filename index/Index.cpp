@@ -7,16 +7,21 @@
 #include "lib/logger.h"
 
 
+string IndexChunk::get_index_chunk_path() const {
+    return string::join("", string(INDEX_OUTPUT_DIR), "/index_chunk_", string(WORKER_NUMBER), "_", string(chunk), ".txt");
+}
+
+
 IndexChunk::IndexChunk(uint32_t worker_number) : curr_doc_(1), chunk(0), posts_count(0), WORKER_NUMBER(worker_number){
     // Important: Init curr_doc_ to 1 to allow for 00 to be used as new doc flag
     // Find the latest chunk ID for this thread
-    while (file_exists(string::join("index_chunk_", string(WORKER_NUMBER), "_", string(chunk), ".txt"))) chunk++;
+    while (file_exists(get_index_chunk_path())) chunk++;
 }
 
 
 void IndexChunk::persist() {
     // Create a file (if it already exists, fail -- don't want to overwrite)
-    string path = string::join("index_chunk_", string(WORKER_NUMBER), "_", string(chunk), ".txt");
+    string path = get_index_chunk_path();
     FILE* fd = fopen(path.data(), "wx");
 
     if (fd == nullptr) perror("Error opening index chunk file for writing.");

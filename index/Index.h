@@ -31,6 +31,7 @@ private:
     vector<string> sort_entries();
     void persist();
     void reset();
+    string get_index_chunk_path() const;
 
 public:
 
