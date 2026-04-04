@@ -6,9 +6,28 @@
 deque<string> get_files(uint32_t worker_number) {
     // Fill the file queue
     deque<string> files;
-    uint32_t i = 0;
-    while (file_exists(string::join("parsed_docs_", string(NUM_CORES*i+worker_number), ".txt"))) {
-        files.push_back(string::join("parsed_docs_", string(NUM_CORES*(i++)+worker_number), ".txt"));
+    size_t i = 0;
+    while (true) {
+        bool file_found = false;
+        for (size_t parser = worker_number; parser < CRAWLER_THREADPOOL_SIZE; parser+=NUM_PARSER_THREADS) {
+            string file_name = string::join(
+                "",
+                string(PARSER_OUTPUT_DIR),
+                "/parser_",
+                string(i),
+                "_out_",
+                string(parser),
+                ".txt");
+
+            if (file_exists(file_name)) {
+                files.push_back(move(file_name));
+                file_found = true;
+            }
+        }
+        if (not file_found) {
+            return files;
+        };
+        i++;
     }
     return files;
 }
@@ -28,7 +47,7 @@ void worker(uint32_t worker_number) {
 
 int main(int argc, char* argv[]) {
     vector<std::thread> workers;
-    for (size_t i = 0; i < NUM_CORES; i++) {
+    for (size_t i = 0; i < NUM_PARSER_THREADS; i++) {
         workers.push_back(std::thread(worker, i));
     }
 
