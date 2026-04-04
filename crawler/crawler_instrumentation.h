@@ -65,6 +65,7 @@ private:
     vector<std::mutex> locks;
 
     std::atomic<uint64_t> documents_crawled{0};
+    uint64_t prev_documents_crawled{0};
     std::atomic<double> total_page_length{0};
     std::atomic<uint64_t> page_length_count{0};
     std::atomic<double> total_page_priority{0};
@@ -115,8 +116,13 @@ private:
             if (!running) break;
             process_metric_updates();
 
-            logger::info("Instrumentation | docs: %llu | avg page len: %.1f bytes | avg priority: %.2f",
-                get_documents_crawled(), get_avg_page_length(), get_avg_page_priority());
+            uint64_t current = get_documents_crawled();
+            uint64_t interval_docs = current - prev_documents_crawled;
+            double docs_per_sec = drain_interval_sec > 0 ? static_cast<double>(interval_docs) / drain_interval_sec : 0;
+            prev_documents_crawled = current;
+
+            logger::info("Instrumentation | total docs: %llu | docs/sec: %.1f | avg page len: %.1f bytes | avg priority: %.2f",
+                current, docs_per_sec, get_avg_page_length(), get_avg_page_priority());
         }
     }
 };
