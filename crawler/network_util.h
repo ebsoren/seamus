@@ -68,7 +68,7 @@ inline ssize_t https_get_once(const char *host, const char *path, char *body, ch
     }
 
     // Build GET request
-    char req[1024];
+    char req[4096];
     int req_len = snprintf(req, sizeof(req),
         "GET /%s HTTP/1.1\r\n"
         "Host: %s\r\n"
@@ -77,6 +77,13 @@ inline ssize_t https_get_once(const char *host, const char *path, char *body, ch
         "Accept-Encoding: identity\r\n"
         "Connection: close\r\n\r\n",
         path, host);
+
+    if (req_len < 0 || req_len >= (int)sizeof(req)) {
+        SSL_shutdown(ssl);
+        SSL_free(ssl);
+        close(sock);
+        return -1;
+    }
 
     int total_sent = 0;
     while (total_sent < req_len) {
