@@ -370,9 +370,9 @@ public:
         if (uniqueKeys < loading_factor * map_capacity) {
             return;
         }
-        // grow table by x2, if zero default to 256
+        // grow table to fit at the desired load factor
         size_t new_cap = std::bit_ceil(static_cast<size_t>(uniqueKeys / loading_factor));
-        new_cap = 256 > new_cap ? 256 : new_cap;
+        if (new_cap <= map_capacity) new_cap = map_capacity * 2;
 
         reallocate(new_cap);
     }

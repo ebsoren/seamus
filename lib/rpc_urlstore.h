@@ -22,7 +22,7 @@ struct AnchorData {
 };
 
 struct UrlData {
-    unordered_map<uint32_t, uint32_t> anchor_freqs;                     // anchor text id to frequency since its last update (potentially size >1)
+    unordered_map<uint32_t, uint32_t> anchor_freqs{8, 0.65};             // anchor text id to frequency since its last update (potentially size >1)
     uint32_t num_encountered;                            // Number of times this URL has been encountered
     uint16_t seed_distance;                              // Distance from seed list
     uint16_t domain_dist;                                // Domain distance from seed list TODO(charlie): implement this feature
