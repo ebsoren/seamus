@@ -18,8 +18,6 @@
 #include "crawler_instrumentation.h"
 
 
-static std::atomic<uint64_t> pages_crawled{0};
-
 // Runs in a detached thread, there are CRAWLER_THREADPOOL_SIZE concurrent instances of these
 // Monitors an interval [carousel_left, carousel_right] inclusive on the domain carousel
 // Makes network call to fetch HTML buffer -> parses -> persists to disk
@@ -80,10 +78,6 @@ inline void crawler_worker(DomainCarousel& dc, size_t carousel_left, size_t caro
             char body[MAX_HTML_SIZE];
             ssize_t body_len = https_get(host.data(), path, body);
             if (body_len > 0) {
-                uint64_t count = pages_crawled.fetch_add(1, std::memory_order_relaxed) + 1;
-                if (count % 10 == 0) {
-                    logger::info("Pages crawled: %lu", count);
-                }
                 logger::debug("Worker [%zu-%zu] received %zd bytes from %s", carousel_left, carousel_right, body_len, target->url.data());
                 parser->parse_page(body, static_cast<size_t>(body_len), target->seed_distance, target->domain_dist, target->url.data());
 
