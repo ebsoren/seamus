@@ -16,11 +16,11 @@
 
 static const int MAX_SIZE_BUCKET = 16777216;  
 
-bool is_digit(char c) {
+inline bool is_digit(char c) {
     return c >= '0' && c <= '9';
 }
 
-unordered_map<string,double> makeTldWeight() {
+inline unordered_map<string,double> makeTldWeight() {
     unordered_map<string, double> m(32);
 
     m.insert(string("gov"),1.2);
@@ -34,9 +34,9 @@ unordered_map<string,double> makeTldWeight() {
 
     return m;
 }
-unordered_map<string, double> tldWeight = makeTldWeight(); // factory function to avoid having to implement initializer lists lol
+inline unordered_map<string, double> tldWeight = makeTldWeight(); // factory function to avoid having to implement initializer lists lol
 
-double max(double i, double j) {
+inline double max(double i, double j) {
     if(i < j) {
         return j;
     } else {
@@ -44,12 +44,13 @@ double max(double i, double j) {
     }
 }
 
-int calcPriorityScore(const string& u, int seed_list_dist) {
+inline int calcPriorityScore(const string& u, int seed_list_dist) {
     // points for http or https however https > http
     double factor_1;
 
     string_view url = u.str_view(0, u.size());
 
+    if (url.size() < 8) return 0;
     if(url.substr(0,4) == "http") {
         if(url[4] == 's') {
             factor_1 = 1.0;
@@ -127,7 +128,7 @@ int calcPriorityScore(const string& u, int seed_list_dist) {
     return int((factor_1 * factor_2 * factor_3 * factor_4 * factor_5 * factor_6 * factor_7 * factor_8 * factor_9) * 1000000);
 }
 
-size_t get_priority_bucket(const string& url, int seed_list_dist) {
+inline size_t get_priority_bucket(const string& url, int seed_list_dist) {
     // TODO(Erik): write this function
     // 0 is the index of the highest priority bucket, PRIORITY_BUCKETS - 1 is the index of the lowest priority bucket
     // PRIORITY_BUCKETS defined in ~/lib/consts.h
