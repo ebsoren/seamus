@@ -33,6 +33,8 @@ struct UrlShard {
 class UrlStore {
 private:
     std::mutex global_mtx; // used when reading/modifying data like anchor_to_id
+    std::atomic<size_t> unique_url_count{0};
+    std::atomic<size_t> total_url_count{0};
     UrlShard shards[URL_NUM_SHARDS];
     unordered_map<string, size_t> anchor_to_id; // anchor text to corresponding id (index)
     vector<string> id_to_anchor;
@@ -156,6 +158,9 @@ public:
         const UrlData* it = us.findUrlData(url);
         return it ? it->eot <= word_pos && word_pos < it->eod : false;
     }
+
+    size_t distinct_urls() const { return unique_url_count.load(std::memory_order_relaxed); }
+    size_t seen_urls() const { return total_url_count.load(std::memory_order_relaxed); }
 };
 
 

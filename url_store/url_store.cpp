@@ -101,6 +101,7 @@ bool UrlStore::addUrl_unlocked(string& url, vector<string>& anchor_texts, const 
     // if url already exists, return false
     if (url_data.find(url) != url_data.end()) return false;
 
+    unique_url_count.fetch_add(1, std::memory_order_relaxed);
     url_data[url].num_encountered = num_encountered;
     url_data[url].seed_distance = seed_distance;
     url_data[url].domain_dist = domain_distance;
@@ -116,6 +117,7 @@ bool UrlStore::addUrl_unlocked(string& url, vector<string>& anchor_texts, const 
 
 // returns whether or not the url was new to the url_store
 bool UrlStore::updateUrl(string& url, vector<string>& anchor_texts, const uint16_t seed_distance, const uint16_t domain_distance, const uint32_t num_encountered) {
+    total_url_count.fetch_add(1, std::memory_order_relaxed);
     UrlShard& us = get_shard(url);
     std::lock_guard<std::mutex> lg(us.mtx);
     UrlData* url_data_ptr = us.findUrlData(url);
@@ -281,6 +283,7 @@ void UrlStore::readFromFile(const int worker_number) {
 
         UrlShard& shard = get_shard(url);
         auto& url_data = shard.url_data;
+        unique_url_count.fetch_add(1, std::memory_order_relaxed);
 
         fread(&url_data[url].num_encountered, sizeof(uint32_t), 1, fd);
         fread(&url_data[url].seed_distance, sizeof(uint16_t), 1, fd);

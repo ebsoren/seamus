@@ -11,6 +11,8 @@
 #include <thread>
 #include <condition_variable>
 
+#include "../url_store/url_store.h"
+
 
 enum class MetricType : uint8_t {
     DOCUMENTS_CRAWLED_ACCUMULATE,           // Accumulator for total # of documents crawled for the entirety of the crawler runtime
@@ -33,6 +35,8 @@ class CrawlerInstrumentation {
 public:
     CrawlerInstrumentation(size_t num_workers, size_t drain_interval_sec = CRAWLER_INSTRUMENTATION_INTERVAL_SEC)
         : drain_interval_sec(drain_interval_sec), queues(num_workers), locks(num_workers), start_time(std::chrono::steady_clock::now()) {}
+
+    void set_url_store(UrlStore* us) { url_store = us; }
 
     ~CrawlerInstrumentation() {
         running.store(false, std::memory_order_relaxed);
@@ -66,6 +70,8 @@ private:
 
     std::atomic<uint64_t> documents_crawled{0};
     uint64_t prev_documents_crawled{0};
+    size_t prev_urls_seen{0};
+    size_t prev_urls_distinct{0};
     std::atomic<double> total_page_length{0};
     std::atomic<uint64_t> page_length_count{0};
     std::atomic<double> total_page_priority{0};
@@ -75,6 +81,7 @@ private:
     std::condition_variable shutdown_cv;
     std::thread drain_thread;
     std::chrono::steady_clock::time_point start_time;
+    UrlStore* url_store = nullptr;
 
     void process_metric_updates() {
         for (size_t i = 0; i < queues.size(); i++) {
@@ -129,6 +136,19 @@ private:
 
             logger::info("Instrumentation | %02ld:%02ld:%02ld | total docs: %llu | docs/sec: %.1f | avg page len: %.1f bytes | avg priority: %.2f",
                 hrs, mins, secs, current, docs_per_sec, get_avg_page_length(), get_avg_page_priority());
+
+            if (url_store) {
+                size_t seen = url_store->seen_urls();
+                size_t distinct = url_store->distinct_urls();
+                size_t interval_seen = seen - prev_urls_seen;
+                size_t interval_distinct = distinct - prev_urls_distinct;
+                double total_per_sec = drain_interval_sec > 0 ? static_cast<double>(interval_seen) / drain_interval_sec : 0;
+                double new_per_sec = drain_interval_sec > 0 ? static_cast<double>(interval_distinct) / drain_interval_sec : 0;
+                prev_urls_seen = seen;
+                prev_urls_distinct = distinct;
+                logger::info("Instrumentation | total urls: %zu | total urls/sec: %.1f | distinct urls: %zu | new urls/sec: %.1f",
+                    seen, total_per_sec, distinct, new_per_sec);
+            }
         }
     }
 };
