@@ -44,13 +44,14 @@ inline void radix_sort(vector<string> &vec, size_t l, size_t h, size_t idx) {
         }
     }
 
-    // Recursively sort the 3 subarrays
-    radix_sort(vec, l, lt - 1, idx);
+    // Recursively sort the 3 subarrays (guard against unsigned underflow)
+    if (lt > l) radix_sort(vec, l, lt - 1, idx);
     radix_sort(vec, lt, gt, idx + 1); // This one is sorted by the next character
-    radix_sort(vec, gt + 1, h, idx);
+    if (gt + 1 <= h) radix_sort(vec, gt + 1, h, idx);
 }
 
 inline void radix_sort(vector<string> &vec) {
+    if (vec.size() <= 1) return;
     radix_sort(vec, 0, vec.size() - 1, 0);
 }
 
