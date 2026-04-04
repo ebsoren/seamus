@@ -371,7 +371,8 @@ void test_spawn_crawler_workers_consumes_and_stops() {
     }
 
     // Spawn workers
-    auto workers = spawn_crawler_workers(dc, running, 0);
+    CrawlerInstrumentation instrumentation(CRAWLER_THREADPOOL_SIZE);
+    auto workers = spawn_crawler_workers(dc, running, 0, &instrumentation);
 
     // Wait for workers to consume all targets
     std::this_thread::sleep_for(std::chrono::seconds(CRAWLER_BACKOFF_SEC + 3));

@@ -1,7 +1,9 @@
 #pragma once
 
+#include "crawler/bucket_manager.h"
 #include "cstddef"
 #include "domain_carousel.h"
+#include "lib/Frontier.h"
 #include "lib/consts.h"
 #include "lib/logger.h"
 #include "network_util.h"
@@ -13,6 +15,7 @@
 #include <thread>
 #include "../lib/vector.h"
 #include "url_store/url_store.h"
+#include "crawler_instrumentation.h"
 
 
 static std::atomic<uint64_t> pages_crawled{0};
@@ -20,7 +23,11 @@ static std::atomic<uint64_t> pages_crawled{0};
 // Runs in a detached thread, there are CRAWLER_THREADPOOL_SIZE concurrent instances of these
 // Monitors an interval [carousel_left, carousel_right] inclusive on the domain carousel
 // Makes network call to fetch HTML buffer -> parses -> persists to disk
-inline void crawler_worker(DomainCarousel& dc, size_t carousel_left, size_t carousel_right, std::atomic<bool>& running, HtmlParser* parser, RobotsManager* rm, UrlStore* url_store) {
+inline void crawler_worker(DomainCarousel& dc, size_t carousel_left, size_t carousel_right, std::atomic<bool>& running, HtmlParser* parser, RobotsManager* rm, UrlStore* url_store, size_t worker_id, CrawlerInstrumentation* instrumentation) {
+    size_t batch_count = 0;
+    double batch_page_length = 0;
+    double batch_page_priority = 0;
+
     while (running) {
         for (size_t carousel_index = carousel_left; running; carousel_index = (carousel_index < carousel_right) ? carousel_index + 1 : carousel_left) {
             // Try lock on the carousel slot - if contended, skip to next slot
@@ -79,10 +86,19 @@ inline void crawler_worker(DomainCarousel& dc, size_t carousel_left, size_t caro
                 }
                 logger::debug("Worker [%zu-%zu] received %zd bytes from %s", carousel_left, carousel_right, body_len, target->url.data());
                 parser->parse_page(body, static_cast<size_t>(body_len), target->seed_distance, target->domain_dist, target->url.data());
-            } else if (body_len == 0) {
-                logger::debug("Worker [%zu-%zu] received empty body from %s", carousel_left, carousel_right, target->url.data());
-            } else {
-                logger::debug("Worker [%zu-%zu] errored on %s", carousel_left, carousel_right, target->url.data());
+
+                // Instrumentation calls after parsing
+                batch_count++;
+                batch_page_length += static_cast<double>(body_len);
+                batch_page_priority += 0;                                           // todo(hershey): replace this placeholder with actual url priority function 
+                if (batch_count >= CRAWLER_INSTRUMENTATION_BATCH_SIZE) {
+                    instrumentation->submit(worker_id, {MetricType::DOCUMENTS_CRAWLED_ACCUMULATE, static_cast<double>(batch_count), 0});
+                    instrumentation->submit(worker_id, {MetricType::PAGE_LENGTH_AVERAGE, batch_page_length, static_cast<int>(batch_count)});
+                    instrumentation->submit(worker_id, {MetricType::PAGE_PRIORITY_AVERAGE, batch_page_priority, static_cast<int>(batch_count)});
+                    batch_count = 0;
+                    batch_page_length = 0;
+                    batch_page_priority = 0;
+                }
             }
         }
     }
@@ -91,7 +107,7 @@ inline void crawler_worker(DomainCarousel& dc, size_t carousel_left, size_t caro
 
 // Spawns CRAWLER_THREADPOOL_SIZE crawler worker threads, each monitoring an interval of the domain carousel
 // Returns the vector of threads so the caller can join them before exiting
-inline vector<std::thread> spawn_crawler_workers(DomainCarousel& dc, std::atomic<bool>& running, size_t machine_id) {
+inline vector<std::thread> spawn_crawler_workers(DomainCarousel& dc, std::atomic<bool>& running, size_t machine_id, CrawlerInstrumentation* instrumentation) {
     size_t interval_size = CRAWLER_CAROUSEL_SIZE / CRAWLER_THREADPOOL_SIZE;
     size_t curr_domain_left = 0;
     size_t curr_domain_right = interval_size - 1;
@@ -115,7 +131,7 @@ inline vector<std::thread> spawn_crawler_workers(DomainCarousel& dc, std::atomic
     vector<std::thread> workers;
     int i = 0;
     while (curr_domain_right < CRAWLER_CAROUSEL_SIZE) {
-        workers.push_back(std::thread(crawler_worker, std::ref(dc), curr_domain_left, curr_domain_right, std::ref(running), &parsers[i], &robot_managers[i], &url_store));
+        workers.push_back(std::thread(crawler_worker, std::ref(dc), curr_domain_left, curr_domain_right, std::ref(running), &parsers[i], &robot_managers[i], &url_store, static_cast<size_t>(i), instrumentation));
         curr_domain_left = curr_domain_right + 1;
         curr_domain_right = curr_domain_left + interval_size - 1;
         i++;

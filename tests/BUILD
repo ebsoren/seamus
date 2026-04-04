@@ -142,6 +142,14 @@ cc_test(
 )
 
 cc_test(
+    name = "instrumentation_test",
+    srcs = ["instrumentation_test.cpp"],
+    deps = [
+        "//crawler:crawler_lib",
+    ],
+)
+
+cc_test(
     name = "https_benchmark",
     srcs = ["https_benchmark.cpp"],
     deps = [
