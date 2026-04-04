@@ -12,6 +12,7 @@
 #include "priority_queue.h"
 #include "utils.h"
 #include "consts.h"
+#include "algorithm.h"
 #include <optional>
 
 static const int MAX_SIZE_BUCKET = 16777216;  
@@ -35,14 +36,6 @@ inline unordered_map<string,double> makeTldWeight() {
     return m;
 }
 inline unordered_map<string, double> tldWeight = makeTldWeight(); // factory function to avoid having to implement initializer lists lol
-
-inline double max(double i, double j) {
-    if(i < j) {
-        return j;
-    } else {
-        return i;
-    }
-}
 
 inline int calcPriorityScore(const string& u, int seed_list_dist) {
     // points for http or https however https > http

@@ -5,6 +5,7 @@
 #include "../lib/rpc_listener.h"
 #include "../lib/rpc_crawler.h"
 #include "../lib/consts.h"
+#include "../lib/Frontier.h"
 #include <thread>
 
 
@@ -30,7 +31,7 @@ public:
                 if (!batch) return;
 
                 for (size_t i = 0; i < batch->targets.size(); i++) {
-                    size_t bucket_idx = BucketManager::get_priority_bucket(batch->targets[i].url);
+                    size_t bucket_idx = get_priority_bucket(batch->targets[i].url, batch->targets[i].seed_distance);
                     auto& bucket = domain_carousel->buckets[bucket_idx];
                     std::lock_guard<std::mutex> lock(bucket.bucket_lock);
                     bucket.enqueue(static_cast<CrawlTarget&&>(batch->targets[i]));

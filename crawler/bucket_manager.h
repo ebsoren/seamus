@@ -47,15 +47,6 @@ public:
         }
     }
 
-
-    static size_t get_priority_bucket(const string& url) {
-        // TODO(hershey): delete this after Erik implements the same interface in Frontier, Frontier doesn't yet build and doesn't follow lib structure
-        // 0 is the index of the highest priority bucket, PRIORITY_BUCKETS - 1 is the index of the lowest priority bucket
-        // PRIORITY_BUCKETS defined in ~/lib/consts.h
-        return 0;
-    }
-
-
     // Sequentially spawns detached bucket manager routines (below)
     // Sleep 500ms between starting each routine:
     //      1) Load disk buckets into in-memory buckets

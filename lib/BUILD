@@ -14,7 +14,7 @@ cc_library(
     hdrs = ["Frontier.h"],
     visibility = ["//visibility:public"],
     deps = [
-        ":string", ":vector", ":priority_queue", ":unordered_map", ":consts"
+        ":string", ":vector", ":priority_queue", ":unordered_map", ":consts", ":algorithm",
     ],
 )
 

@@ -1,9 +1,11 @@
+#pragma once
+
 #include "string.h"
 #include "utils.h"
 #include "vector.h"
 
 template<class It, class T>
-bool binary_search(It first, It last, T& value) {
+inline bool binary_search(It first, It last, T& value) {
 
     while (first < last) {
         It mid = first + (last - first) / 2;
@@ -55,22 +57,20 @@ inline void radix_sort(vector<string> &vec) {
     radix_sort(vec, 0, vec.size() - 1, 0);
 }
 
-template <class T>
-constexpr const T& min(const T& a, const T& b) {
+template <typename T>
+inline constexpr const T& min(const T& a, const T& b) {
     // If b is strictly less than a, return b.
     // Otherwise, return a. 
     return (b < a) ? b : a;
 }
 
-template <class T>
-constexpr const T& max(const T& a, const T& b) {
-    // If b is strictly greater than a, return b.
-    // Otherwise, return a. 
-    return (b > a) ? b : a;
+template <typename T>
+inline constexpr const T& max(const T& a, const T& b) {
+    return (a < b) ? b : a;
 }
 
 template <class T>
-size_t partition(vector<T> &vec, size_t low, size_t high, bool (*comp)(const T&, const T&)) {
+inline size_t partition(vector<T> &vec, size_t low, size_t high, bool (*comp)(const T&, const T&)) {
     // std::sort often uses "Median-of-Three" for the pivot, but 
     // for now, we'll pick the middle element to avoid O(N^2) on sorted data.
     T pivot = move(vec[low + (high - low) / 2]);
@@ -91,7 +91,7 @@ size_t partition(vector<T> &vec, size_t low, size_t high, bool (*comp)(const T&,
 }
 
 template <class T>
-void quickSort(vector<T> &vec, size_t low, size_t high, bool (*comp)(const T&, const T&)) {
+inline void quickSort(vector<T> &vec, size_t low, size_t high, bool (*comp)(const T&, const T&)) {
     if (low < high) {
         size_t p = partition(vec, low, high, comp);
         quickSort(vec, low, p, comp);
@@ -100,7 +100,7 @@ void quickSort(vector<T> &vec, size_t low, size_t high, bool (*comp)(const T&, c
 }
 
 template <class T>
-void sort(vector<T> &vec, bool (*comp)(const T&, const T&)) {
+inline void sort(vector<T> &vec, bool (*comp)(const T&, const T&)) {
     if (vec.size() <= 1) return;
     quickSort(vec, 0, vec.size() - 1, comp);
 }
