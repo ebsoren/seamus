@@ -10,6 +10,7 @@
 #include "../lib/priority_queue.h"
 #include "../lib/utils.h"
 #include "../lib/consts.h"
+#include "../lib/logger.h"
 #include <optional>
 
 // struct WordPos {
@@ -22,14 +23,13 @@ struct RankedPage {
     string title;
     int seed_list_dist;
     int pages_from_seed; // unsure if we have infra in place for this 
-    int num_words_found_anchor;
-    int num_words_found_title;
-    int num_words_found_descr;
+    int num_unique_words_found_anchor;
+    int num_unique_words_found_title;
+    int num_unique_words_found_descr;
     int times_seen;
     vector<vector<size_t>> word_positions;
     size_t doc_len;
     size_t description_len;
-    double score;
 };
 
 struct LeanPage {
@@ -195,13 +195,30 @@ double word_pos_score(const vector<vector<size_t>> &positions, int unique_words_
     return normalized;
 }
 
-// TODO
+// PARAMETERS FOR THE FUNCTION. TUNE TO MAKE IT BETTER.
+const double e = 2.718; 
+const double k = 0.25; // this controls sharpness of the graph
+const double n_0 = 5; // this is where it equals 0.5
+const double Gamma = 0.5; 
 double calc_dynamic_score(RankedPage &r, size_t unique_words_in_query) {
-    double factor_1 = word_pos_score(r.word_positions, r.doc_len, unique_words_in_query);
+    // This factor checks frequency of unique words and proximity scores of the unique words to other unique words in the query 
+    double factor_1 = word_pos_score(r.word_positions, r.doc_len, unique_words_in_query); // this score should be given extra weight in calculations
 
-    double factor_2 = r.times_seen;
+    // This factor scores based on number of times the link was seen during crawling
+    double factor_2 = max(1.0 / (1.0 + double_pow(e, -k * (r.times_seen - n_0))), 0.2);
 
-    return(factor_1 * factor_2);
+    // This factor scores based on how many unique words in the query were found in the title but penalized on length of the title
+    double factor_3 = (r.num_unique_words_found_title / unique_words_in_query) * double_pow(e, (-Gamma * r.title.size()));
+
+    // This factor scores based on how many unique words in the query were found in the description but penalized on length of the description
+    double factor_4 = (r.num_unique_words_found_descr / unique_words_in_query) * double_pow(e, (-Gamma * r.description_len));
+
+    // This factor checks unique words in the query found in the anchor texts pointing to the link
+    // PROBABLY WANT TO ADD MORE TO THIS FACTOR ONCE I KNOW MORE ABOUT ANCHOR TEXT
+    double factor_5 = (r.num_unique_words_found_anchor / unique_words_in_query); 
+
+    // final score returned here with extra weightings 
+    return((factor_1 * 5) + factor_2 + factor_3 + factor_4 + factor_5);
 }
 
 // LeanPage input_total_score(RankedPage r, double dynamic_weight, size_t unique_words_in_query) {
@@ -215,23 +232,33 @@ struct RankedCompare {
 
     RankedCompare(double f, size_t s) : dynamic_weight(f), unique_words_in_query(s) {}
 
-    bool operator()(RankedPage a, RankedPage b) const {
+    bool operator()(LeanPage a, LeanPage b) const {
         return a.score < b.score; 
     }
 };
 
 class Ranker {
 private:
-    priority_queue<RankedPage, vector<RankedPage>, RankedCompare> pq;
+    priority_queue<LeanPage, vector<LeanPage>, RankedCompare> pq;
     double dynamic_weight;
     size_t unique_words_in_query;
     size_t size_lim;
+    bool verbose_mode;
 
 public:
-    Ranker(double dynamic_weight_init, size_t unique_words_in_query_init, size_t size_lim_init) : pq(RankedCompare(dynamic_weight_init, unique_words_in_query)), 
-        dynamic_weight(dynamic_weight_init), unique_words_in_query(unique_words_in_query_init), size_lim(size_lim_init) { }
+    Ranker(double dynamic_weight_init, size_t unique_words_in_query_init, size_t size_lim_init, bool verbose_init = false) : pq(RankedCompare(dynamic_weight_init, unique_words_in_query)), 
+        dynamic_weight(dynamic_weight_init), unique_words_in_query(unique_words_in_query_init), size_lim(size_lim_init), verbose_mode(verbose_init) { 
+        
+        if(verbose_mode) {
+            logger::debug("Ranker is initialized with size limit of %zu, dynamic weighting of %f, and unique words in query of %zu", 
+                size_lim_init, dynamic_weight_init, unique_words_in_query_init);
+        }
+    }
 
     void reset() {
+        if(verbose_mode) {
+            logger::debug("Ranker has cleared the pq and reset for next query");
+        }
         pq.clear();
     }
 
@@ -240,9 +267,13 @@ public:
         for(int i = 0; i < x; i++) {
             v.push_back(pq.pop_move());
         }
+        if(verbose_mode) {
+            logger::debug("Ranker is returning vector of %zu elements", v.size());
+        }
         return v;
     }
 
+    // FOR HIGHEST EFFECTIVENESS, LIST SHOULD COME ORDERED BY SEED LIST TO ENSURE MOST PROMISING LINKS ARE SEEN IF THERE ARE SIZE CONSTRAINTS
     void rank(vector<RankedPage> v) {
         auto end_it = v.end();
         // limit the amount of pages being ranked 
@@ -253,15 +284,21 @@ public:
                 break;
             } else {
                 double r_score = calc_static_score(v[i].url, v[i].seed_list_dist) * (1-dynamic_weight) + calc_dynamic_score(v[i], unique_words_in_query) * dynamic_weight;
+                if(verbose_mode) {
+                    logger::debug("The URL %s earned a score of: %.6f", v[i].url.data(), r_score);
+                }
                 input.push_back(LeanPage{std::move(v[i].url), std::move(v[i].title), r_score});
             }
         }
-        pq = priority_queue<RankedPage, vector<RankedPage>, RankedCompare>(
+        pq = priority_queue<LeanPage, vector<LeanPage>, RankedCompare>(
             v.begin(),
             end_it,
             RankedCompare(dynamic_weight, unique_words_in_query),
-            vector<RankedPage>()
+            vector<LeanPage>()
         );
+        if(verbose_mode) {
+            logger::debug("Ranker has finished ranking %zu elements", pq.size());
+        }
     }
 };
 
