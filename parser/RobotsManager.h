@@ -319,7 +319,8 @@ public:
 private:
     // 1. The Cache Structures
     size_t capacity;
-    
+    size_t current_size = 0;
+
     Node *head, *tail; // Dummy head and tail for LRU list
     unordered_map<string, Node*> cache_map;
     // Helper to perform the actual HTTP fetch and parse

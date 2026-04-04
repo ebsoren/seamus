@@ -816,7 +816,7 @@ RobotsManager::Node* RobotsManager::fetchAndParse(const string& domain) {
    auto it = cache_map.find(domain);
    if (it != cache_map.end()) return (*it).value;
 
-   if (cache_map.size() == capacity) {
+   if (current_size >= capacity) {
       Node* lru = tail->prev;
       lru->prev->next = tail;
       tail->prev = lru->prev;
@@ -824,7 +824,7 @@ RobotsManager::Node* RobotsManager::fetchAndParse(const string& domain) {
       cache_map.erase(lru->domain);
       delete lru->rules;
       delete lru;
-      capacity--;
+      current_size--;
    }
 
    // fetch robots.txt, parse and make node
@@ -853,6 +853,6 @@ RobotsManager::Node* RobotsManager::fetchAndParse(const string& domain) {
    head->next = node;
 
    cache_map[node->domain] = node;
-   capacity++;
+   current_size++;
    return node;
 }
