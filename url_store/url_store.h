@@ -40,6 +40,12 @@ private:
     vector<string> id_to_anchor;
 
     DefaultHash<string> hasher;
+
+    std::atomic<bool> running{true};
+    std::mutex shutdown_mtx;
+    std::condition_variable shutdown_cv;
+    std::thread persist_thread;
+
     UrlShard& get_shard(const string& url) {
         return shards[hasher(url) % URL_NUM_SHARDS];
     }
@@ -59,12 +65,21 @@ private:
     void client_handler(int fd);    // Detached handler for client requests
 
     bool addUrl_unlocked(string& url, vector<string>& anchor_texts, const uint16_t seed_distance, const uint16_t domain_distance, const uint32_t num_encountered);
-   // to read urlStore from disk after a crash, each worker thread will read from its corresponding files and update it's urlstore object accordingly
+    // to read urlStore from disk after a crash, each worker thread will read from its corresponding files and update it's urlstore object accordingly
     void readFromFile(const int worker_number);
+
+    void persist_store_thread() {
+        while (running) {
+            std::unique_lock<std::mutex> lock(shutdown_mtx);
+            shutdown_cv.wait_for(lock, std::chrono::seconds(CRAWLER_PERSIST_INTERVAL_SEC));
+            persist();
+        }
+    }
     
 public:
     UrlStore(DomainCarousel* dc, const int worker_num);
     ~UrlStore();
+
     void persist();
 
     // bool addUrl(string& url, vector<string>& anchor_texts, const uint16_t seed_distance, const uint16_t domain_distance, const uint16_t eot, const uint16_t eod, const uint32_t num_encountered);

@@ -13,11 +13,15 @@ UrlStore::UrlStore(DomainCarousel* dc, const int worker_num) : dc(dc) {
     listener_thread = std::thread([this]() {
         rpc_listener->listener_loop([this](int fd) { client_handler(fd); });
     });
+    persist_thread = std::thread(&UrlStore::persist_store_thread, this);
 }
 
 UrlStore::~UrlStore() {
+    running.store(false, std::memory_order_relaxed);
+    shutdown_cv.notify_all();
     rpc_listener->stop();
     if (listener_thread.joinable()) listener_thread.join();
+    if (persist_thread.joinable()) persist_thread.join();
     delete rpc_listener;
 }
 
@@ -178,13 +182,14 @@ For each URL:
 void UrlStore::persist() {
     string fileName = string::join("", "urlstore_", string(URL_STORE_WORKER_NUMBER), "_tmp.txt");
     string write_mode("wb");
-    FILE* fd = fopen(fileName.data(), write_mode.data());
+    FILE* fd = fopen(fileName, write_mode.data());
 
     if (fd == nullptr) perror("Error opening urlstore file for writing.");
     vector<string> anchor_snapshot;
 
     {
         std::lock_guard<std::mutex> lock(global_mtx);
+        // maybe check here if size constraint is met to persist, and exit early if not?
         anchor_snapshot.reserve(id_to_anchor.size());
         
         for (const string& anchor_text : id_to_anchor) {

@@ -70,7 +70,6 @@ static constexpr size_t MAX_BASE_LEN = 256;
 static constexpr size_t MAX_HTML_SIZE = 100 * 1024; // 100 KB
 
 // URL Store
-constexpr uint32_t URL_STORE_WORKER_NUMBER = 0;
 constexpr uint32_t URL_STORE_NUM_THREADS = 1;               // TODO(hershey/charlie): make url store thread safe and increase this number afterward
                                                             // We cannot have multiple client listeners running concurrently calling read and update methods without locks
                                                             // At the same time, we do want multiple listeners, so we should add some locking mechanism better than a global one
