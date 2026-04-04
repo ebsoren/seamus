@@ -100,6 +100,20 @@ public:
         return us.findUrlData(url) != nullptr;
     }
 
+    bool hasCrawled(const string& url) {
+        UrlShard& us = get_shard(url);
+        std::lock_guard<std::mutex> lock(us.mtx);
+        const UrlData* data = us.findUrlData(url);
+        return data && data->crawled;
+    }
+
+    void markCrawled(const string& url) {
+        UrlShard& us = get_shard(url);
+        std::lock_guard<std::mutex> lock(us.mtx);
+        UrlData* data = us.findUrlData(url);
+        if (data) data->crawled = true;
+    }
+
 
     uint32_t getUrlNumEncountered(const string& url) {
         UrlShard& us = get_shard(url);
