@@ -22,7 +22,7 @@ struct RankedPage {
     string url;
     string title;
     int seed_list_dist;
-    int pages_from_seed; // unsure if we have infra in place for this 
+    int domains_from_seed; // unsure if we have infra in place for this 
     int num_unique_words_found_anchor;
     int num_unique_words_found_title;
     int num_unique_words_found_descr;
