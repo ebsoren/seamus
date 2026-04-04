@@ -117,14 +117,12 @@ inline void crawler_worker(DomainCarousel& dc, size_t carousel_left, size_t caro
 
 // Spawns CRAWLER_THREADPOOL_SIZE crawler worker threads, each monitoring an interval of the domain carousel
 // Returns the vector of threads so the caller can join them before exiting
-inline vector<std::thread> spawn_crawler_workers(DomainCarousel& dc, std::atomic<bool>& running, size_t machine_id, CrawlerInstrumentation* instrumentation) {
+inline vector<std::thread> spawn_crawler_workers(DomainCarousel& dc, UrlStore& url_store, std::atomic<bool>& running, size_t machine_id, CrawlerInstrumentation& instrumentation) {
     size_t interval_size = CRAWLER_CAROUSEL_SIZE / CRAWLER_THREADPOOL_SIZE;
     size_t curr_domain_left = 0;
     size_t curr_domain_right = interval_size - 1;
 
-    // URL Store (static so it outlives the spawned threads)
-    static UrlStore url_store(&dc, my_machine_id());
-    logger::info("URL store listener started on port %u with %u threads", URL_STORE_PORT, URL_STORE_NUM_THREADS);
+    
 
     // Parsers and buffer managers
     static OutboundUrlBuffer outbound(machine_id, &url_store);
@@ -143,7 +141,7 @@ inline vector<std::thread> spawn_crawler_workers(DomainCarousel& dc, std::atomic
     vector<std::thread> workers;
     int i = 0;
     while (curr_domain_right < CRAWLER_CAROUSEL_SIZE) {
-        workers.push_back(std::thread(crawler_worker, std::ref(dc), curr_domain_left, curr_domain_right, std::ref(running), &parsers[i], &robot_managers[i], &url_store, static_cast<size_t>(i), instrumentation));
+        workers.push_back(std::thread(crawler_worker, std::ref(dc), curr_domain_left, curr_domain_right, std::ref(running), &parsers[i], &robot_managers[i], &url_store, static_cast<size_t>(i), &instrumentation));
         curr_domain_left = curr_domain_right + 1;
         curr_domain_right = curr_domain_left + interval_size - 1;
         i++;

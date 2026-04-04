@@ -56,9 +56,12 @@ int main() {
     instrumentation.start();
     logger::info("Crawler instrumentation started (drain interval: %zu sec)", CRAWLER_INSTRUMENTATION_INTERVAL_SEC);
 
+    UrlStore url_store(&dc, my_machine_id());
+    logger::info("URL store listener started on port %u with %u threads", URL_STORE_PORT, URL_STORE_NUM_THREADS);
+
     // Crawler workers (multiplexing domain carousel)
     std::atomic<bool> workers_running{true};
-    auto workers = spawn_crawler_workers(dc, workers_running, my_machine_id(), &instrumentation);
+    auto workers = spawn_crawler_workers(dc, url_store, workers_running, my_machine_id(), instrumentation);
     logger::info("Spawned %zu crawler workers", CRAWLER_THREADPOOL_SIZE);
 
     // Join all worker threads so stack objects stay alive
