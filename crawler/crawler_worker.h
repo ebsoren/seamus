@@ -136,7 +136,7 @@ inline vector<std::thread> spawn_crawler_workers(DomainCarousel& dc, UrlStore& u
     }
     logger::info("Spawned %u parsers and local URL buffers.", NUM_PARSERS);
 
-    instrumentation->set_url_store(&url_store);
+    instrumentation.set_url_store(&url_store);
 
     vector<std::thread> workers;
     int i = 0;

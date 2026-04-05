@@ -180,7 +180,7 @@ For each URL:
         For each list: <anchor_text id (32 bits)> <times seen (32 bits)>\n
 */
 void UrlStore::persist() {
-    string fileName = string::join("", "urlstore_", string(URL_STORE_WORKER_NUMBER), "_tmp.txt");
+    char fileName[] = "urlstore_tmp.txt";
     string write_mode("wb");
     FILE* fd = fopen(fileName, write_mode.data());
 
@@ -243,7 +243,8 @@ void UrlStore::persist() {
 
     fclose(fd);
 
-    int rc = rename(fileName.data(), string::join("", "urlstore_", string(URL_STORE_WORKER_NUMBER), ".txt").data());
+    char old_file[] = "urlstore.txt";
+    int rc = rename(fileName, old_file);
     if (rc != 0) {
         perror("Error renaming urlstore file");
     }
