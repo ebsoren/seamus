@@ -6,7 +6,7 @@
 
 
 // Logging (0=DEBUG, 1=INFO, 2=WARN, 3=ERROR, 4=NONE)
-constexpr uint8_t LOG_LEVEL = 1;
+constexpr uint8_t LOG_LEVEL = 3;
 constexpr const char* USER_AGENT = "Seamus the Search Engine (web crawler for university course)";
 
 // Global
@@ -79,7 +79,7 @@ constexpr uint32_t URL_STORE_MAX_ANCHOR_TEXT_LEN = 512;     // 0.5 KB max anchor
 constexpr size_t URL_NUM_SHARDS = 64;
 
 // Robots.txt Manager
-constexpr size_t ROBOTS_CACHE_SIZE = 256;
+constexpr size_t ROBOTS_CACHE_SIZE = 1024;
 
 
 // Indexer

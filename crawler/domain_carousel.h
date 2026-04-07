@@ -94,7 +94,7 @@ public:
                             backoff_queue.push_back(BackoffEntry{std::move(target), std::chrono::steady_clock::now()});
                         }
                     }
-                    return static_cast<int16_t>(plevel);
+                    continue;
                 }
             }
         }

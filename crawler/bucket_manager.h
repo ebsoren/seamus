@@ -93,7 +93,7 @@ public:
                 }
             }
 
-            std::this_thread::sleep_for(std::chrono::seconds(CRAWLER_FEED_INTERVAL_SEC));
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
         }
     }
 

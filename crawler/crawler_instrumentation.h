@@ -134,7 +134,7 @@ private:
             long mins = (elapsed % 3600) / 60;
             long secs = elapsed % 60;
 
-            logger::info("Instrumentation | %02ld:%02ld:%02ld | total docs: %llu | docs/sec: %.1f | avg page len: %.1f bytes | avg priority: %.2f",
+            logger::error("Instrumentation | %02ld:%02ld:%02ld | total docs: %llu | docs/sec: %.1f | avg page len: %.1f bytes | avg priority: %.2f",
                 hrs, mins, secs, current, docs_per_sec, get_avg_page_length(), get_avg_page_priority());
 
             if (url_store) {
@@ -146,7 +146,7 @@ private:
                 double new_per_sec = drain_interval_sec > 0 ? static_cast<double>(interval_distinct) / drain_interval_sec : 0;
                 prev_urls_seen = seen;
                 prev_urls_distinct = distinct;
-                logger::info("Instrumentation | total urls: %zu | total urls/sec: %.1f | distinct urls: %zu | new urls/sec: %.1f",
+                logger::error("Instrumentation | total urls: %zu | total urls/sec: %.1f | distinct urls: %zu | new urls/sec: %.1f",
                     seen, total_per_sec, distinct, new_per_sec);
             }
         }
