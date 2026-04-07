@@ -10,7 +10,7 @@ constexpr uint8_t LOG_LEVEL = 3;
 constexpr const char* USER_AGENT = "Seamus the Search Engine (web crawler for university course)";
 
 // Global
-constexpr size_t NUM_MACHINES = 1;                                  // todo(hershey): obviously, change when we deploy on more machines
+constexpr size_t NUM_MACHINES = 18;                                  // todo(hershey): obviously, change when we deploy on more machines
 constexpr const char* MACHINES[NUM_MACHINES] = {"127.0.0.1"};       // todo(hershey): replace localhost ip (127.0.0.1) with global ip of machines once we deploy on multiple machines -- store machine ID as an environment variable
 
 inline const char* get_machine_addr(size_t machine_id) {
@@ -28,7 +28,7 @@ inline const size_t my_machine_id() {
 // Crawler
 constexpr uint16_t CRAWLER_LISTENER_PORT = 8080;
 constexpr size_t CRAWLER_LISTENER_THREADS = 16;
-constexpr size_t CRAWLER_THREADPOOL_SIZE = 1<<10;
+constexpr size_t CRAWLER_THREADPOOL_SIZE = 1<<11;
 constexpr size_t CRAWLER_CAROUSEL_SIZE = CRAWLER_THREADPOOL_SIZE*16;
 static constexpr size_t CRAWLER_CAROUSEL_QUEUE_SIZE = 32;
 constexpr size_t CRAWLER_MAX_QUEUE_SIZE = 32;
