@@ -48,3 +48,8 @@ Remove all bazel caches (build server cache, test results, executables, symlinks
 ```bash
 bazel clean --expunge
 ```
+
+### Initial VM Setup (installs `bazel`, `openssl`, and clones monorepo)
+```bash
+curl -sL https://raw.githubusercontent.com/hershyz/seamus/main/scripts/vm_setup.sh | bash
+```
