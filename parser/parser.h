@@ -23,23 +23,32 @@ class HtmlParser {
 public:
     HtmlParser()
         : parser_id_(-1)
-        , url("") {}
+        , out_fd_(-1)
+        , url(""),
+        title("") {}
 
     HtmlParser(size_t parser_id, LocalUrlBuffer *url_buff, UrlStore *url_store)
         : parser_id_(parser_id)
-        , file_num_(0)
-        , url("")
+        , out_fd_(-1)
+        , url(""),
+        title("")
         , urlStore(url_store)
         , localBuffer(url_buff) {
-        init();
+        open_output_file();
+        setup_link_callback();
+    }
+
+    ~HtmlParser() {
+        if (out_fd_ >= 0) close(out_fd_);
     }
 
     HtmlParser &operator=(HtmlParser &&rhs) noexcept {
+        if (out_fd_ >= 0) close(out_fd_);
         parser_id_ = rhs.parser_id_;
-        file_num_ = rhs.file_num_;
         out_fd_ = rhs.out_fd_;
         rhs.out_fd_ = -1;
         url = string("");
+        title = string("");
         words.fd_ = out_fd_;
         localBuffer = rhs.localBuffer;
         urlStore = rhs.urlStore;
@@ -63,6 +72,7 @@ public:
         non_alnum_run_ = 0;
         in_a_ = false;
         in_title_ = false;
+        done_with_title_ = false;
         in_comment_ = false;
         in_discard_ = false;
         base_found_ = false;
@@ -112,10 +122,6 @@ public:
 
         // Reset links word array
         links.reset();
-
-        // Create a new file descriptor to write to
-        close(out_fd_);
-        init();
     }
 
     void inline write_headers() {
@@ -138,12 +144,12 @@ public:
     }
 
 private:
-    int out_fd_;
     size_t parser_id_;
-    size_t file_num_;
+    int out_fd_;
     uint16_t hops_;
     uint16_t domain_hops_;
     string url;
+    string title;
     buffer buf;
     char base[MAX_BASE_LEN] = {};
     size_t base_len = 0;
@@ -162,18 +168,17 @@ private:
         });
     }
 
-    inline void init() {
+    inline void open_output_file() {
         mkdir(PARSER_OUTPUT_DIR, 0755);   // no-op if already exists
         char file_name[128];
-        snprintf(file_name, sizeof(file_name), "%s/parser_%zu_out_%zu.txt", PARSER_OUTPUT_DIR, parser_id_, file_num_++);
+        snprintf(file_name, sizeof(file_name), "%s/parser_%zu_out.txt", PARSER_OUTPUT_DIR, parser_id_);
         out_fd_ = open(file_name, O_WRONLY | O_CREAT | O_TRUNC, 0644);
         if (out_fd_ < 0) {
-            logger::error("init: open failed for '%s' (errno=%d)", file_name, errno);
+            logger::error("open_output_file: open failed for '%s' (errno=%d)", file_name, errno);
         } else {
-            logger::info("init: fd %d -> '%s'", out_fd_, file_name);
+            logger::info("open_output_file: fd %d -> '%s'", out_fd_, file_name);
         }
         words.fd_ = out_fd_;
-        setup_link_callback();
     }
 
     // Internal parse that operates on the current buffer contents
@@ -274,6 +279,7 @@ private:
     // Persistent state
     bool in_a_ = false;         // in <a>
     bool in_title_ = false;     // in <title>
+    bool done_with_title_ = false;
     bool base_found_ = false;   // found base link
 
     // set to true if found MAX_CONSECUTIVE_NON_ALNUM non-alphanumeric characters in a row. Abort mission under the
@@ -297,8 +303,7 @@ private:
     }
 
     static bool comma_in_number(const char *p, const char *start, const char *end) {
-        return (*p == ',' || *p == '.')
-            && (p + 1 < end && *(p + 1) >= '0' && *(p + 1) <= '9')
+        return (*p == ',' || *p == '.') && (p + 1 < end && *(p + 1) >= '0' && *(p + 1) <= '9')
             && (p > start && *(p - 1) >= '0' && *(p - 1) <= '9');
     }
 
@@ -333,6 +338,9 @@ private:
                     // If a comma in between two ints, treat the whole number as a single word
                     !comma_in_number(p, buffer, end) ? words.push_back(word_start, word_len)
                                                      : words.push_back(word_start, word_len, NULL_DELIM);
+                    if (in_title_ && done_with_title_) {
+                        title = string::join(" ", title, string(word_start, word_len));
+                    }
                     num_words++;
                     word_start = ++p;
                 } else {   // Not tracking a word, just continue
@@ -371,6 +379,9 @@ private:
                         }
 
                         words.push_back(word_start, word_len);
+                        if (in_title_ && done_with_title_) {
+                            title = string::join(" ", title, string(word_start, word_len));
+                        }
                         num_words++;
                     }
                 }
@@ -388,6 +399,9 @@ private:
                         }
 
                         words.push_back(word_start, word_len);
+                        if (in_title_ && done_with_title_) {
+                            title = string::join(" ", title, string(word_start, word_len));
+                        }
                         num_words++;
                         word_start = ++p;
                     } else if (p < end)
@@ -401,6 +415,8 @@ private:
                     } else {
                         words.push_back("</title>", 8);
                         urlStore->updateTitleLen(string(url.data(), url.size()), num_words);
+                        urlStore->updateTitle(string(url.data(), url.size()), title);
+                        done_with_title_ = true;
                     }
 
                     while (p < end && *p != '>') p++;
@@ -466,10 +482,10 @@ private:
                                 if (p != end && p > a_start) {
                                     if (*a_start == '/') {
                                         // Relative link -- prepend scheme+host only
-                                        const char* s = url.data();
-                                        const char* s_end = s + url.size();
+                                        const char *s = url.data();
+                                        const char *s_end = s + url.size();
                                         while (s < s_end && *s != ':') s++;
-                                        if (s + 2 < s_end) s += 3; // skip "://"
+                                        if (s + 2 < s_end) s += 3;   // skip "://"
                                         while (s < s_end && *s != '/') s++;
                                         size_t host_len = s - url.data();
 
@@ -562,6 +578,9 @@ private:
                             links.case_convert(links.size() - (word_len + 1), links.size());
                         }
                         words.push_back(word_start, word_len);
+                        if (in_title_ && done_with_title_) {
+                            title = string::join(" ", title, string(word_start, word_len));
+                        }
                         num_words++;
                     }
                 }
@@ -593,6 +612,9 @@ private:
                     if (in_a_) {
                         links.push_back(word_start, p - word_start, SPACE_DELIM);
                         links.case_convert(links.size() - ((p - word_start) + 1), links.size());
+                    }
+                    if (in_title_ && done_with_title_) {
+                        title = string::join(" ", title, string(word_start, p - word_start));
                     }
                     num_words++;
                 }

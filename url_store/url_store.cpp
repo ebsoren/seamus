@@ -8,7 +8,8 @@
 
 
 UrlStore::UrlStore(DomainCarousel* dc, const int worker_num) : dc(dc) {
-    readFromFile(worker_num);
+    if (!URL_FROM_SCRATCH) readFromFile(worker_num);
+    
     rpc_listener = new RPCListener(URL_STORE_PORT, URL_STORE_NUM_THREADS);
     listener_thread = std::thread([this]() {
         rpc_listener->listener_loop([this](int fd) { client_handler(fd); });

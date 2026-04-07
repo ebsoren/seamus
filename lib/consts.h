@@ -15,7 +15,6 @@ constexpr const char* MACHINES[NUM_MACHINES] = {"127.0.0.1"};       // todo(hers
 
 inline const char* get_machine_addr(size_t machine_id) {
     // todo(hershey): once we deploy on multiple machines, check an environment variable here (e.g., self_id) and return localhost if machine_id == self_id
-
     assert(machine_id < NUM_MACHINES);
     return MACHINES[machine_id];
 }
@@ -58,7 +57,7 @@ constexpr const char* SEED_LIST[SEED_LIST_SIZE] = {
 
 
 // Parser
-static constexpr const char* PARSER_OUTPUT_DIR = "/tmp/seamus_parser_output";
+static constexpr const char* PARSER_OUTPUT_DIR = "/var/seamus/parser_output";
 static constexpr int MAX_CONSECUTIVE_NON_ALNUM = 100;
 static constexpr char RETURN_DELIM = '\r';
 static constexpr char NULL_DELIM = '\0';
@@ -70,7 +69,8 @@ static constexpr size_t MAX_BASE_LEN = 256;
 static constexpr size_t MAX_HTML_SIZE = 100 * 1024; // 100 KB
 
 // URL Store
-constexpr uint32_t URL_STORE_NUM_THREADS = 1;               // TODO(hershey/charlie): make url store thread safe and increase this number afterward
+constexpr bool URL_FROM_SCRATCH = false; // whether to read from file or start from scratch on url_store bottup
+constexpr uint32_t URL_STORE_NUM_THREADS = 16;
                                                             // We cannot have multiple client listeners running concurrently calling read and update methods without locks
                                                             // At the same time, we do want multiple listeners, so we should add some locking mechanism better than a global one
 constexpr uint32_t URL_STORE_PORT = 9000;
@@ -84,7 +84,7 @@ constexpr size_t ROBOTS_CACHE_SIZE = 256;
 
 // Indexer
 constexpr size_t INDEX_POSTS_COUNT_FLUSH_THRESHOLD = 1<<23;
-static constexpr const char* INDEX_OUTPUT_DIR = "/tmp/seamus_index_output";
+static constexpr const char* INDEX_OUTPUT_DIR = "/var/seamus/index_output";
 constexpr size_t NUM_INDEXER_THREADS = 16; // Should be then number of cores     // todo(Aiden): change depending on number of cores we end up renting per machine
 
 

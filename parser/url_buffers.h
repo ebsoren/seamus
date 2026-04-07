@@ -33,7 +33,7 @@ public:
     void add_url(size_t machine_id, URLStoreUpdateRequest&& target) {
         buffers[machine_id].push_back(move(target));
         if (buffers[machine_id].size() >= CRAWLER_OUTBOUND_BATCH_SIZE) {
-            logger::info("pushing urls to machine %zd", machine_id);
+            // logger::info("pushing urls to machine %zd", machine_id);
             flush(machine_id);
         }
     }
