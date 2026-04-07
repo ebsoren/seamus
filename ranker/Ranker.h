@@ -26,6 +26,7 @@ struct RankedPage {
     int num_unique_words_found_anchor;
     int num_unique_words_found_title;
     int num_unique_words_found_descr;
+    int num_unique_words_found_url;
     int times_seen;
     vector<vector<size_t>> word_positions;
     size_t doc_len;
@@ -67,22 +68,22 @@ double max(double i, double j) {
 }
 
 // basically the same function from the frontier. Maybe should modify some of the constants or get rid of some features here
+const double static_1_weight = 1.0;
+const double static_2_weight = 1.0;
+const double static_3_weight = 1.0;
+const double static_4_weight = 1.0;
+const double static_5_weight = 1.0;
+const double static_6_weight = 1.0;
+const double static_7_weight = 1.0;
+const double static_8_weight = 1.0;
+const double static_9_weight = 1.0;
+const double static_weight_sum = static_1_weight + static_2_weight + static_3_weight + static_4_weight + 
+    static_5_weight + static_6_weight + static_7_weight + static_8_weight + static_9_weight;
 double calc_static_score(const string& u, int seed_list_dist) {
-    // points for http or https however https > http
-    double factor_1;
+    
+    double factor_1; // add another factor here!
 
     string_view url = u.str_view(0, u.size());
-
-    if(url.substr(0,4) == "http") {
-        if(url[4] == 's') {
-            factor_1 = 1.0;
-        } else {
-            factor_1 = 0.6;
-        }
-    } else {
-        return 0.0;
-    }
-
     // points for certain desirable domains
 
     size_t start_pos = (factor_1 == 0.6) ? 7 : 8;
@@ -147,7 +148,7 @@ double calc_static_score(const string& u, int seed_list_dist) {
 
     double factor_9 = (qmarkfound) ? 0.75 : 1.0;
     
-    return (factor_1 * factor_2 * factor_3 * factor_4 * factor_5 * factor_6 * factor_7 * factor_8 * factor_9);
+    return(factor_1 * factor_2 * factor_3 * factor_4 * factor_5 * factor_6 * factor_7 * factor_8 * factor_9);
 }
 
 
@@ -199,7 +200,15 @@ double word_pos_score(const vector<vector<size_t>> &positions, int unique_words_
 const double e = 2.718; 
 const double k = 0.25; // this controls sharpness of the graph
 const double n_0 = 5; // this is where it equals 0.5
-const double Gamma = 0.5; 
+const double Gamma_url = 0.1; 
+const double Gamma_desc = 0.0005; 
+const double Gamma_title = 0.2; 
+const double factor_1_weight = 5.0;
+const double factor_2_weight = 1.0;
+const double factor_3_weight = 1.0;
+const double factor_4_weight = 1.0;
+const double factor_5_weight = 1.0;
+const double dynamic_weight_sum = factor_1_weight + factor_2_weight + factor_3_weight + factor_4_weight + factor_5_weight;
 double calc_dynamic_score(RankedPage &r, size_t unique_words_in_query) {
     // This factor checks frequency of unique words and proximity scores of the unique words to other unique words in the query 
     double factor_1 = word_pos_score(r.word_positions, r.doc_len, unique_words_in_query); // this score should be given extra weight in calculations
@@ -208,17 +217,21 @@ double calc_dynamic_score(RankedPage &r, size_t unique_words_in_query) {
     double factor_2 = max(1.0 / (1.0 + double_pow(e, -k * (r.times_seen - n_0))), 0.2);
 
     // This factor scores based on how many unique words in the query were found in the title but penalized on length of the title
-    double factor_3 = (r.num_unique_words_found_title / unique_words_in_query) * double_pow(e, (-Gamma * r.title.size()));
+    double factor_3 = (r.num_unique_words_found_title / unique_words_in_query) * double_pow(e, (-Gamma_title * r.title.size()));
 
     // This factor scores based on how many unique words in the query were found in the description but penalized on length of the description
-    double factor_4 = (r.num_unique_words_found_descr / unique_words_in_query) * double_pow(e, (-Gamma * r.description_len));
+    double factor_4 = (r.num_unique_words_found_descr / unique_words_in_query) * double_pow(e, (-Gamma_desc * r.description_len));
 
     // This factor checks unique words in the query found in the anchor texts pointing to the link
     // PROBABLY WANT TO ADD MORE TO THIS FACTOR ONCE I KNOW MORE ABOUT ANCHOR TEXT
     double factor_5 = (r.num_unique_words_found_anchor / unique_words_in_query); 
 
+    // This factor checks the URL for keywords in it
+    double factor_6 = (r.num_unique_words_found_url / unique_words_in_query) * double_pow(e, (-Gamma_url * r.url.size()));
+
     // final score returned here with extra weightings 
-    return((factor_1 * 5) + factor_2 + factor_3 + factor_4 + factor_5);
+    return(((factor_1 * factor_1_weight) + (factor_2 * factor_2_weight) + (factor_3 * factor_3_weight)
+         + (factor_4 * factor_4_weight) + (factor_5 * factor_5_weight)) / dynamic_weight_sum);
 }
 
 // LeanPage input_total_score(RankedPage r, double dynamic_weight, size_t unique_words_in_query) {
@@ -262,8 +275,8 @@ public:
         pq.clear();
     }
 
-    vector<RankedPage> get_top_x(int x) {
-        vector<RankedPage> v;
+    vector<LeanPage> get_top_x(int x) {
+        vector<LeanPage> v;
         for(int i = 0; i < x; i++) {
             v.push_back(pq.pop_move());
         }
