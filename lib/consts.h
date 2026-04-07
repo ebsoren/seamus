@@ -9,6 +9,9 @@
 constexpr uint8_t LOG_LEVEL = 3;
 constexpr const char* USER_AGENT = "Seamus the Search Engine (web crawler for university course)";
 
+static constexpr const char* VAR_DIR = "/var";
+static constexpr const char* SEAMUS_DIR = "/var/seamus";
+
 // Global
 constexpr size_t NUM_MACHINES = 1;                                  // todo(hershey): obviously, change when we deploy on more machines
 constexpr const char* MACHINES[NUM_MACHINES] = {"127.0.0.1"};       // todo(hershey): replace localhost ip (127.0.0.1) with global ip of machines once we deploy on multiple machines -- store machine ID as an environment variable
@@ -69,6 +72,8 @@ static constexpr size_t MAX_BASE_LEN = 256;
 static constexpr size_t MAX_HTML_SIZE = 100 * 1024; // 100 KB
 
 // URL Store
+static constexpr const char* URL_STORE_OUTPUT_DIR = "/var/seamus/urlstore_output";
+static const string URL_STORE_OUTPUT_DIR_STR = string(URL_STORE_OUTPUT_DIR);
 constexpr bool URL_FROM_SCRATCH = false; // whether to read from file or start from scratch on url_store bottup
 constexpr uint32_t URL_STORE_NUM_THREADS = 16;
                                                             // We cannot have multiple client listeners running concurrently calling read and update methods without locks

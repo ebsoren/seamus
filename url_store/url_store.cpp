@@ -4,6 +4,7 @@
 #include "../lib/utils.h"
 #include "../lib/algorithm.h"
 #include "../lib/Frontier.h"
+#include "../lib/logger.h"
 #include <optional>
 
 
@@ -14,6 +15,8 @@ UrlStore::UrlStore(DomainCarousel* dc, const int worker_num) : dc(dc) {
     listener_thread = std::thread([this]() {
         rpc_listener->listener_loop([this](int fd) { client_handler(fd); });
     });
+
+    mkdir(URL_STORE_OUTPUT_DIR, 0755);   // no-op if already exists
     persist_thread = std::thread(&UrlStore::persist_store_thread, this);
 }
 
@@ -181,9 +184,10 @@ For each URL:
         For each list: <anchor_text id (32 bits)> <times seen (32 bits)>\n
 */
 void UrlStore::persist() {
-    char fileName[] = "urlstore_tmp.txt";
+    logger::info("Persisting UrlStore to disk...");
+    string fileName = string::join("", URL_STORE_OUTPUT_DIR_STR, "/urlstore_tmp.txt");
     string write_mode("wb");
-    FILE* fd = fopen(fileName, write_mode.data());
+    FILE* fd = fopen(fileName.data(), write_mode.data());
 
     if (fd == nullptr) perror("Error opening urlstore file for writing.");
     vector<string> anchor_snapshot;
@@ -244,8 +248,8 @@ void UrlStore::persist() {
 
     fclose(fd);
 
-    char old_file[] = "urlstore.txt";
-    int rc = rename(fileName, old_file);
+    string final_file = string::join("", URL_STORE_OUTPUT_DIR_STR, "/urlstore.txt");
+    int rc = rename(fileName.data(), final_file.data());
     if (rc != 0) {
         perror("Error renaming urlstore file");
     }
@@ -257,7 +261,7 @@ void UrlStore::readFromFile(const int worker_number) {
     FILE* fd = fopen(fileName.data(), read_mode.data());
 
     if (fd == nullptr) {
-        perror("Error opening urlstore file for reading.");
+        logger::debug("Error opening urlstore file for reading.");
         return;
     }
 
