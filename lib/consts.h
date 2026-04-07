@@ -15,7 +15,6 @@ constexpr const char* MACHINES[NUM_MACHINES] = {"127.0.0.1"};       // todo(hers
 
 inline const char* get_machine_addr(size_t machine_id) {
     // todo(hershey): once we deploy on multiple machines, check an environment variable here (e.g., self_id) and return localhost if machine_id == self_id
-
     assert(machine_id < NUM_MACHINES);
     return MACHINES[machine_id];
 }
@@ -70,7 +69,8 @@ static constexpr size_t MAX_BASE_LEN = 256;
 static constexpr size_t MAX_HTML_SIZE = 100 * 1024; // 100 KB
 
 // URL Store
-constexpr uint32_t URL_STORE_NUM_THREADS = 1;               // TODO(hershey/charlie): make url store thread safe and increase this number afterward
+constexpr bool URL_FROM_SCRATCH = false; // whether to read from file or start from scratch on url_store bottup
+constexpr uint32_t URL_STORE_NUM_THREADS = 16;
                                                             // We cannot have multiple client listeners running concurrently calling read and update methods without locks
                                                             // At the same time, we do want multiple listeners, so we should add some locking mechanism better than a global one
 constexpr uint32_t URL_STORE_PORT = 9000;
