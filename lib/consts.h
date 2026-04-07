@@ -58,7 +58,7 @@ constexpr const char* SEED_LIST[SEED_LIST_SIZE] = {
 
 
 // Parser
-static constexpr const char* PARSER_OUTPUT_DIR = "/tmp/seamus_parser_output";
+static constexpr const char* PARSER_OUTPUT_DIR = "/var/seamus/parser_output";
 static constexpr int MAX_CONSECUTIVE_NON_ALNUM = 100;
 static constexpr char RETURN_DELIM = '\r';
 static constexpr char NULL_DELIM = '\0';
@@ -84,7 +84,7 @@ constexpr size_t ROBOTS_CACHE_SIZE = 256;
 
 // Indexer
 constexpr size_t INDEX_POSTS_COUNT_FLUSH_THRESHOLD = 1<<23;
-static constexpr const char* INDEX_OUTPUT_DIR = "/tmp/seamus_index_output";
+static constexpr const char* INDEX_OUTPUT_DIR = "/var/seamus/index_output";
 constexpr size_t NUM_INDEXER_THREADS = 16; // Should be then number of cores     // todo(Aiden): change depending on number of cores we end up renting per machine
 
 

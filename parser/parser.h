@@ -23,20 +23,26 @@ class HtmlParser {
 public:
     HtmlParser()
         : parser_id_(-1)
+        , out_fd_(-1)
         , url("") {}
 
     HtmlParser(size_t parser_id, LocalUrlBuffer *url_buff, UrlStore *url_store)
         : parser_id_(parser_id)
-        , file_num_(0)
+        , out_fd_(-1)
         , url("")
         , urlStore(url_store)
         , localBuffer(url_buff) {
-        init();
+        open_output_file();
+        setup_link_callback();
+    }
+
+    ~HtmlParser() {
+        if (out_fd_ >= 0) close(out_fd_);
     }
 
     HtmlParser &operator=(HtmlParser &&rhs) noexcept {
+        if (out_fd_ >= 0) close(out_fd_);
         parser_id_ = rhs.parser_id_;
-        file_num_ = rhs.file_num_;
         out_fd_ = rhs.out_fd_;
         rhs.out_fd_ = -1;
         url = string("");
@@ -112,10 +118,6 @@ public:
 
         // Reset links word array
         links.reset();
-
-        // Create a new file descriptor to write to
-        close(out_fd_);
-        init();
     }
 
     void inline write_headers() {
@@ -138,9 +140,8 @@ public:
     }
 
 private:
-    int out_fd_;
     size_t parser_id_;
-    size_t file_num_;
+    int out_fd_;
     uint16_t hops_;
     uint16_t domain_hops_;
     string url;
@@ -162,18 +163,17 @@ private:
         });
     }
 
-    inline void init() {
+    inline void open_output_file() {
         mkdir(PARSER_OUTPUT_DIR, 0755);   // no-op if already exists
         char file_name[128];
-        snprintf(file_name, sizeof(file_name), "%s/parser_%zu_out_%zu.txt", PARSER_OUTPUT_DIR, parser_id_, file_num_++);
+        snprintf(file_name, sizeof(file_name), "%s/parser_%zu_out.txt", PARSER_OUTPUT_DIR, parser_id_);
         out_fd_ = open(file_name, O_WRONLY | O_CREAT | O_TRUNC, 0644);
         if (out_fd_ < 0) {
-            logger::error("init: open failed for '%s' (errno=%d)", file_name, errno);
+            logger::error("open_output_file: open failed for '%s' (errno=%d)", file_name, errno);
         } else {
-            logger::info("init: fd %d -> '%s'", out_fd_, file_name);
+            logger::info("open_output_file: fd %d -> '%s'", out_fd_, file_name);
         }
         words.fd_ = out_fd_;
-        setup_link_callback();
     }
 
     // Internal parse that operates on the current buffer contents
