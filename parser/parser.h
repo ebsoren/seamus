@@ -127,8 +127,13 @@ public:
     void inline write_headers() {
         words.push_back("<doc>", 5);
         words.push_back(url.data(), url.size());
+        write_link_headers();
+    }
 
-        // Add hops info and domain to header in links so it can be easily accessed in URL manager
+    // Only writes the link-side header. Used by the link flush callback
+    // to start a fresh link batch without touching the words buffer, which
+    // is still in the middle of the current document.
+    void inline write_link_headers() {
         links.push_back("<doc>", 5);
         string hops_str(hops_);
         string dhops_str(domain_hops_);
@@ -164,7 +169,9 @@ private:
             links.push_docend();
             localBuffer->add_urls(arr);
             links.reset();
-            write_headers();
+            // Only reset the link-side header -- the words buffer is still
+            // mid-document and must not get a spurious <doc> marker.
+            write_link_headers();
         });
     }
 
