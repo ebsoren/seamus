@@ -192,7 +192,7 @@ void UrlStore::persist() {
     string write_mode("wb");
     FILE* fd = fopen(fileName.data(), write_mode.data());
 
-    if (fd == nullptr) perror("Error opening urlstore file for writing.");
+    if (fd == nullptr) { perror("Error opening urlstore file for writing."); return; }
     vector<string> anchor_snapshot;
 
     {

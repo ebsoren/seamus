@@ -215,13 +215,10 @@ private:
             if (url_updates[i].empty()) continue;
             vector<URLStoreUpdateRequest> batch = std::move(url_updates[i]);
             url_updates[i] = vector<URLStoreUpdateRequest>();
-            std::thread([this, i, b = std::move(batch)]() mutable {
-                outboundBuffer->locks[i].lock();
-                for (URLStoreUpdateRequest& req : b) {
-                    outboundBuffer->add_url(i, std::move(req));
-                }
-                outboundBuffer->locks[i].unlock();
-            }).detach();
+            std::lock_guard<std::mutex> lock(outboundBuffer->locks[i]);
+            for (URLStoreUpdateRequest& req : batch) {
+                outboundBuffer->add_url(i, std::move(req));
+            }
         }
     }
 };

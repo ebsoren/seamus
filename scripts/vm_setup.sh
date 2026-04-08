@@ -1,6 +1,9 @@
 #!/bin/bash
 set -e
 
+sudo mkdir -p /var/seamus/parser_output /var/seamus/index_output /var/seamus/urlstore_output
+sudo chmod 777 /var/seamus/parser_output /var/seamus/index_output /var/seamus/urlstore_output
+
 sudo apt update
 sudo apt install -y build-essential libssl-dev git npm
 sudo npm install -g @bazel/bazelisk
