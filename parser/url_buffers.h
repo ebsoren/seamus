@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <mutex>
+#include "lib/consts.h"
 #include "word_array.h"
 #include "../lib/logger.h"
 #include "../lib/rpc_urlstore.h"
@@ -60,7 +61,7 @@ private:
     void flush_async(size_t machine_id, BatchURLStoreUpdateRequest batch){
         const char* addr = get_machine_addr(machine_id);
         string host(addr, strlen(addr));
-        if (!send_batch_urlstore_update(host, CRAWLER_LISTENER_PORT, batch)) {
+        if (!send_batch_urlstore_update(host, URL_STORE_PORT, batch)) {
             logger::warn("Failed to send outbound batch to machine %zu (%s)", machine_id, addr);
         }
     }
