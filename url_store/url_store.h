@@ -90,7 +90,7 @@ public:
     bool updateTitle(const string& url, string& title);
     bool updateBodyLen(const string& url, const uint16_t eod);
 
-    size_t findAnchorId(string& anchor_text);
+    int findAnchorId(string& anchor_text, UrlData* url);
 
     vector<UrlAnchorData> getUrlAnchorInfo(const string& url) {
         UrlShard& us = get_shard(url);

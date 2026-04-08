@@ -89,11 +89,12 @@ void UrlStore::client_handler(int fd) {
 }
 
 
-size_t UrlStore::findAnchorId(string& anchor_text) {
+int UrlStore::findAnchorId(string& anchor_text, UrlData* url_data) {
     std::lock_guard<std::mutex> lock(global_mtx);
     auto it = anchor_to_id.find(anchor_text);
 
     if (it == anchor_to_id.end()) {
+        if (url_data && url_data->anchor_freqs.size() >= MAX_ANCHORS_PER_URL) return -1;
         anchor_to_id[string(anchor_text.data(), anchor_text.size())] = anchor_to_id.size();
         id_to_anchor.push_back(::move(anchor_text));
         return id_to_anchor.size() - 1;
@@ -115,7 +116,8 @@ bool UrlStore::addUrl_unlocked(string& url, vector<string>& anchor_texts, const 
     url_data[url].domain_dist = domain_distance;
 
     for (string& anchor_text : anchor_texts) {
-        uint32_t anchor_id = findAnchorId(anchor_text);
+        int anchor_id = findAnchorId(anchor_text, us.findUrlData(url));
+        if (anchor_id == -1) continue; // skip anchor text if url already has max anchors
         url_data[url].anchor_freqs[anchor_id] = 1;
     }
 
@@ -136,7 +138,8 @@ bool UrlStore::updateUrl(string& url, vector<string>& anchor_texts, const uint16
     url_data_ptr->domain_dist = min(url_data_ptr->domain_dist, domain_distance);
 
     for (string& anchor_text : anchor_texts) {
-        uint32_t anchor_id = findAnchorId(anchor_text);
+        int anchor_id = findAnchorId(anchor_text, url_data_ptr);
+        if (anchor_id == -1) continue; // skip anchor text if url already has max anchors
         url_data_ptr->anchor_freqs[anchor_id]++;
     }
 
