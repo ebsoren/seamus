@@ -270,7 +270,7 @@ bool IndexChunk::index_file(const string &path) {
 
     char buff[4096];
     char url[2048];
-    
+
     while (true) {
         // Set of words already encountered in the document to track number of documents word appears in
         unordered_map<string, bool> word_set;
@@ -278,17 +278,33 @@ bool IndexChunk::index_file(const string &path) {
         // Check doc header (or EOF between documents)
         if (!fgets(buff, sizeof(buff), fd)) break;
         if (strcmp(buff, "<doc>\n")) {
-            logger::error("Worker %u: expected <doc> header, got: %s in file: %s", WORKER_NUMBER, buff, path.data());
-            fclose(fd);
-            return false;
+            // Corrupt data -- scan forward for the next <doc> header instead of bailing on the file
+            logger::warn("Worker %u: expected <doc> header, got: %s in file: %s (scanning for next <doc>)", WORKER_NUMBER, buff, path.data());
+            while (fgets(buff, sizeof(buff), fd)) {
+                if (!strcmp(buff, "<doc>\n")) break;
+            }
+            if (feof(fd) || ferror(fd)) break;
         }
 
         // Read in the URL (will end with \n\0)
         if (!fgets(url, sizeof(url), fd)) break;
 
+        // Defensive: skip doc if URL line is empty or has no content
+        size_t url_len = strlen(url);
+        if (url_len == 0) {
+            logger::warn("Worker %u: empty URL line in file: %s (skipping doc)", WORKER_NUMBER, path.data());
+            continue;
+        }
+        // Strip trailing newline if present
+        size_t url_content_len = (url[url_len - 1] == '\n') ? url_len - 1 : url_len;
+        if (url_content_len == 0) {
+            logger::warn("Worker %u: blank URL in file: %s (skipping doc)", WORKER_NUMBER, path.data());
+            continue;
+        }
+
         // Increment the doc count
         uint32_t doc = curr_doc_++;
-        urls.push_back(string(url, strlen(url) - 1)); // -1 bc of \n at the end
+        urls.push_back(string(url, url_content_len));
 
         // Start a counter for word locations
         uint32_t loc = 0;
