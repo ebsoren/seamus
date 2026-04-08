@@ -11,6 +11,7 @@
 #include "../lib/utils.h"
 #include "../lib/consts.h"
 #include "../lib/logger.h"
+#include "ranker_consts.h"
 #include <optional>
 
 // struct WordPos {
@@ -67,23 +68,14 @@ double max(double i, double j) {
     }
 }
 
-// basically the same function from the frontier. Maybe should modify some of the constants or get rid of some features here
-const double static_1_weight = 1.0;
-const double static_2_weight = 1.0;
-const double static_3_weight = 1.0;
-const double static_4_weight = 1.0;
-const double static_5_weight = 1.0;
-const double static_6_weight = 1.0;
-const double static_7_weight = 1.0;
-const double static_8_weight = 1.0;
-const double static_9_weight = 1.0;
-const double static_weight_sum = static_1_weight + static_2_weight + static_3_weight + static_4_weight + 
-    static_5_weight + static_6_weight + static_7_weight + static_8_weight + static_9_weight;
-double calc_static_score(const string& u, int seed_list_dist) {
+// basically the same function from the frontier. I have modified and added certain things to increase acuracy I think . . .
+double calc_static_score(const RankedPage &p) {
     
-    double factor_1; // add another factor here!
+    // domains from seed list is potentially more important that seed list distance itself 
 
-    string_view url = u.str_view(0, u.size());
+    double factor_1 = max(double_pow(e, -0.08 * p.domains_from_seed), 0.2);  // NOTE: may need to tune the constant here
+
+    string_view url = p.url.str_view(0, p.url.size());
     // points for certain desirable domains
 
     size_t start_pos = (factor_1 == 0.6) ? 7 : 8;
@@ -121,16 +113,14 @@ double calc_static_score(const string& u, int seed_list_dist) {
     }
     string_view extension = (url.substr(start, len_ext));
     auto slot = tldWeight.find(extension);
-    double factor_2 = (slot == tldWeight.end()) ? 0.6 : (*slot).value; 
+    double factor_2 = (slot == tldWeight.end()) ? 0.2 : (*slot).value; 
 
     // points for closer to seed list
-
-    const double e = 2.718;
-    double factor_3 = max(double_pow(e, -0.04 * seed_list_dist), 0.4);  // NOTE: may need to tune the constant here
+    double factor_3 = max(double_pow(e, -0.04 * p.seed_list_dist), 0.2);  // NOTE: may need to tune the constant here
 
     // points for shortness of domain title
 
-    double factor_4 = max((50.0 - domain_size) / 50.0, 0.5);
+    double factor_4 = max((50.0 - domain_size) / 50.0, 0.2);
 
     // points for less subdomains
 
@@ -142,13 +132,25 @@ double calc_static_score(const string& u, int seed_list_dist) {
 
     // points for shortness of overall url
 
-    double factor_7 = max((150.0 - url.size()) / 100.0, 0.5);
+    double factor_7 = max((150.0 - url.size()) / 100.0, 0.2);
 
-    double factor_8 = max(1.0 - 0.1 * path_depth, 0.4);
+    // penalizes the path depth of the link based on something like x.com/this/that/these/those
 
-    double factor_9 = (qmarkfound) ? 0.75 : 1.0;
+    double factor_8 = max(1.0 - 0.1 * path_depth, 0.2);
+
+    // apparently a question mark in a link is kind of a bad thing? 
+
+    double factor_9 = (qmarkfound) ? 0.0 : 1.0;
     
-    return(factor_1 * factor_2 * factor_3 * factor_4 * factor_5 * factor_6 * factor_7 * factor_8 * factor_9);
+    return(((factor_1 * static_1_weight) + 
+        (factor_2 * static_2_weight) + 
+        (factor_3 * static_3_weight) + 
+        (factor_4 * static_4_weight) + 
+        (factor_5 * static_5_weight) +
+        (factor_6 * static_6_weight) + 
+        (factor_7 * static_7_weight) + 
+        (factor_8 * static_8_weight) + 
+        (factor_9 * static_9_weight)) / static_weight_sum);
 }
 
 
@@ -196,19 +198,6 @@ double word_pos_score(const vector<vector<size_t>> &positions, int unique_words_
     return normalized;
 }
 
-// PARAMETERS FOR THE FUNCTION. TUNE TO MAKE IT BETTER.
-const double e = 2.718; 
-const double k = 0.25; // this controls sharpness of the graph
-const double n_0 = 5; // this is where it equals 0.5
-const double Gamma_url = 0.1; 
-const double Gamma_desc = 0.0005; 
-const double Gamma_title = 0.2; 
-const double factor_1_weight = 5.0;
-const double factor_2_weight = 1.0;
-const double factor_3_weight = 1.0;
-const double factor_4_weight = 1.0;
-const double factor_5_weight = 1.0;
-const double dynamic_weight_sum = factor_1_weight + factor_2_weight + factor_3_weight + factor_4_weight + factor_5_weight;
 double calc_dynamic_score(RankedPage &r, size_t unique_words_in_query) {
     // This factor checks frequency of unique words and proximity scores of the unique words to other unique words in the query 
     double factor_1 = word_pos_score(r.word_positions, r.doc_len, unique_words_in_query); // this score should be given extra weight in calculations
@@ -275,6 +264,13 @@ public:
         pq.clear();
     }
 
+    void change_words_in_query(size_t num_words) {
+        unique_words_in_query = num_words;
+        if(verbose_mode) {
+            logger::debug("Ranker has been changed to serving an amount of %zu unique words in the query", num_words);
+        }
+    }
+
     vector<LeanPage> get_top_x(int x) {
         vector<LeanPage> v;
         for(int i = 0; i < x; i++) {
@@ -296,11 +292,15 @@ public:
                 end_it = v.begin() + i;
                 break;
             } else {
-                double r_score = calc_static_score(v[i].url, v[i].seed_list_dist) * (1-dynamic_weight) + calc_dynamic_score(v[i], unique_words_in_query) * dynamic_weight;
+                
+                input.push_back(LeanPage{std::move(v[i].url), 
+                    std::move(v[i].title), 
+                    (calc_static_score(v[i]) * (1-dynamic_weight) + 
+                    calc_dynamic_score(v[i], unique_words_in_query) * dynamic_weight)});
                 if(verbose_mode) {
+                    double r_score = calc_static_score(v[i]) * (1-dynamic_weight) + calc_dynamic_score(v[i], unique_words_in_query) * dynamic_weight;
                     logger::debug("The URL %s earned a score of: %.6f", v[i].url.data(), r_score);
                 }
-                input.push_back(LeanPage{std::move(v[i].url), std::move(v[i].title), r_score});
             }
         }
         pq = priority_queue<LeanPage, vector<LeanPage>, RankedCompare>(
