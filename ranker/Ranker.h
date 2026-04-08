@@ -248,7 +248,7 @@ private:
     bool verbose_mode;
 
 public:
-    Ranker(double dynamic_weight_init, size_t unique_words_in_query_init, size_t size_lim_init, bool verbose_init = false) : pq(RankedCompare(dynamic_weight_init, unique_words_in_query)), 
+    Ranker(size_t unique_words_in_query_init, size_t size_lim_init, double dynamic_weight_init = DEFAULT_DYNAMIC_WEIGHT, bool verbose_init = false) : pq(RankedCompare(dynamic_weight_init, unique_words_in_query)), 
         dynamic_weight(dynamic_weight_init), unique_words_in_query(unique_words_in_query_init), size_lim(size_lim_init), verbose_mode(verbose_init) { 
         
         if(verbose_mode) {

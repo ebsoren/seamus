@@ -31,3 +31,7 @@ constexpr double static_8_weight = 1.0;
 constexpr double static_9_weight = 1.0;
 constexpr double static_weight_sum = static_1_weight + static_2_weight + static_3_weight + static_4_weight + 
     static_5_weight + static_6_weight + static_7_weight + static_8_weight + static_9_weight;
+
+
+// PARAM FOR DYNAMIC VS STATIC WEIGHTING
+constexpr double DEFAULT_DYNAMIC_WEIGHT = 0.67;
