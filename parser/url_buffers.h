@@ -152,6 +152,11 @@ public:
                     ok = false;
                     break;
                 }
+
+                if (p - word_start == 6 && memcmp(word_start, "</doc>", 6) == 0) {
+                    p = word_start; // rewind so the outer loop sees </doc>
+                    break;
+                }
                 string url(word_start, p - word_start);
                 uint16_t dhop = extract_domain(url) != domain ? 1 : 0;
                 vector<string> anchor_words;
@@ -160,7 +165,7 @@ public:
                 p++;
                 while (p < end && *p != '\n') {
                     word_start = p;
-                    while (p < end && *p != ' ') p++;
+                    while (p < end && *p != ' ' && *p != '\n') p++;
                     if (p > word_start) {
                         anchor_words.push_back(string(word_start, p - word_start));
                     }
@@ -190,6 +195,8 @@ public:
             if (!ok) break;
 
             if (p + 6 > end) {
+                if (p >= urls.data() + 7 && memcmp(p - 7, "</doc>\n", 7) == 0)
+                    break;
                 logger::warn("add_urls: truncated data, missing </doc> tag");
                 ok = false;
                 break;

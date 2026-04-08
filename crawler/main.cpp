@@ -40,8 +40,9 @@ int main() {
     for (size_t i = 0; i < bucket_files.size(); ++i) {
         logger::info("  bucket[%zu] = %.*s", i, static_cast<int>(bucket_files[i].size()), bucket_files[i].data());
     }
+    size_t num_bucket_files = bucket_files.size();
     BucketManager bm(static_cast<vector<string>&&>(bucket_files), &dc);
-    logger::info("Initialized %zu bucket files:", bucket_files.size());
+    logger::info("Initialized %zu bucket files:", num_bucket_files);
     bm.load_disk_buckets();
     logger::info("Loaded disk buckets into memory");
     bm.start();

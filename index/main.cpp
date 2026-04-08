@@ -4,31 +4,20 @@
 
 
 deque<string> get_files(uint32_t worker_number) {
-    // Fill the file queue
+    // Fill the file queue: stripe parser files across indexer workers
     deque<string> files;
-    size_t i = 0;
-    while (true) {
-        bool file_found = false;
-        for (size_t parser = worker_number; parser < CRAWLER_THREADPOOL_SIZE; parser+=NUM_INDEXER_THREADS) {
-            string file_name = string::join(
-                "",
-                string(PARSER_OUTPUT_DIR),
-                "/parser_",
-                string(i),
-                "_out_",
-                string(parser),
-                ".txt");
+    for (size_t parser = worker_number; parser < CRAWLER_THREADPOOL_SIZE; parser += NUM_INDEXER_THREADS) {
+        string file_name = string::join(
+            "",
+            string(PARSER_OUTPUT_DIR),
+            "/parser_",
+            string(parser),
+            "_out.txt");
 
-            if (file_exists(file_name)) {
-                files.push_back(move(file_name));
-                file_found = true;
-                logger::info("Index worker %u found file %s", worker_number, file_name.data());
-            }
+        if (file_exists(file_name)) {
+            files.push_back(move(file_name));
+            logger::info("Index worker %u found file %s", worker_number, file_name.data());
         }
-        if (not file_found) {
-            return files;
-        };
-        i++;
     }
     return files;
 }

@@ -539,6 +539,7 @@ private:
                             while (p < end && *p != '"') p++;
 
                             links.push_back(embed_start, p - embed_start);
+
                         } else
                             p++;
                     }
