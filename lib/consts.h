@@ -42,7 +42,7 @@ constexpr size_t CRAWLER_WORKER_SLEEP_MS = 10;              // Time (millisecond
 constexpr size_t CRAWLER_INSTRUMENTATION_INTERVAL_SEC = 20; // Time (seconds) between instrumentation drain cycles
 constexpr size_t CRAWLER_INSTRUMENTATION_BATCH_SIZE = 1;    // Number of successful crawls before submitting a batched metric update
 
-constexpr size_t CRAWLER_OUTBOUND_BATCH_SIZE = 100;         // Number of crawl targets to buffer per machine before sending
+constexpr size_t CRAWLER_OUTBOUND_BATCH_SIZE = 1<<13;         // Number of crawl targets to buffer per machine before sending
 constexpr size_t PRIORITY_BUCKETS = 8;
 constexpr size_t NUM_PARSERS = CRAWLER_THREADPOOL_SIZE;
 static_assert(NUM_PARSERS == CRAWLER_THREADPOOL_SIZE);      // TODO(hershey): make sure this assumption is valid
