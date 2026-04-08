@@ -1,6 +1,7 @@
 #include "../url_store/url_store.h"
 #include "../crawler/domain_carousel.h"
 #include "../lib/rpc_urlstore.h"
+#include "../lib/consts.h"
 #include <iostream>
 #include <cassert>
 #include <chrono>
@@ -9,10 +10,12 @@
 using std::cout;
 using std::endl;
 
+const int URL_STORE_WORKER_NUMBER = 0;
+
 // Helper to clean up the test file so tests don't pollute each other across runs
 void cleanup_test_file(int worker_number) {
     // join natively accepts raw C-string literals, so this remains safe
-    string fileName = string::join("", "urlstore_", string(worker_number), ".txt");
+    string fileName = string::join("", URL_STORE_OUTPUT_DIR_STR, "/urlstore.txt");
     remove(fileName.data());
 }
 
@@ -98,7 +101,7 @@ void test_url_store_persistence() {
     store.persist();
     
     // Basic sanity check that the file can be opened
-    string fileName = string::join("", "urlstore_", string(URL_STORE_WORKER_NUMBER), ".txt");
+    string fileName = string::join("", URL_STORE_OUTPUT_DIR_STR, "/urlstore.txt");
     string read_mode("r");
     FILE* fd = fopen(fileName.data(), read_mode.data());
     assert(fd != nullptr);

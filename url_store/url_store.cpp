@@ -256,7 +256,7 @@ void UrlStore::persist() {
 }
 
 void UrlStore::readFromFile(const int worker_number) {
-    string fileName = string::join("", "urlstore_", string(worker_number), ".txt");
+    string fileName = string::join("", URL_STORE_OUTPUT_DIR_STR, "/urlstore.txt");
     string read_mode("rb");
     FILE* fd = fopen(fileName.data(), read_mode.data());
 
