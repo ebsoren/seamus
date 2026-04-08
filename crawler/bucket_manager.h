@@ -6,6 +6,7 @@
 #include "../lib/rpc_crawler.h"
 #include "lib/consts.h"
 #include "domain_carousel.h"
+#include "lib/logger.h"
 #include "lib/utils.h"
 #include <cassert>
 #include <atomic>
@@ -74,7 +75,10 @@ public:
     void feed_carousel_worker() {
         while (running) {
             // Move crawl targets from priority buckets into the carousel
-            dc->feed_carousel_from_highest_priority_bucket(backoff_lock, backoff_queue);
+            int16_t domain_carousel_res = dc->feed_carousel_from_highest_priority_bucket(backoff_lock, backoff_queue);
+            if (domain_carousel_res == -1) {
+                logger::warn("feed_carousel_worker found no CrawlTargets in all priority buckets");
+            }
 
             // Move crawl targets from the backoff queue into the carousel, breaks once we encounter an item that has not been on the backoff queue for long enough (FIFO order)
             {
