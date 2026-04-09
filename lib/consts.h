@@ -28,7 +28,7 @@ inline const size_t my_machine_id() {
 // Crawler
 constexpr uint16_t CRAWLER_LISTENER_PORT = 8080;
 constexpr size_t CRAWLER_LISTENER_THREADS = 16;
-constexpr size_t CRAWLER_THREADPOOL_SIZE = 1<<9;
+constexpr size_t CRAWLER_THREADPOOL_SIZE = 1<<10;
 constexpr size_t CRAWLER_CAROUSEL_SIZE = CRAWLER_THREADPOOL_SIZE*16;
 static constexpr size_t CRAWLER_CAROUSEL_QUEUE_SIZE = 32;
 constexpr size_t CRAWLER_MAX_QUEUE_SIZE = 32;

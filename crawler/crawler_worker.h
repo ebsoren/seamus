@@ -6,6 +6,7 @@
 #include "lib/Frontier.h"
 #include "lib/consts.h"
 #include "lib/logger.h"
+#include "lib/url_filter.h"
 #include "network_util.h"
 #include "parser/parser.h"
 #include "parser/RobotsManager.h"
@@ -59,6 +60,12 @@ inline void crawler_worker(DomainCarousel& dc, size_t carousel_left, size_t caro
 
             // Only crawl HTTPS links
             if (target->url.size() < 8 || memcmp(target->url.data(), "https://", 8) != 0) continue;
+
+            // Skip NSFW URLs
+            if (is_nsfw_url(target->url)) {
+                logger::debug("Worker [%zu-%zu] skipping NSFW url: %s", carousel_left, carousel_right, target->url.data());
+                continue;
+            }
 
             // Skip URLs we've already crawled
             if (url_store->hasCrawled(target->url)) {

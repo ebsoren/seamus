@@ -150,3 +150,10 @@ cc_library(
     visibility = ["//visibility:public"],
     deps = [":consts"],
 )
+
+cc_library(
+    name = "url_filter",
+    hdrs = ["url_filter.h"],
+    visibility = ["//visibility:public"],
+    deps = [":string"],
+)
