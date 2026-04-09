@@ -99,8 +99,6 @@ void IndexChunk::persist() {
         postings& entry = index[alphabetized_entries[i].str_view(0, alphabetized_entries[i].size())];
         uint32_t num_docs = entry.posts[0].doc == 0 ? 1 : 0;
 
-        uint32_t next_checkpoint = INDEX_SKIP_SIZE;
-
         for (post p : entry.posts) {
             // Utf8 encoding size of loc offset (no delimiters)
             uint64_t post_size = SizeOfUtf8(p.loc - last_loc);
@@ -157,6 +155,7 @@ void IndexChunk::persist() {
     for (uint32_t i = 0; i < N; i++) {
         postings& entry = index[alphabetized_entries[i].str_view(0, alphabetized_entries[i].size())];
         uint64_t size = entry.posts.size(); // Needs to be an lvalue for fwrite
+        uint32_t next_checkpoint = INDEX_SKIP_SIZE;
 
         // Write the number of occurrences and documents
         // <64b NUM POSTS> <64b NUM DOCS>\n
@@ -172,24 +171,36 @@ void IndexChunk::persist() {
             uint32_t scan_last_loc = 0;
             uint64_t scan_offset = 0;
 
-            // TODO: Rewrite this now that we're using INDEX_SKIP_SIZE
             for (size_t pi = 0; pi < entry.posts.size(); ++pi) {
                 post p = entry.posts[pi];
-                uint64_t post_size = SizeOfUtf8(p.loc - scan_last_loc);
+                uint64_t post_size = 0;
 
                 if (p.doc > scan_last_doc) {
                     post_size += 1 + SizeOfUtf8(p.doc - scan_last_doc);
                     scan_last_doc = p.doc;
                     scan_last_loc = 0;
 
+                    while (p.doc > next_checkpoint) {
+                        // Fill the skip_list with the first posting after <CHECKPOINT> # of documents
+                        // If we've passed multiple checkpoints, they'll have the same offset (hence the while loop)
+                        uint64_t total_offset = scan_offset + SKIP_LIST_SIZE;
+                        fwrite(&next_checkpoint, sizeof(uint32_t), 1, fd);
+                        fwrite(" ", sizeof(char), 1, fd);
+                        fwrite(&total_offset, sizeof(uint64_t), 1, fd);
+                        fwrite("\n", sizeof(char), 1, fd);
+                        
+                        next_checkpoint += INDEX_SKIP_SIZE;
+                    }
+
                     uint64_t total_offset = scan_offset + SKIP_LIST_SIZE;
                     fwrite(&p.doc, sizeof(uint32_t), 1, fd);
                     fwrite(" ", sizeof(char), 1, fd);
                     fwrite(&total_offset, sizeof(uint64_t), 1, fd);
                     fwrite("\n", sizeof(char), 1, fd);
-                } else {
-                    scan_last_loc = p.loc;
                 }
+
+                post_size += SizeOfUtf8(p.loc - scan_last_loc);
+                scan_last_loc = p.loc;
 
                 scan_offset += post_size;
             }
@@ -210,6 +221,7 @@ void IndexChunk::persist() {
             if (p.doc > last_doc) {
                 Utf8* doc_end = WriteUtf8(doc_buff + 1, p.doc - last_doc, doc_buff + MAX_UTF8_LEN + 1);
                 fwrite(doc_buff, sizeof(Utf8), doc_end - doc_buff, fd);
+                last_loc = 0;
             }
 
             // Write the loc offset
@@ -217,12 +229,10 @@ void IndexChunk::persist() {
             fwrite(loc_buff, sizeof(Utf8), loc_end - loc_buff, fd);
 
             // Update offsets
+            last_loc = p.loc;
             if (p.doc > last_doc) {
                 last_doc = p.doc;
-                last_loc = 0;
-            } else {
-                last_loc = p.loc;
-            }
+            } 
         }
 
         fwrite("\n", sizeof(char), 1, fd);
