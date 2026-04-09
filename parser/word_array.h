@@ -21,20 +21,20 @@ public:
     buffer_array() {}
 
     void push_back(const char *start, size_t len, char delim = DEFAULT_DELIM) {
-        // Guard against wrapped-negative lengths from pointer arithmetic on malformed HTML
         if (len > MAX_MEMORY) {
             logger::warn("buffer_array::push_back: rejecting bogus len=%zu (likely negative pointer diff)", len);
             return;
         }
-        if (this->size_ + len + 10 >= MAX_MEMORY) { // 10 to have space for /doc
+        if (this->size_ + len + 10 >= MAX_MEMORY) {
             logger::debug("buffer_array flush triggered: size_=%zu, incoming len=%zu, capacity=%zu", this->size_, len,
                           MAX_MEMORY);
             flush();
 
-            // After flush, if the single item still can't fit, truncate to avoid overflow
-            if (len >= MAX_MEMORY - 1) {
-                logger::warn("buffer_array: item too large for buffer (len=%zu, max=%zu), truncating", len, MAX_MEMORY);
-                len = MAX_MEMORY - 2;
+            if (this->size_ + len + 10 >= MAX_MEMORY) {
+                logger::warn("buffer_array: no room after flush (size_=%zu, len=%zu, max=%zu), truncating", this->size_, len, MAX_MEMORY);
+                if (len >= MAX_MEMORY - this->size_ - 2) {
+                    len = (MAX_MEMORY > this->size_ + 2) ? MAX_MEMORY - this->size_ - 2 : 0;
+                }
             }
         }
         if (start && len > 0) {
