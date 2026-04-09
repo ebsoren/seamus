@@ -57,6 +57,7 @@ constexpr const char* SEED_LIST[SEED_LIST_SIZE] = {
 
 
 // Parser
+static constexpr size_t MAX_PARSED_PAGES = (3*10e9)/18; // 300M/18
 static constexpr const char* PARSER_OUTPUT_DIR = "/var/seamus/parser_output";
 static constexpr int MAX_CONSECUTIVE_NON_ALNUM = 100;
 static constexpr char RETURN_DELIM = '\r';
@@ -69,6 +70,7 @@ static constexpr size_t MAX_BASE_LEN = 256;
 static constexpr size_t MAX_HTML_SIZE = 100 * 1024; // 100 KB
 
 // URL Store
+static constexpr uint32_t MAX_STORE_URLS = (6*10e9)/18; // 600M/18
 static constexpr const char* URL_STORE_OUTPUT_DIR = "/var/seamus/urlstore_output";
 static const string URL_STORE_OUTPUT_DIR_STR = string(URL_STORE_OUTPUT_DIR);
 constexpr bool URL_FROM_SCRATCH = false; // whether to read from file or start from scratch on url_store bottup

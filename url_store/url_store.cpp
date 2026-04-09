@@ -27,6 +27,8 @@ UrlStore::~UrlStore() {
     if (listener_thread.joinable()) listener_thread.join();
     if (persist_thread.joinable()) persist_thread.join();
     delete rpc_listener;
+
+    persist(true); // only persist dirty urls (parsed)
 }
 
 void UrlStore::manage_frontier_and_update_url(URLStoreUpdateRequest& req) {
@@ -131,7 +133,13 @@ bool UrlStore::updateUrl(string& url, vector<string>& anchor_texts, const uint16
     UrlShard& us = get_shard(url);
     std::lock_guard<std::mutex> lg(us.mtx);
     UrlData* url_data_ptr = us.findUrlData(url);
-    if (url_data_ptr == nullptr) return addUrl_unlocked(url, anchor_texts, seed_distance, domain_distance, num_encountered);
+    if (url_data_ptr == nullptr) {
+        if (unique_url_count.load(std::memory_order_relaxed) >= MAX_STORE_URLS) {
+            logger::warn("UrlStore has reached max capacity, not adding new URL: %s", url.data());
+            return false;
+        }
+        return addUrl_unlocked(url, anchor_texts, seed_distance, domain_distance, num_encountered);
+    }
 
     url_data_ptr->num_encountered += num_encountered;
     url_data_ptr->seed_distance = min(url_data_ptr->seed_distance, seed_distance);
@@ -186,7 +194,7 @@ For each URL:
     Anchor text list.
         For each list: <anchor_text id (32 bits)> <times seen (32 bits)>\n
 */
-void UrlStore::persist() {
+void UrlStore::persist(bool final_persist) {
     logger::info("Persisting UrlStore to disk...");
     string fileName = string::join("", URL_STORE_OUTPUT_DIR_STR, "/urlstore_tmp.txt");
     string write_mode("wb");
@@ -220,13 +228,14 @@ void UrlStore::persist() {
         auto& url_data = curr_shard.url_data;
         for (const auto& slot : url_data) {
             const string& url = slot.key;
-            if (url.size() > URL_STORE_MAX_URL_LEN) continue; 
+            if (url.size() > URL_STORE_MAX_URL_LEN) continue;
+            if (final_persist && !slot.value.crawled) continue; // if final persist, only persist urls that have been crawled (parsed)
             
             UrlData& data = slot.value;
             
             uint32_t url_len = static_cast<uint32_t>(url.size());
             fwrite(&url_len, sizeof(uint32_t), 1, fd);
-            fwrite(url.data(), sizeof(char), url_len, fd); // FIX: Use .data()
+            fwrite(url.data(), sizeof(char), url_len, fd);
 
             fwrite(&data.num_encountered, sizeof(uint32_t), 1, fd);
             fwrite(&data.seed_distance, sizeof(uint16_t), 1, fd);

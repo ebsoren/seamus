@@ -80,8 +80,8 @@ public:
     UrlStore(DomainCarousel* dc, const int worker_num);
     ~UrlStore();
 
-    void persist();
-
+    void persist(bool final_persist = false);
+    
     // bool addUrl(string& url, vector<string>& anchor_texts, const uint16_t seed_distance, const uint16_t domain_distance, const uint16_t eot, const uint16_t eod, const uint32_t num_encountered);
     bool updateUrl(string& url, vector<string>& anchor_texts, const uint16_t seed_distance, const uint16_t domain_distance, const uint32_t num_encountered);
     void manage_frontier_and_update_url(URLStoreUpdateRequest& req);
@@ -123,6 +123,7 @@ public:
         const UrlData* data = us.findUrlData(url);
         return data && data->crawled;
     }
+
 
     void markCrawled(const string& url) {
         UrlShard& us = get_shard(url);

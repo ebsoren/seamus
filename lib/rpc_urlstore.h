@@ -15,7 +15,6 @@ Currently, there functionality is divided into a couple categories:
     - Sending URLStore update/write requests from crawlers
     - URLStore read/data getters and batch getters
 */
-
 struct AnchorData {
     uint32_t anchor_id;
     uint32_t freq;
@@ -27,7 +26,6 @@ struct UrlData {
     uint16_t seed_distance;                              // Distance from seed list
     uint16_t domain_dist;                                // Domain distance from seed list TODO(charlie): implement this feature
     uint16_t eot;                                        // End of title
-    // TODO(charlie): add title content, not eot
     string title = string("", 0);
     uint16_t eod;                                        // End of description
     bool crawled = false;                                // Whether this URL has actually been fetched
