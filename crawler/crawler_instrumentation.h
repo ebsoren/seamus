@@ -128,7 +128,7 @@ private:
             long mins = (elapsed % 3600) / 60;
             long secs = elapsed % 60;
 
-            logger::error("Instrumentation | %02ld:%02ld:%02ld | total docs: %llu | docs/sec: %.1f | avg page len: %.1f bytes | avg priority: %.2f",
+            logger::instr("%02ld:%02ld:%02ld | total docs: %llu | docs/sec: %.1f | avg page len: %.1f bytes | avg priority: %.2f",
                 hrs, mins, secs, current, docs_per_sec, get_avg_page_length(), get_avg_page_priority());
 
             uint64_t cur_local = urls_from_local.load(std::memory_order_relaxed);
@@ -139,7 +139,7 @@ private:
             double rpc_per_sec = drain_interval_sec > 0 ? static_cast<double>(interval_rpc) / drain_interval_sec : 0;
             prev_urls_from_local = cur_local;
             prev_urls_from_rpc = cur_rpc;
-            logger::error("Instrumentation | local urls: %llu (%.1f/sec) | rpc urls: %llu (%.1f/sec)",
+            logger::instr("local urls: %llu (%.1f/sec) | rpc urls: %llu (%.1f/sec)",
                 cur_local, local_per_sec, cur_rpc, rpc_per_sec);
 
             if (url_store) {
@@ -151,7 +151,7 @@ private:
                 double new_per_sec = drain_interval_sec > 0 ? static_cast<double>(interval_distinct) / drain_interval_sec : 0;
                 prev_urls_seen = seen;
                 prev_urls_distinct = distinct;
-                logger::error("Instrumentation | total urls: %zu | total urls/sec: %.1f | distinct urls: %zu | new urls/sec: %.1f",
+                logger::instr("total urls: %zu | total urls/sec: %.1f | distinct urls: %zu | new urls/sec: %.1f\n",
                     seen, total_per_sec, distinct, new_per_sec);
             }
         }
