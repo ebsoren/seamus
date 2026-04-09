@@ -18,6 +18,14 @@ sudo mkdir -p /var/seamus/parser_output /var/seamus/index_output /var/seamus/url
 sudo chown -R $(whoami):$(whoami) /var/seamus
 sudo chmod -R 755 /var/seamus
 
+echo "Configuring system limits..."
+sudo sysctl -w fs.nr_open=1048576
+sudo sysctl -w fs.file-max=1048576
+grep -q "fs.nr_open" /etc/sysctl.conf || echo "fs.nr_open = 1048576" | sudo tee -a /etc/sysctl.conf > /dev/null
+grep -q "fs.file-max" /etc/sysctl.conf || echo "fs.file-max = 1048576" | sudo tee -a /etc/sysctl.conf > /dev/null
+grep -q "hard nofile" /etc/security/limits.conf || echo "* hard nofile 1048576" | sudo tee -a /etc/security/limits.conf > /dev/null
+grep -q "soft nofile" /etc/security/limits.conf || echo "* soft nofile 1048576" | sudo tee -a /etc/security/limits.conf > /dev/null
+
 echo "Clearing output directories..."
 rm -rf /var/seamus/parser_output/*
 rm -rf /var/seamus/index_output/*
