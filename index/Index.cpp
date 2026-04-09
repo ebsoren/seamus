@@ -56,11 +56,17 @@ void IndexChunk::persist() {
     vector<string> alphabetized_entries = sort_entries();
     const uint32_t N = alphabetized_entries.size();
 
+    // 32 bit ID, 64 bit offset, 2 filler chars per entry
+    const uint64_t SKIP_LIST_ENTRY_SIZE = 5 + 6 + 2;
+    const uint32_t SKIP_SIZE = 500;  // TODO: Make this and NUM_DOCS tunable
+    const uint32_t NUM_DOCS = 500000;
+    const uint64_t SKIP_LIST_SIZE = (NUM_DOCS / SKIP_SIZE) * SKIP_LIST_ENTRY_SIZE;
+
     /**
      * FIRST PASS over postings
      * Calculate dictionary lookup table values (bytes from start of dict to first word of each letter)
      * Calculate posting list sizes/locations
-     * Caclulate internal index sizes (part of posting list sizes) and locations
+     * Caclulate skip list sizes (part of posting list sizes) and locations
      *  */
 
     vector<uint64_t> posting_list_locations(N);
@@ -70,8 +76,6 @@ void IndexChunk::persist() {
     dict_offsets[0] = 0;
     uint64_t curr_offset = 0;
     char curr_char = 'a';
-
-    vector<uint64_t> internal_index_sizes(N);
 
     for (uint32_t i = 0; i < N; i++) {
         // First word starting with this letter -- add its offset to the dict lookup table
@@ -93,12 +97,11 @@ void IndexChunk::persist() {
         uint32_t last_doc = 0;
         uint32_t last_loc = 0;
 
-        // Used to fill the internal index at the top of a posting list, which maps doc ID to byte offset from start of index
+        // Used to fill the skip list at the top of a posting list, which maps doc ID to byte offset from start of index
         postings& entry = index[alphabetized_entries[i].str_view(0, alphabetized_entries[i].size())];
         uint32_t num_docs = entry.posts[0].doc == 0 ? 1 : 0;
 
-        // 32 bit ID, 64 bit offset, 2 filler chars per entry
-        const uint64_t INTERNAL_INDEX_ENTRY_SIZE = 5 + 6 + 2;
+        uint32_t next_checkpoint = SKIP_SIZE;
 
         for (post p : entry.posts) {
             // Utf8 encoding size of loc offset (no delimiters)
@@ -120,11 +123,8 @@ void IndexChunk::persist() {
             posting_list_size += post_size;
         }
 
-        // Calculate size of internal index itself
-        internal_index_sizes[i] = num_docs * INTERNAL_INDEX_ENTRY_SIZE;
-
         // Extra 1 for newline at end of each word's posting list
-        posting_list_size += internal_index_sizes[i] + 1;
+        posting_list_size += SKIP_LIST_SIZE + 1;
     }
 
     // Write dictionary lookup table
@@ -167,23 +167,26 @@ void IndexChunk::persist() {
         fwrite(&entry.n_docs, sizeof(uint32_t), 1, fd);
         fwrite("\n", sizeof(char), 1, fd);
 
-        // Compute doc offsets on the fly and write internal index
-        // For each document that appears in this posting list: <32b DOC ID> <64b BYTE OFFSET FROM START OF INTERNAL INDEX>\n
+        // Compute doc offsets on the fly and write skip list
+        // For every SKIP_SIZE document: <32b DOC ID> <64b BYTE OFFSET FROM START OF SKIP LIST>\n
         {
             uint32_t scan_last_doc = 0;
             uint32_t scan_last_loc = 0;
             uint64_t scan_offset = 0;
 
+            // TODO: Rewrite this now that we're using SKIP_SIZE
             for (size_t pi = 0; pi < entry.posts.size(); ++pi) {
                 post p = entry.posts[pi];
                 uint64_t post_size = SizeOfUtf8(p.loc - scan_last_loc);
 
                 if (p.doc > scan_last_doc) {
+                    // TODO: This may have a bug in size calculation because of the flag for new documents we're adding
+                    // Need to validate this
                     post_size += 1 + SizeOfUtf8(p.doc - scan_last_doc);
                     scan_last_doc = p.doc;
                     scan_last_loc = 0;
 
-                    uint64_t total_offset = scan_offset + internal_index_sizes[i];
+                    uint64_t total_offset = scan_offset + SKIP_LIST_SIZE;
                     fwrite(&p.doc, sizeof(uint32_t), 1, fd);
                     fwrite(" ", sizeof(char), 1, fd);
                     fwrite(&total_offset, sizeof(uint64_t), 1, fd);
