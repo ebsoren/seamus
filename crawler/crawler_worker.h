@@ -95,7 +95,7 @@ inline void crawler_worker(DomainCarousel& dc, size_t carousel_left, size_t caro
                 // Instrumentation calls after parsing
                 batch_count++;
                 batch_page_length += static_cast<double>(body_len);
-                batch_page_priority += 0;                                           // todo(hershey): replace this placeholder with actual url priority function 
+                batch_page_priority += static_cast<double>(calcPriorityScore(target->url, target->seed_distance));
                 if (batch_count >= CRAWLER_INSTRUMENTATION_BATCH_SIZE) {
                     instrumentation->submit(worker_id, {MetricType::DOCUMENTS_CRAWLED_ACCUMULATE, static_cast<double>(batch_count), 0});
                     instrumentation->submit(worker_id, {MetricType::PAGE_LENGTH_AVERAGE, batch_page_length, static_cast<int>(batch_count)});
