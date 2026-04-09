@@ -12,23 +12,7 @@
 #include <condition_variable>
 
 #include "../url_store/url_store.h"
-
-
-enum class MetricType : uint8_t {
-    DOCUMENTS_CRAWLED_ACCUMULATE,           // Accumulator for total # of documents crawled for the entirety of the crawler runtime
-    PAGE_LENGTH_AVERAGE,                    // Running average page length
-    PAGE_PRIORITY_AVERAGE,                  // Running average of page priority
-
-    // TODO(hershey): implement if needed
-    PAGE_LENGTH_DISTRIBUTION,               // Distribution buckets/intervals for page length
-    PAGE_PRIORITY_DISTRIBUTION,             // Distribution buckets/intervals for page priority
-};
-
-struct MetricUpdate {
-    MetricType type;
-    double num;                 // numerator quantity
-    int den;                    // denominator quantity (for averaging/batching)
-};
+#include "crawler_metrics.h"
 
 
 class CrawlerInstrumentation {
@@ -76,6 +60,10 @@ private:
     std::atomic<uint64_t> page_length_count{0};
     std::atomic<double> total_page_priority{0};
     std::atomic<uint64_t> page_priority_count{0};
+    std::atomic<uint64_t> urls_from_local{0};
+    std::atomic<uint64_t> urls_from_rpc{0};
+    uint64_t prev_urls_from_local{0};
+    uint64_t prev_urls_from_rpc{0};
     std::atomic<bool> running{true};
     std::mutex shutdown_mutex;
     std::condition_variable shutdown_cv;
@@ -110,6 +98,12 @@ private:
                         total_page_priority.store(total_page_priority.load(std::memory_order_relaxed) + update.num, std::memory_order_relaxed);
                         page_priority_count.fetch_add(update.den, std::memory_order_relaxed);
                         break;
+                    case MetricType::LOCAL_URL_ACCUMULATE:
+                        urls_from_local.fetch_add(static_cast<uint64_t>(update.num), std::memory_order_relaxed);
+                        break;
+                    case MetricType::RECEIVED_URL_ACCUMULATE:
+                        urls_from_rpc.fetch_add(static_cast<uint64_t>(update.num), std::memory_order_relaxed);
+                        break;
                     default:
                         break;
                 }
@@ -134,8 +128,19 @@ private:
             long mins = (elapsed % 3600) / 60;
             long secs = elapsed % 60;
 
-            logger::error("Instrumentation | %02ld:%02ld:%02ld | total docs: %llu | docs/sec: %.1f | avg page len: %.1f bytes | avg priority: %.2f",
+            logger::info("Instrumentation | %02ld:%02ld:%02ld | total docs: %llu | docs/sec: %.1f | avg page len: %.1f bytes | avg priority: %.2f",
                 hrs, mins, secs, current, docs_per_sec, get_avg_page_length(), get_avg_page_priority());
+
+            uint64_t cur_local = urls_from_local.load(std::memory_order_relaxed);
+            uint64_t cur_rpc = urls_from_rpc.load(std::memory_order_relaxed);
+            uint64_t interval_local = cur_local - prev_urls_from_local;
+            uint64_t interval_rpc = cur_rpc - prev_urls_from_rpc;
+            double local_per_sec = drain_interval_sec > 0 ? static_cast<double>(interval_local) / drain_interval_sec : 0;
+            double rpc_per_sec = drain_interval_sec > 0 ? static_cast<double>(interval_rpc) / drain_interval_sec : 0;
+            prev_urls_from_local = cur_local;
+            prev_urls_from_rpc = cur_rpc;
+            logger::info("Instrumentation | local urls: %llu (%.1f/sec) | rpc urls: %llu (%.1f/sec)",
+                cur_local, local_per_sec, cur_rpc, rpc_per_sec);
 
             if (url_store) {
                 size_t seen = url_store->seen_urls();
@@ -146,7 +151,7 @@ private:
                 double new_per_sec = drain_interval_sec > 0 ? static_cast<double>(interval_distinct) / drain_interval_sec : 0;
                 prev_urls_seen = seen;
                 prev_urls_distinct = distinct;
-                logger::error("Instrumentation | total urls: %zu | total urls/sec: %.1f | distinct urls: %zu | new urls/sec: %.1f",
+                logger::info("Instrumentation | total urls: %zu | total urls/sec: %.1f | distinct urls: %zu | new urls/sec: %.1f",
                     seen, total_per_sec, distinct, new_per_sec);
             }
         }

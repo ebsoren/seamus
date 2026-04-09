@@ -15,6 +15,12 @@ cc_library(
 )
 
 cc_library(
+    name = "crawler_metrics",
+    hdrs = ["crawler_metrics.h"],
+    visibility = ["//visibility:public"],
+)
+
+cc_library(
     name = "crawler_lib",
     hdrs = [
         "crawler_listener.h",
@@ -23,7 +29,7 @@ cc_library(
         "crawler_worker.h",
         "crawler_instrumentation.h",
     ],
-    deps = [":domain_carousel", ":network_util", "//lib:consts", "//lib:vector", "//lib:deque", "//lib:string", "//lib:utils", "//lib:rpc_listener", "//lib:rpc_crawler", "//lib:logger", "//parser:parser", "//parser:robots_manager"],
+    deps = [":domain_carousel", ":crawler_metrics", ":network_util", "//lib:consts", "//lib:vector", "//lib:deque", "//lib:string", "//lib:utils", "//lib:rpc_listener", "//lib:rpc_crawler", "//lib:logger", "//parser:parser", "//parser:robots_manager"],
     visibility = ["//visibility:public"],
 )
 
