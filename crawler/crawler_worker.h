@@ -134,8 +134,6 @@ inline vector<std::thread> spawn_crawler_workers(DomainCarousel& dc, UrlStore& u
     size_t curr_domain_left = 0;
     size_t curr_domain_right = interval_size - 1;
 
-    
-
     // Parsers and buffer managers
     static OutboundUrlBuffer outbound(machine_id, &url_store);
     static LocalUrlBuffer url_buffers[NUM_PARSERS];
