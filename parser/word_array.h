@@ -92,6 +92,7 @@ public:
         : fd_(fd) {}
     void flush() override {
         if (this->size_ > 0) {
+            this->case_convert();
             seamus_write(fd_, this->data_, this->size_);
             this->size_ = 0;
         }
