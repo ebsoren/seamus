@@ -9,3 +9,6 @@ bazel-*
 .clwb/
 .idea/
 cmake-build-*/
+
+# Script stuff
+.machine_id
