@@ -9,9 +9,6 @@ fi
 MACHINE_ID=$(cat .machine_id)
 USER=$(whoami)
 
-ulimit -n 1048575
-ulimit -s 1024
-
 echo "Building crawler..."
 bazel build //crawler
 
@@ -37,7 +34,7 @@ RestartSec=5
 User=$USER
 Environment=MACHINE_ID=$MACHINE_ID
 LimitNOFILE=1048575
-LimitSTACK=1048576
+LimitSTACK=2097152
 
 [Install]
 WantedBy=multi-user.target
