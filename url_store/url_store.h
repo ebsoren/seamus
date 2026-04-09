@@ -6,7 +6,9 @@
 #include "../lib/rpc_listener.h"
 #include "../lib/rpc_urlstore.h"
 #include "../lib/consts.h"
+#include "../crawler/crawler_metrics.h"
 #include <cstdint>
+#include <functional>
 #include <thread>
 
 class DomainCarousel;
@@ -40,6 +42,14 @@ private:
     vector<string> id_to_anchor;
 
     DefaultHash<string> hasher;
+
+    std::function<void(size_t, MetricUpdate)> metric_submit;
+    std::atomic<uint64_t> local_url_pending{0};
+    std::atomic<uint64_t> rpc_url_pending{0};
+    std::atomic<uint64_t> local_call_count{0};
+    std::atomic<uint64_t> rpc_call_count{0};
+    void flush_local_urls();
+    void flush_rpc_urls();
 
     std::atomic<bool> running{true};
     std::mutex shutdown_mtx;
@@ -79,6 +89,22 @@ private:
 public:
     UrlStore(DomainCarousel* dc, const int worker_num);
     ~UrlStore();
+
+    void set_metric_submit(std::function<void(size_t, MetricUpdate)> fn) { metric_submit = std::move(fn); }
+
+    void record_local_urls(size_t count) {
+        local_url_pending.fetch_add(count, std::memory_order_relaxed);
+        if (local_call_count.fetch_add(1, std::memory_order_relaxed) % 100 == 99) {
+            flush_local_urls();
+        }
+    }
+
+    void record_rpc_urls(size_t count) {
+        rpc_url_pending.fetch_add(count, std::memory_order_relaxed);
+        if (rpc_call_count.fetch_add(1, std::memory_order_relaxed) % 100 == 99) {
+            flush_rpc_urls();
+        }
+    }
 
     void persist(bool final_persist = false);
     

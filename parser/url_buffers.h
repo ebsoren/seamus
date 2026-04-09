@@ -52,6 +52,7 @@ private:
         buffers[machine_id] = vector<URLStoreUpdateRequest>();
 
         if (machine_id == ME && urlStore) {
+            urlStore->record_local_urls(batch.reqs.size());
             urlStore->batch_manage_frontier_and_update_url(batch);
         } else {
             std::thread(&OutboundUrlBuffer::flush_async, this, machine_id, std::move(batch)).detach();

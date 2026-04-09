@@ -149,6 +149,9 @@ inline vector<std::thread> spawn_crawler_workers(DomainCarousel& dc, UrlStore& u
     logger::info("Spawned %u parsers and local URL buffers.", NUM_PARSERS);
 
     instrumentation.set_url_store(&url_store);
+    url_store.set_metric_submit([&instrumentation](size_t worker_id, MetricUpdate update) {
+        instrumentation.submit(worker_id, update);
+    });
 
     vector<std::thread> workers;
     int i = 0;

@@ -31,6 +31,22 @@ UrlStore::~UrlStore() {
     persist(true); // only persist dirty urls (parsed)
 }
 
+void UrlStore::flush_local_urls() {
+    if (!metric_submit) return;
+    uint64_t pending = local_url_pending.exchange(0, std::memory_order_relaxed);
+    if (pending > 0) {
+        metric_submit(0, MetricUpdate{MetricType::LOCAL_URL_ACCUMULATE, static_cast<double>(pending), 0});
+    }
+}
+
+void UrlStore::flush_rpc_urls() {
+    if (!metric_submit) return;
+    uint64_t pending = rpc_url_pending.exchange(0, std::memory_order_relaxed);
+    if (pending > 0) {
+        metric_submit(0, MetricUpdate{MetricType::RECEIVED_URL_ACCUMULATE, static_cast<double>(pending), 0});
+    }
+}
+
 void UrlStore::manage_frontier_and_update_url(URLStoreUpdateRequest& req) {
     bool is_new = updateUrl(req.url, req.anchor_text, req.seed_list_url_hops, req.seed_list_domain_hops, req.num_encountered);
 
@@ -87,6 +103,7 @@ void UrlStore::client_handler(int fd) {
     std::optional<BatchURLStoreUpdateRequest> req = recv_batch_urlstore_update(fd);
     if (!req) return;
 
+    record_rpc_urls(req->reqs.size());
     batch_manage_frontier_and_update_url(*req);
 }
 
