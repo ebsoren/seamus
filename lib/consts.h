@@ -10,8 +10,8 @@ constexpr uint8_t LOG_LEVEL = 3;
 constexpr const char* USER_AGENT = "Seamus the Search Engine (web crawler for university course)";
 
 // Global
-constexpr size_t NUM_MACHINES = 2;
-constexpr const char* MACHINES[NUM_MACHINES] = {"136.119.122.181", "34.55.208.73"};
+constexpr size_t NUM_MACHINES = 1;
+constexpr const char* MACHINES[NUM_MACHINES] = {"136.119.122.181"};
 
 inline const char* get_machine_addr(size_t machine_id) {
     assert(machine_id < NUM_MACHINES);
