@@ -13,7 +13,7 @@ string IndexChunk::get_index_chunk_path() const {
 }
 
 
-IndexChunk::IndexChunk(uint32_t worker_number) : curr_doc_(1), chunk(0), posts_count(0), WORKER_NUMBER(worker_number){
+IndexChunk::IndexChunk(uint32_t worker_number) : curr_doc_(1), chunk(0), doc_count(0), WORKER_NUMBER(worker_number){
     // Important: Init curr_doc_ to 1 to allow for 00 to be used as new doc flag
     // Find the latest chunk ID for this thread
     while (file_exists(get_index_chunk_path())) chunk++;
@@ -58,9 +58,7 @@ void IndexChunk::persist() {
 
     // 32 bit ID, 64 bit offset, 2 filler chars per entry
     const uint64_t SKIP_LIST_ENTRY_SIZE = 5 + 6 + 2;
-    const uint32_t SKIP_SIZE = 500;  // TODO: Make this and NUM_DOCS tunable
-    const uint32_t NUM_DOCS = 500000;
-    const uint64_t SKIP_LIST_SIZE = (NUM_DOCS / SKIP_SIZE) * SKIP_LIST_ENTRY_SIZE;
+    const uint64_t SKIP_LIST_SIZE = (DOCS_PER_INDEX_CHUNK / INDEX_SKIP_SIZE) * SKIP_LIST_ENTRY_SIZE;
 
     /**
      * FIRST PASS over postings
@@ -101,7 +99,7 @@ void IndexChunk::persist() {
         postings& entry = index[alphabetized_entries[i].str_view(0, alphabetized_entries[i].size())];
         uint32_t num_docs = entry.posts[0].doc == 0 ? 1 : 0;
 
-        uint32_t next_checkpoint = SKIP_SIZE;
+        uint32_t next_checkpoint = INDEX_SKIP_SIZE;
 
         for (post p : entry.posts) {
             // Utf8 encoding size of loc offset (no delimiters)
@@ -168,20 +166,18 @@ void IndexChunk::persist() {
         fwrite("\n", sizeof(char), 1, fd);
 
         // Compute doc offsets on the fly and write skip list
-        // For every SKIP_SIZE document: <32b DOC ID> <64b BYTE OFFSET FROM START OF SKIP LIST>\n
+        // For every INDEX_SKIP_SIZE document: <32b DOC ID> <64b BYTE OFFSET FROM START OF SKIP LIST>\n
         {
             uint32_t scan_last_doc = 0;
             uint32_t scan_last_loc = 0;
             uint64_t scan_offset = 0;
 
-            // TODO: Rewrite this now that we're using SKIP_SIZE
+            // TODO: Rewrite this now that we're using INDEX_SKIP_SIZE
             for (size_t pi = 0; pi < entry.posts.size(); ++pi) {
                 post p = entry.posts[pi];
                 uint64_t post_size = SizeOfUtf8(p.loc - scan_last_loc);
 
                 if (p.doc > scan_last_doc) {
-                    // TODO: This may have a bug in size calculation because of the flag for new documents we're adding
-                    // Need to validate this
                     post_size += 1 + SizeOfUtf8(p.doc - scan_last_doc);
                     scan_last_doc = p.doc;
                     scan_last_loc = 0;
@@ -240,7 +236,7 @@ void IndexChunk::persist() {
 void IndexChunk::reset() {
     index = unordered_map<string, postings>();
     urls = vector<string>();
-    posts_count = 0;
+    doc_count = 0;
     curr_doc_ = 1; // Curr_doc must start at 1, 0 reserved for flag
 }
 
@@ -329,7 +325,6 @@ bool IndexChunk::index_file(const string &path) {
                 }
 
                 index[word_view].posts.push_back({doc, ++loc});
-                posts_count++;
             }
         }
 
@@ -343,7 +338,7 @@ bool IndexChunk::index_file(const string &path) {
     fclose(fd);
     logger::info("Worker %u: indexed file: %s", WORKER_NUMBER, path.data());
 
-    if (posts_count > INDEX_POSTS_COUNT_FLUSH_THRESHOLD) {
+    if (++doc_count == DOCS_PER_INDEX_CHUNK) {
         flush();
     }
     return true;

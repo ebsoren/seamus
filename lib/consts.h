@@ -88,7 +88,8 @@ constexpr size_t ROBOTS_CACHE_SIZE = 1024;
 
 
 // Indexer
-constexpr size_t INDEX_POSTS_COUNT_FLUSH_THRESHOLD = 1<<23;
+constexpr size_t DOCS_PER_INDEX_CHUNK = 500000;
+constexpr uint32_t INDEX_SKIP_SIZE = 500; 
 static constexpr const char* INDEX_OUTPUT_DIR = "/var/seamus/index_output";
 constexpr size_t NUM_INDEXER_THREADS = 16; // Should be then number of cores     // todo(Aiden): change depending on number of cores we end up renting per machine
 
