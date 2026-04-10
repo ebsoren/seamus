@@ -5,7 +5,7 @@
 #include "string.h"
 
 
-// Logging (0=DEBUG, 1=INFO, 2=WARN, 3=ERROR, 4=NONE)
+// Logging (0=DEBUG, 1=INFO, 2=WARN, 3=ERROR, 4=INSTR, 5=NONE)
 constexpr uint8_t LOG_LEVEL = 3;
 constexpr const char* USER_AGENT = "Seamus the Search Engine (web crawler for university course)";
 

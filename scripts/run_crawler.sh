@@ -42,7 +42,7 @@ EOF
 
 echo "Starting service..."
 sudo systemctl daemon-reload
-# sudo systemctl enable crawler -- uncomment to make the crawler start on VM boot
+sudo systemctl enable crawler
 sudo systemctl start crawler
 
 echo "Checking status..."

@@ -30,7 +30,7 @@ const   Unicode  ReplacementCharacter = 0xfffd;
 // SizeOfUTF8( GetUtf8( p ) ) does not tell how many bytes encode
 // the character pointed to by p because p may point to a malformed
 // character.
-size_t SizeOfUtf8(Unicode c) {
+inline size_t SizeOfUtf8(Unicode c) {
     if (c <= 0x7F) return 1;
     if (c <= 0x7FF) return 2;
     if (c <= 0xFFFF) return 3;
@@ -42,7 +42,7 @@ size_t SizeOfUtf8(Unicode c) {
 
 // IndicatedLength looks at the first byte of a Utf8 sequence and
 // determines the expected length.  Return 1 for an invalid first byte.
-size_t IndicatedLength(const Utf8 *p) {
+inline size_t IndicatedLength(const Utf8 *p) {
     // Weird that instructions say to return 1 for an invalid first byte
     // Since 1 byte Utf8 characters can exist
     if ((*p & 0x80) == 0x00) return 1;
@@ -67,7 +67,7 @@ size_t IndicatedLength(const Utf8 *p) {
 // Overlong characters and character values 0xd800 to 0xdfff (UTF-16
 // surrogates), "noncharacters" 0xfdd0 to 0xfdef, and the values 0xfffe
 // and 0xffff should be returned as the replacement character.
-Unicode ReadUtf8(const Utf8 **p, const Utf8 *bound) {
+inline Unicode ReadUtf8(const Utf8 **p, const Utf8 *bound) {
     if (bound && *p >= bound) return 0x00;
 
     Utf8 first = **p;
@@ -116,7 +116,7 @@ Unicode ReadUtf8(const Utf8 **p, const Utf8 *bound) {
 // Scan backward for the first PREVIOUS byte which could
 // be the start of a UTF-8 character.  If bound != null,
 // bound points to the first (leftmost) valid byte.
-const Utf8* PreviousUtf8(const Utf8 *p, const Utf8 *bound) {
+inline const Utf8* PreviousUtf8(const Utf8 *p, const Utf8 *bound) {
     if (bound && p <= bound) return p;
     p--;
 
@@ -134,7 +134,7 @@ const Utf8* PreviousUtf8(const Utf8 *p, const Utf8 *bound) {
 // nothing and return p.)
 //
 // If c > 0x7fffffff (31 bits) write the replacement character.
-Utf8* WriteUtf8(Utf8 *p, Unicode c, Utf8 *bound) {
+inline Utf8* WriteUtf8(Utf8 *p, Unicode c, Utf8 *bound) {
     // Replacement for invalid codepoints
     if (c > 0x7FFFFFFF) c = ReplacementCharacter;
 
@@ -166,13 +166,13 @@ Utf8* WriteUtf8(Utf8 *p, Unicode c, Utf8 *bound) {
 }
 
 // Read the character but don't advance the pointer
-Unicode GetUtf8(const Utf8 *p, const Utf8 *bound) {
+inline Unicode GetUtf8(const Utf8 *p, const Utf8 *bound) {
     Unicode res = ReadUtf8(&p, bound);
     return res;
 }
 
 // Advance the pointer but throw away the value
-const Utf8* NextUtf8(const Utf8 *p, const Utf8 *bound) {
+inline const Utf8* NextUtf8(const Utf8 *p, const Utf8 *bound) {
     ReadUtf8(&p, bound);
     return p;
 }
