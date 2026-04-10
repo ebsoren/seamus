@@ -81,7 +81,7 @@ constexpr uint32_t URL_STORE_PORT = 9000;
 constexpr uint32_t URL_STORE_MAX_URL_LEN = 4096;           // 4 KB max url length
 constexpr uint32_t URL_STORE_MAX_ANCHOR_TEXT_LEN = 512;     // 0.5 KB max anchor text length
 constexpr size_t URL_NUM_SHARDS = 64;
-constexpr size_t MAX_ANCHORS_PER_URL = 128; // Arbitrary cap to prevent memory blowup from urls with too many anchors -- can be tuned based on observed distribution of anchors per url
+constexpr size_t MAX_ANCHORS_PER_URL = 64; // Arbitrary cap to prevent memory blowup from urls with too many anchors -- can be tuned based on observed distribution of anchors per url
 
 // Robots.txt Manager
 constexpr size_t ROBOTS_CACHE_SIZE = 1024;
