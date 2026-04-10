@@ -8,6 +8,7 @@
 #include "../lib/logger.h"
 #include "../lib/rpc_urlstore.h"
 #include "../lib/string.h"
+#include "../lib/url_filter.h"
 #include "../lib/vector.h"
 #include "../url_store/url_store.h"
 
@@ -159,7 +160,16 @@ public:
                     p = word_start; // rewind so the outer loop sees </doc>
                     break;
                 }
-                string url(word_start, p - word_start);
+                string raw_url(word_start, p - word_start);
+                string url = normalize_url(raw_url);
+                if (url.size() == 0) {
+                    logger::debug("add_urls: dropping url (normalize rejected): %s", raw_url.data());
+                    // Skip anchor text
+                    p++;
+                    while (p < end && *p != '\n') p++;
+                    if (p < end) p++;
+                    continue;
+                }
                 uint16_t dhop = extract_domain(url) != domain ? 1 : 0;
                 vector<string> anchor_words;
 

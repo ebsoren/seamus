@@ -31,9 +31,9 @@ void IndexChunk::persist() {
         return;
     }
 
-    // 4 bytes for each uint32_t ID, one byte for each char in string, one byte for each new line char
-    uint64_t urls_bytes = urls.size() * 4;
-    for (size_t i = 0; i < urls.size(); i++) urls_bytes += urls[i].size() + 1;
+    // Each entry is: <4B id> <1B space> <url_len bytes> <1B '\n'>
+    uint64_t urls_bytes = 0;
+    for (size_t i = 0; i < urls.size(); i++) urls_bytes += 4 + 1 + urls[i].size() + 1;
 
     // Write the size of the ID->URL mapping
     // <64b SIZE>\n
@@ -56,8 +56,8 @@ void IndexChunk::persist() {
     vector<string> alphabetized_entries = sort_entries();
     const uint32_t N = alphabetized_entries.size();
 
-    // 32 bit ID, 64 bit offset, 2 filler chars per entry
-    const uint64_t SKIP_LIST_ENTRY_SIZE = 5 + 6 + 2;
+    // Each skip entry: <4B doc_id> <1B space> <8B offset> <1B '\n'>
+    const uint64_t SKIP_LIST_ENTRY_SIZE = 4 + 1 + 8 + 1;
     const uint64_t SKIP_LIST_SIZE = (DOCS_PER_INDEX_CHUNK / INDEX_SKIP_SIZE) * SKIP_LIST_ENTRY_SIZE;
 
     /**
@@ -95,9 +95,7 @@ void IndexChunk::persist() {
         uint32_t last_doc = 0;
         uint32_t last_loc = 0;
 
-        // Used to fill the skip list at the top of a posting list, which maps doc ID to byte offset from start of index
         postings& entry = index[alphabetized_entries[i].str_view(0, alphabetized_entries[i].size())];
-        uint32_t num_docs = entry.posts[0].doc == 0 ? 1 : 0;
 
         for (post p : entry.posts) {
             // Utf8 encoding size of loc offset (no delimiters)
@@ -109,8 +107,6 @@ void IndexChunk::persist() {
                 post_size += 1 + SizeOfUtf8(p.doc - last_doc);
                 last_doc = p.doc;
                 last_loc = 0;
-
-                num_docs++;
             } else {
                 last_loc = p.loc;
             }
@@ -158,7 +154,7 @@ void IndexChunk::persist() {
         uint32_t next_checkpoint = INDEX_SKIP_SIZE;
 
         // Write the number of occurrences and documents
-        // <64b NUM POSTS> <64b NUM DOCS>\n
+        // <64b NUM POSTS> <32b NUM DOCS>\n
         fwrite(&size, sizeof(uint64_t), 1, fd);
         fwrite(" ", sizeof(char), 1, fd);
         fwrite(&entry.n_docs, sizeof(uint32_t), 1, fd);
@@ -166,10 +162,14 @@ void IndexChunk::persist() {
 
         // Compute doc offsets on the fly and write skip list
         // For every INDEX_SKIP_SIZE document: <32b DOC ID> <64b BYTE OFFSET FROM START OF SKIP LIST>\n
+        // Plus one entry per new doc encountered.
+        // The region is padded out to SKIP_LIST_SIZE bytes so the first-pass
+        // size accounting in posting_list_locations stays correct.
         {
             uint32_t scan_last_doc = 0;
             uint32_t scan_last_loc = 0;
             uint64_t scan_offset = 0;
+            uint64_t skip_bytes_written = 0;
 
             for (size_t pi = 0; pi < entry.posts.size(); ++pi) {
                 post p = entry.posts[pi];
@@ -188,7 +188,8 @@ void IndexChunk::persist() {
                         fwrite(" ", sizeof(char), 1, fd);
                         fwrite(&total_offset, sizeof(uint64_t), 1, fd);
                         fwrite("\n", sizeof(char), 1, fd);
-                        
+
+                        skip_bytes_written += SKIP_LIST_ENTRY_SIZE;
                         next_checkpoint += INDEX_SKIP_SIZE;
                     }
 
@@ -197,12 +198,34 @@ void IndexChunk::persist() {
                     fwrite(" ", sizeof(char), 1, fd);
                     fwrite(&total_offset, sizeof(uint64_t), 1, fd);
                     fwrite("\n", sizeof(char), 1, fd);
+
+                    skip_bytes_written += SKIP_LIST_ENTRY_SIZE;
                 }
 
                 post_size += SizeOfUtf8(p.loc - scan_last_loc);
                 scan_last_loc = p.loc;
 
                 scan_offset += post_size;
+            }
+
+            // Pad skip list region to SKIP_LIST_SIZE. The per-new-doc writes
+            // mean dense inputs can overflow the reservation — flag it loudly
+            // if that ever happens (design issue; not fixed here).
+            if (skip_bytes_written > SKIP_LIST_SIZE) {
+                logger::error("Worker %u: skip list overflow for '%.*s' (%llu > %llu bytes)",
+                              WORKER_NUMBER,
+                              static_cast<int>(alphabetized_entries[i].size()),
+                              alphabetized_entries[i].data(),
+                              static_cast<unsigned long long>(skip_bytes_written),
+                              static_cast<unsigned long long>(SKIP_LIST_SIZE));
+            } else {
+                static const char ZERO_BUF[1024] = {0};
+                uint64_t pad = SKIP_LIST_SIZE - skip_bytes_written;
+                while (pad > 0) {
+                    size_t n = pad < sizeof(ZERO_BUF) ? static_cast<size_t>(pad) : sizeof(ZERO_BUF);
+                    fwrite(ZERO_BUF, 1, n, fd);
+                    pad -= n;
+                }
             }
         }
 
