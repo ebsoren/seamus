@@ -101,6 +101,8 @@ inline ssize_t https_get_once(const char *host, const char *path, char *body, ch
     size_t resp_len = 0;
     bool headers_stripped = false;
     bool is_redirect = false;
+    bool dead_client = false;   // 
+    bool rate_limited = false; // 429 only — site explicitly says "try later"
 
     int rcvd;
     while ((rcvd = SSL_read(ssl, body + resp_len, MAX_HTML_SIZE - resp_len)) > 0) {
@@ -110,6 +112,24 @@ inline ssize_t https_get_once(const char *host, const char *path, char *body, ch
         if (!headers_stripped) {
             for (size_t i = 0; i + 3 < resp_len; ++i) {
                 if (body[i] == '\r' && body[i+1] == '\n' && body[i+2] == '\r' && body[i+3] == '\n') {
+                    // Check status code
+                    if (resp_len >= 12) {
+                        char c0 = body[9], c1 = body[10], c2 = body[11];
+                        // Kill on 5xx, risk/reward is bad
+                        if (c0 == '5') {
+                            dead_client = true;
+                        } else if (c0 == '4') {
+                            // Retry on rate limit
+                            if (c1 == '2' && c2 == '9') {
+                                rate_limited = true;
+                            } 
+                            // Any other 4xx, kill
+                            else {
+                                dead_client = true;
+                            }
+                        }
+                    }
+
                     // Check for 3xx redirect status in the first line (e.g. "HTTP/1.1 301 ...")
                     if (redirect_location && resp_len >= 12 && body[9] == '3') {
                         is_redirect = true;
@@ -151,7 +171,7 @@ inline ssize_t https_get_once(const char *host, const char *path, char *body, ch
             }
         }
 
-        if (is_redirect) break;  // Don't bother reading redirect body
+        if (is_redirect || dead_client || rate_limited) break;
         if (resp_len >= MAX_HTML_SIZE) break;
     }
 
@@ -160,7 +180,9 @@ inline ssize_t https_get_once(const char *host, const char *path, char *body, ch
     close(sock);
 
     if (!headers_stripped) return -1;
-    if (is_redirect) return -2;  // Signal redirect to caller
+    if (is_redirect) return -2;            // Signal redirect to caller
+    if (dead_client) return -3;        // Permanent client error (4xx)
+    if (rate_limited) return -4;     // Retryable error (429, 5xx)
     return static_cast<ssize_t>(resp_len);
 }
 
