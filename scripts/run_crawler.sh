@@ -10,7 +10,7 @@ MACHINE_ID=$(cat .machine_id)
 USER=$(whoami)
 
 echo "Building crawler..."
-bazel build //crawler
+bazel build -c opt //crawler
 
 BINARY_PATH=$(readlink -f bazel-bin/crawler/crawler)
 WORK_DIR=$(pwd)
@@ -42,7 +42,7 @@ EOF
 
 echo "Starting service..."
 sudo systemctl daemon-reload
-sudo systemctl enable crawler
+# sudo systemctl enable crawler -- uncomment to make the crawler start on VM boot
 sudo systemctl start crawler
 
 echo "Checking status..."
