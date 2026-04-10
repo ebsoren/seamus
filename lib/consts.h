@@ -26,7 +26,7 @@ inline size_t my_machine_id() {
 
 
 // Crawler
-constexpr uint16_t CRAWLER_LISTENER_PORT = 8080;
+constexpr uint16_t CRAWLER_LISTENER_PORT = 8000;
 constexpr size_t CRAWLER_LISTENER_THREADS = 16;
 constexpr size_t CRAWLER_THREADPOOL_SIZE = 1<<11;
 constexpr size_t CRAWLER_CAROUSEL_SIZE = CRAWLER_THREADPOOL_SIZE*16;
@@ -346,6 +346,11 @@ constexpr size_t MAX_ANCHORS_PER_URL = 64; // Arbitrary cap to prevent memory bl
 
 // Robots.txt Manager
 constexpr size_t ROBOTS_CACHE_SIZE = 1024;
+
+
+// HTML Server
+constexpr uint16_t HTMLSERVER_PORT = 8080;
+constexpr size_t HTMLSERVER_THREADS = 8;
 
 
 // Indexer
