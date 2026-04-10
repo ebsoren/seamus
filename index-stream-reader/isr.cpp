@@ -41,12 +41,13 @@ LoadedIndex::LoadedIndex(string path) {
 
     // Populate the dictionary
     // Seek precisely to start of dictionary
-    if (fseek(fd, INDEX_DICTIONARY_SIZE + urls_size, SEEK_SET) != 0) logger::warn("Error when initializing %s: Seek to dictionary failed.", path);
+    if (fseek(fd, INDEX_DICTIONARY_TOC_SIZE + urls_size, SEEK_SET) != 0) logger::warn("Error when initializing %s: Seek to dictionary failed.", path);
 
     uint64_t posting_list_offset;
 
     do {
         fgets(buff, sizeof(buff), fd);
+        dictionary_size += strlen(buff);
         
         // Copy from end of buffer minus 1B for \n - 4B for offset to get start of offset
         memcpy(&posting_list_offset, buff + strlen(buff) - (1 + sizeof(uint64_t)), sizeof(uint64_t));
@@ -54,8 +55,9 @@ LoadedIndex::LoadedIndex(string path) {
         // Insert offset into dictionary
         dictionary.insert(string(buff, strlen(buff) - (1 + sizeof(uint64_t))), posting_list_offset);
     } while (strcmp(buff, "\n"));
+    dictionary_size++;
 
-    // Now at the top of the skip list
+    // Now at the top of the posting lists
 
     // Populate the posting list
     // TODO: This is huge. Is heap allocating like this alright?
@@ -73,71 +75,19 @@ LoadedIndex::~LoadedIndex() {
     delete[] posting_list_;
 }
 
-// TODO: Refactor this to take in a LoadedIndex object instead of chunk_path
-IndexStreamReader::IndexStreamReader(string word, string chunk_path) : word(move(word)) {
-    struct stat buff;
-    if (stat(chunk_path.data(), &buff) == -1) {
-        logger::warn("ISR couldn't open. %s didn't exist.", chunk_path);
-        return;
-    }
+IndexStreamReader::IndexStreamReader(string word, LoadedIndex* index) : word(move(word)), index(index) {
+    // Get offset of the word from start of posting lists
+    // Postings list don't include the dictionary (but the offset does), so subtract dictionary size
+    uint64_t offset = index->dictionary[word] - index->dictionary_size;
 
-    // rb: Read as a Binary file
-    if ((fd_ = fopen(chunk_path.data(), "rb")) == nullptr) {
-        logger::warn("ISR failed to open %s", chunk_path);
-        return;
-    }
+    // Jump to the word's posting list using that offset (which is from )
+    curr_loc_ = postings_start_= index->posting_list_ + offset;
 
-    // Read the size of ID->URL map and skip over it
-    uint64_t urlmap_size;
-    fread(&urlmap_size, sizeof(uint64_t), 1, fd_);
-    if (fseek(fd_, urlmap_size + 1, SEEK_CUR) != 0) { // +1 for the newline delimiter after the size
-        logger::warn("Fseek to skip over URL map failed when parsing %s.", chunk_path);
-        return;
-    } 
-
-    // Now at the dictionary lookup table
-    // Skip to the letter for this word to see offset to go to
-    long int dict_start = ftell(fd_);
-    int dict_index = word.data()[0] - 'a';
-    int dict_offset = dict_index * (64 + 1);
-    if (fseek(fd_, dict_offset, SEEK_CUR) != 0) {
-        logger::warn("Fseek to index into dictionary failed when parsing %s.", chunk_path);
-        return;
-    }
-
-    char ch;
-    uint64_t letter_offset;
-    fread(&ch, sizeof(char), 1, fd_);
-    if (ch != word.data()[0]) logger::warn("Seeked to wrong letter in dictionary for %s.", word);
-    fread(&letter_offset, sizeof(uint64_t), 1, fd_);
-
-    // Seek ahead to first word in the dictionary that starts with this letter
-    // The letter offset is from the START of the dictionary, so we subtract the amount we've already jumped
-    fseek(fd_, letter_offset - dict_offset, SEEK_CUR);
-
-    // Go through words starting with this letter in dictionary until desired word is found
-    char word_buff[256];
-    uint64_t word_offset;
-    while (fgets(word_buff, sizeof(buff), fd_)) {
-        // Word found,
-        if (!memcmp(word_buff, word.data(), word.size())) break;
-    }
-
-    // Copy the offset to that word
-    // +word.size() skips the word, +1 skips the space
-    memcpy(&word_offset, word_buff + word.size() + 1, sizeof(uint64_t));
-
-    // Jump to posting list using that offset (which is from start of dictionary)
-    // SEEK_SET starts at beginning of file
-    fseek(fd_, dict_start + word_offset, SEEK_SET);
-
-    fread(&n_posts, sizeof(uint64_t), 1, fd_);
-    fread(&ch, sizeof(char), 1, fd_); // Skip the space
-    fread(&n_docs, sizeof(uint64_t), 1, fd_);
-    fread(&ch, sizeof(char), 1, fd_); // Skip the newline
-
-    postings_start = ftell(fd_);
-
+    // TODO: Check these casts...
+    n_posts = static_cast<uint64_t>(*curr_loc_);
+    curr_loc_ += sizeof(uint64_t) + 1; // skip over the number and the space
+    n_docs = static_cast<uint64_t>(*curr_loc_);
+    curr_loc_ += sizeof(uint64_t) + 1; // skip over the number and the newline
+    
     // Starting of posting list, num_docs, num_posts all set
-    // fd_ currently sits at the start of posting list (aka first skip list entry)
 }
