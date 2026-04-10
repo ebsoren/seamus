@@ -6,36 +6,36 @@
 
 
 // Logging (0=DEBUG, 1=INFO, 2=WARN, 3=ERROR, 4=NONE)
-constexpr uint8_t LOG_LEVEL = 2;
+constexpr uint8_t LOG_LEVEL = 3;
 constexpr const char* USER_AGENT = "Seamus the Search Engine (web crawler for university course)";
 
 // Global
-constexpr size_t NUM_MACHINES = 1;                                  // todo(hershey): obviously, change when we deploy on more machines
-constexpr const char* MACHINES[NUM_MACHINES] = {"127.0.0.1"};       // todo(hershey): replace localhost ip (127.0.0.1) with global ip of machines once we deploy on multiple machines -- store machine ID as an environment variable
+constexpr size_t NUM_MACHINES = 1;
+constexpr const char* MACHINES[NUM_MACHINES] = {"136.119.122.181"};
 
 inline const char* get_machine_addr(size_t machine_id) {
-    // todo(hershey): once we deploy on multiple machines, check an environment variable here (e.g., self_id) and return localhost if machine_id == self_id
     assert(machine_id < NUM_MACHINES);
     return MACHINES[machine_id];
 }
 
-inline const size_t my_machine_id() {
-    // todo(hershey): check an environment variable here when we are ready to deploy
-    return 0;
+inline size_t my_machine_id() {
+    const char* env = std::getenv("MACHINE_ID");
+    assert(env != nullptr && "MACHINE_ID environment variable is not set");
+    return std::strtoul(env, nullptr, 10);
 }
 
 
 // Crawler
 constexpr uint16_t CRAWLER_LISTENER_PORT = 8080;
 constexpr size_t CRAWLER_LISTENER_THREADS = 16;
-constexpr size_t CRAWLER_THREADPOOL_SIZE = 1<<10;
+constexpr size_t CRAWLER_THREADPOOL_SIZE = 1<<11;
 constexpr size_t CRAWLER_CAROUSEL_SIZE = CRAWLER_THREADPOOL_SIZE*16;
 static constexpr size_t CRAWLER_CAROUSEL_QUEUE_SIZE = 32;
 constexpr size_t CRAWLER_MAX_QUEUE_SIZE = 32;
 static_assert(CRAWLER_CAROUSEL_SIZE % CRAWLER_THREADPOOL_SIZE == 0, "[consts.h]: CRAWLER_CAROUSEL_SIZE must be a multiple of CRAWLER_THREADPOOL_SIZE");
 static_assert(CRAWLER_CAROUSEL_SIZE >= CRAWLER_THREADPOOL_SIZE, "[consts.h]: CRAWLER_THREADPOOL_SIZE cannot be greater than CRAWLER_CAROUSEL_SIZE");
 
-constexpr size_t CRAWLER_BACKOFF_SEC = 2;                   // Time (seconds) to wait between sending GET requests to URLs within the same domain carousel slot
+constexpr size_t CRAWLER_BACKOFF_SEC = 3;                   // Time (seconds) to wait between sending GET requests to URLs within the same domain carousel slot
 constexpr size_t CRAWLER_PERSIST_INTERVAL_SEC = 60;         // Time (seconds) to wait between persists of in-memory priority buckets -> disk priority bucket files
 constexpr size_t CRAWLER_FEED_INTERVAL_SEC = 1;             // Time (seconds) to wait between feeding in-memory priority buckets -> domain carousel
 constexpr size_t CRAWLER_WORKER_SLEEP_MS = 10;              // Time (milliseconds) for the crawler worker to sleep before moving to a new slot
@@ -89,7 +89,7 @@ constexpr size_t ROBOTS_CACHE_SIZE = 1024;
 
 // Indexer
 constexpr size_t DOCS_PER_INDEX_CHUNK = 500000;
-constexpr uint32_t INDEX_SKIP_SIZE = 500; 
+constexpr uint32_t INDEX_SKIP_SIZE = 500;
 static constexpr const char* INDEX_OUTPUT_DIR = "/var/seamus/index_output";
 constexpr size_t NUM_INDEXER_THREADS = 16; // Should be then number of cores     // todo(Aiden): change depending on number of cores we end up renting per machine
 

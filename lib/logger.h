@@ -11,7 +11,8 @@ enum class LogLevel : uint8_t {
     INFO = 1,
     WARN = 2,
     ERROR = 3,
-    NONE = 4,
+    INSTR = 4,
+    NONE = 5,
 };
 
 namespace logger {
@@ -39,6 +40,10 @@ inline void log(LogLevel level, const char *fmt, ...) {
     case LogLevel::ERROR:
         prefix = "[ERROR] ";
         break;
+    case LogLevel::INSTR:
+     prefix = "[INSTR] ";
+        break;
+        
     default:
         return;
     }
@@ -89,6 +94,17 @@ inline void error(const char *fmt, ...) {
     if (!enabled(LogLevel::ERROR)) return;
     std::lock_guard<std::mutex> lock(log_mtx);
     fputs("[ERROR] ", stderr);
+    va_list args;
+    va_start(args, fmt);
+    vfprintf(stderr, fmt, args);
+    va_end(args);
+    fputc('\n', stderr);
+}
+
+inline void instr(const char *fmt, ...) {
+    if (!enabled(LogLevel::INSTR)) return;
+    std::lock_guard<std::mutex> lock(log_mtx);
+    fputs("[INSTR] ", stderr);
     va_list args;
     va_start(args, fmt);
     vfprintf(stderr, fmt, args);

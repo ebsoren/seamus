@@ -32,7 +32,7 @@ int main() {
 
     // Initialize crawler components/modules
     // Domain carousel
-    DomainCarousel dc;
+    static DomainCarousel dc;
     logger::info("Domain carousel initialized (%zu hash slots, max %zu per queue)", CRAWLER_CAROUSEL_SIZE, CRAWLER_MAX_QUEUE_SIZE);
 
     // Bucket manager
