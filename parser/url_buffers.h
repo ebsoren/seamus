@@ -163,7 +163,7 @@ public:
                 string raw_url(word_start, p - word_start);
                 string url = normalize_url(raw_url);
                 if (url.size() == 0) {
-                    logger::error("add_urls: dropping url (normalize rejected): %s", raw_url.data());
+                    logger::debug("add_urls: dropping url (normalize rejected): %s", raw_url.data());
                     // Skip anchor text
                     p++;
                     while (p < end && *p != '\n') p++;
