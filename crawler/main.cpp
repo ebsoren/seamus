@@ -2,7 +2,6 @@
 
 #include "bucket_manager.h"
 #include "crawler_instrumentation.h"
-#include "crawler_listener.h"
 #include "crawler_worker.h"
 #include "domain_carousel.h"
 #include "../lib/logger.h"
@@ -46,11 +45,6 @@ int main() {
     bm.load_disk_buckets();
     logger::info("Loaded disk buckets into memory");
     bm.start();
-
-    // Crawler listener
-    CrawlerListener cl(&bm, &dc);
-    cl.start();
-    logger::info("Crawler listener started on port %u with %zu threads", CRAWLER_LISTENER_PORT, CRAWLER_LISTENER_THREADS);
 
     // Crawler instrumentation
     CrawlerInstrumentation instrumentation(CRAWLER_THREADPOOL_SIZE);
