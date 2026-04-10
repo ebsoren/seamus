@@ -34,7 +34,7 @@ RestartSec=5
 User=$USER
 Environment=MACHINE_ID=$MACHINE_ID
 LimitNOFILE=1048575
-LimitSTACK=8388608
+LimitSTACK=262144
 
 [Install]
 WantedBy=multi-user.target
