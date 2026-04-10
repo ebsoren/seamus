@@ -5,6 +5,7 @@
 #include "../lib/algorithm.h"
 #include "../lib/Frontier.h"
 #include "../lib/logger.h"
+#include "../lib/url_filter.h"
 #include <optional>
 
 
@@ -152,6 +153,10 @@ bool UrlStore::updateUrl(string& url, vector<string>& anchor_texts, const uint16
         // add to URLStore
         if (priority >= PRIORITY_BUCKETS) {
             logger::debug("updateUrl: dropping url due to low priority (priority=%zu): %s", priority, url.data());
+            return false;
+        }
+        if (is_nsfw_url(url)) {
+            logger::debug("updateUrl: dropping nsfw url: %s", url.data());
             return false;
         }
         if (unique_url_count.load(std::memory_order_relaxed) >= MAX_STORE_URLS) {

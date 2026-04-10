@@ -345,7 +345,5 @@ inline string normalize_url(const string& url) {
         out_len--;
     }
 
-    string result(buf, out_len);
-    if (is_nsfw_url(result)) return string("", 0);
-    return result;
+    return string(buf, out_len);
 }
