@@ -107,9 +107,7 @@ public:
     }
 
     void persist(bool final_persist = false);
-    
-    // bool addUrl(string& url, vector<string>& anchor_texts, const uint16_t seed_distance, const uint16_t domain_distance, const uint16_t eot, const uint16_t eod, const uint32_t num_encountered);
-    bool updateUrl(string& url, vector<string>& anchor_texts, const uint16_t seed_distance, const uint16_t domain_distance, const uint32_t num_encountered);
+    bool updateUrl(string& url, vector<string>& anchor_texts, const uint16_t seed_distance, const uint16_t domain_distance, const uint32_t num_encountered, size_t priority = 0);
     void manage_frontier_and_update_url(URLStoreUpdateRequest& req);
     void batch_manage_frontier_and_update_url(BatchURLStoreUpdateRequest& batch_req);
     bool updateTitleLen(const string& url, const uint16_t eot);
