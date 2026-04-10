@@ -26,6 +26,7 @@ sudo chmod -R 755 /var/seamus
 echo "Configuring system limits..."
 sudo sysctl -w fs.nr_open=1048576
 sudo sysctl -w fs.file-max=1048576
+sudo touch /etc/sysctl.conf
 grep -q "fs.nr_open" /etc/sysctl.conf || echo "fs.nr_open = 1048576" | sudo tee -a /etc/sysctl.conf > /dev/null
 grep -q "fs.file-max" /etc/sysctl.conf || echo "fs.file-max = 1048576" | sudo tee -a /etc/sysctl.conf > /dev/null
 grep -q "hard nofile" /etc/security/limits.conf || echo "* hard nofile 1048576" | sudo tee -a /etc/security/limits.conf > /dev/null
