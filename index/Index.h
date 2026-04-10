@@ -13,7 +13,7 @@ struct post {
 
 struct postings {
     vector<post> posts;
-    uint32_t n_docs;
+    uint64_t n_docs;
 };
 
 class IndexChunk {
@@ -24,7 +24,7 @@ private:
     uint32_t curr_doc_;
     uint32_t chunk;
 
-    size_t posts_count;
+    size_t doc_count;
 
     const uint32_t WORKER_NUMBER;
 

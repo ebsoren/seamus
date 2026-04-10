@@ -7,8 +7,12 @@ public:
 
     // Useful for heuristics on how common the word is
     // Prefer to satisfy constraints on less common words first
-    uint32_t n_posts;
-    uint32_t n_docs;
+    uint64_t n_posts;
+    uint64_t n_docs;
+
+    // Access & easily traverse the file
+    long int postings_start;
+    FILE * fd_;
 
     IndexStreamReader(string word, string chunk_path);
 private:
