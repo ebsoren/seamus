@@ -94,6 +94,12 @@ static constexpr const char* INDEX_OUTPUT_DIR = "/var/seamus/index_output";
 constexpr size_t NUM_INDEXER_THREADS = 16; // Should be then number of cores     // todo(Aiden): change depending on number of cores we end up renting per machine
 
 
+// Index Server to handle outbound word requests from other machines' query handlers
+constexpr size_t INDEX_SERVER_NUM_THREADS = 16; // Should be then number of cores     // todo(Charlie): change depending on number of cores we end up renting per machine
+constexpr uint32_t INDEX_SERVER_PORT = 9100;
+
+// Query Handler
+constexpr size_t QUERY_HANDLER_NUM_THREADS = 16; // Should be then number of cores    // todo(Charlie): change depending on number of cores we end up renting per machine
 
 typedef uint32_t Unicode;
 typedef uint8_t  Utf8;

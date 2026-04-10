@@ -1,3 +1,5 @@
+#pragma once
+
 #include <cstddef>    // for size_t
 #include <cassert>
 #include <cstdint>
