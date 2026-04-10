@@ -5,6 +5,42 @@
 #include <sys/mman.h>
 #include <unistd.h>
 
+LoadedIndex::LoadedIndex(string path) {
+    urls.resize(DOCS_PER_INDEX_CHUNK);
+    dictionary.reserve(DOCS_PER_INDEX_CHUNK);
+
+    // TODO: This is huge. Is heap allocating like this alright?
+    posting_list_ = new uint8_t[POSTING_LIST_BUFFER_SIZE];
+
+    FILE* fd;
+    if ((fd = fopen(path.data(), "rb")) == nullptr) {
+        logger::warn("Failed to open %s", path);
+        return;
+    }
+    
+    // Populate the URL vector
+    uint64_t urls_size;
+    fread(&urls_size, sizeof(uint64_t), 1, fd);
+
+    char url_buff[4096];
+    uint64_t bytes_read = 0;
+    while (bytes_read < urls_size) {
+        fgets(url_buff, sizeof(url_buff), fd);
+        bytes_read += strlen(url_buff);
+        // TODO: Parse <32b ID> <varlen URL>\n and add to urls vector 
+    }
+
+    // Populate the dictionary
+
+    // Populate the posting list
+
+    fclose(fd);
+}
+
+LoadedIndex::~LoadedIndex() {
+    delete[] posting_list_;
+}
+
 IndexStreamReader::IndexStreamReader(string word, string chunk_path) : word(move(word)) {
     struct stat buff;
     if (stat(chunk_path.data(), &buff) == -1) {

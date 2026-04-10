@@ -1,6 +1,17 @@
 #include "lib/string.h"
 #include "index/Index.h"
 
+class LoadedIndex {
+private:
+    vector<string> urls;
+    unordered_map<string, uint64_t> dictionary;
+    uint8_t* posting_list_;
+
+public:
+    LoadedIndex(string path);
+    ~LoadedIndex();
+};
+
 class IndexStreamReader {
 public:
     string word;
