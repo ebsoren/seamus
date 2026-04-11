@@ -31,6 +31,7 @@ class QueryHandler {
 
         // TODO: determine final input semantics for get_results
         vector<RankedPage> get_results(vector<string> query_words) {
+
             // return doc ids and positions of query words in those docs for ranking to use
             vector<std::future<vector<RankedPage>>> futures;
             // takes words and starts with rarest first

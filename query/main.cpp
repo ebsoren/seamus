@@ -9,10 +9,16 @@
 #include "../index/Index.h"
 #include "../index-stream-reader/isr.h"
 
+/*
+Query Language Syntax:
+    - needs to support AND, OR, NOT, and parentheses for precedence and ordering
+    - queries without explicit operators will be treated as AND queries (e.g. "hello world" is treated as "hello AND world")
+    - for simplicity, we will assume that all queries are well-formed and do not contain syntax errors (e.g. unbalanced parentheses, invalid operator usage, etc.)
+        - can add error handling if needed
+*/
 int main(int argc, char* argv[]) {
 
-    // TODO: determine query language syntax/how to parse queries before feeding into QueryCompiler
-    // parse query here
+    
     auto query_words = vector<string>{"example", "query", "words"};
 
     // TODO(charlie): input constructor args for ISR
