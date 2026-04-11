@@ -11,13 +11,6 @@ public:
     uint32_t n_docs;
 
     IndexStreamReader(string word, string chunk_path);
-private:
-    post* curr_loc;
-
-    // Return the current post/location for the given word
-    const inline post loc() {
-        return *curr_loc;
-    }
 
     // Advance the ISR to the next post in the index
     // @returns next post on success; {0, 0} if at last post
@@ -27,4 +20,12 @@ private:
     // If no posts exist for that document, the ISR remains at the current location
     // @returns first post of the doc on success; {0, 0} if no posts exist for that document
     post advance_to(uint32_t doc);
+    
+private:
+    post* curr_loc;
+
+    // Return the current post/location for the given word
+    const inline post loc() {
+        return *curr_loc;
+    }
 };

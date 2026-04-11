@@ -6,6 +6,7 @@
 
 #include <thread>
 
+// receives requests for word doc data from another machine's query handlers
 class IndexServer {
     private:
         RPCListener* rpc_listener;      // Listener for client requests

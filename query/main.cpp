@@ -15,6 +15,7 @@ Query Language Syntax:
     - queries without explicit operators will be treated as AND queries (e.g. "hello world" is treated as "hello AND world")
     - for simplicity, we will assume that all queries are well-formed and do not contain syntax errors (e.g. unbalanced parentheses, invalid operator usage, etc.)
         - can add error handling if needed
+    - if words in quotes, there must be an exact match
 */
 int main(int argc, char* argv[]) {
 
