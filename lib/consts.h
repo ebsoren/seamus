@@ -49,12 +49,7 @@ static_assert(NUM_PARSERS == CRAWLER_THREADPOOL_SIZE);      // TODO(hershey): ma
 
 
 // Seed URLs (loaded into priority bucket 0 on startup)
-<<<<<<< HEAD
-constexpr int SEED_LIST_SIZE = 103;
-=======
-constexpr int SEED_LIST_SIZE = 108;
->>>>>>> d6bdc20 (consts fixes)
- 
+constexpr size_t SEED_LIST_SIZE = 108; 
 constexpr const char* SEED_LIST[SEED_LIST_SIZE] = {
     "https://www.ed.gov/",
     "https://www.energy.gov/national-laboratories",
