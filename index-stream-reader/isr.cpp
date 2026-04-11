@@ -1,5 +1,6 @@
 #include "isr.h"
 #include "lib/logger.h"
+#include "lib/utf8.h"
 
 #include <fcntl.h>
 #include <sys/mman.h>
@@ -90,4 +91,32 @@ IndexStreamReader::IndexStreamReader(string word, LoadedIndex* index) : word(mov
     curr_loc_ += sizeof(uint64_t) + 1; // skip over the number and the newline
     
     // Starting of posting list, num_docs, num_posts all set
+}
+
+const inline post IndexStreamReader::loc() {
+    return post{doc_offset_, loc_offset_};
+}
+
+post IndexStreamReader::advance() {
+    if (posts_consumed_ == n_posts) return post{0, 0};
+
+    posts_consumed_++;
+    uint32_t loc_or_flag = ReadUtf8(&curr_loc_, nullptr);
+    if (loc_or_flag > 0) {
+        loc_offset_ += loc_or_flag;
+        return post{doc_offset_, loc_offset_};
+    }
+
+    // If we read 0, that was the flag for a new doc
+    doc_offset_ += ReadUtf8(&curr_loc_, nullptr); // Add to doc offset
+    loc_offset_= ReadUtf8(&curr_loc_, nullptr); // Reset loc offset
+    return post{doc_offset_, loc_offset_};
+}
+
+post IndexStreamReader::advance_to(uint32_t doc) {
+    while (doc_offset_ < doc) {
+        post p = advance();
+        if (p.doc == 0) return p;
+    }
+    return post{doc_offset_, loc_offset_};
 }

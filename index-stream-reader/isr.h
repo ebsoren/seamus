@@ -32,11 +32,18 @@ private:
     uint8_t* postings_start_;
     uint8_t* curr_loc_;
 
+    // Track number of posts we've seen to know whether we're at the end
+    uint64_t posts_consumed_ = 0;
+    
+    // Track the current deltas
+    uint32_t doc_offset_ = 0;
+    uint32_t loc_offset_ = 0;
+
     // Return the current post/location for the given word
     const inline post loc();
 
     // Advance the ISR to the next post in the index
-    // @returns next post on success; {0, 0} if at last post
+    // @returns post just read on success; {0, 0} if at last post
     post advance();
 
     // Advance the ISR to the first post of a given document, if one exists
