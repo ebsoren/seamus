@@ -49,7 +49,7 @@ static_assert(NUM_PARSERS == CRAWLER_THREADPOOL_SIZE);      // TODO(hershey): ma
 
 
 // Seed URLs (loaded into priority bucket 0 on startup)
-constexpr int SEED_LIST_SIZE = 104;
+constexpr int SEED_LIST_SIZE = 103;
  
 constexpr const char* SEED_LIST[SEED_LIST_SIZE] = {
     "https://www.ed.gov/",
@@ -148,7 +148,7 @@ constexpr const char* SEED_LIST[SEED_LIST_SIZE] = {
     "https://www.wikimedia.org",
     "https://www.fandom.com",
     "https://www.w3schools.com",
-    "https://wikisource.org"
+    "https://wikisource.org",
     "https://lithub.com/",
     "https://www.poetryfoundation.org/",
     "https://www.gutenberg.org/",
