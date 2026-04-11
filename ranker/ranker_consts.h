@@ -16,6 +16,7 @@ constexpr double factor_2_weight = 1.0;
 constexpr double factor_3_weight = 1.0;
 constexpr double factor_4_weight = 1.0;
 constexpr double factor_5_weight = 1.0;
+constexpr double factor_6_weight = 1.0;
 constexpr double dynamic_weight_sum = factor_1_weight + factor_2_weight + factor_3_weight + factor_4_weight + factor_5_weight;
 
 // PARAMETERS FOR THE STATIC WEIGHTING FUNCTION. TUNE TO MAKE IT BETTER.
