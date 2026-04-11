@@ -6,8 +6,10 @@ private:
     vector<string> urls;
     unordered_map<string, uint64_t> dictionary;
     uint8_t* posting_list_;
+    uint64_t dictionary_size = 0;
 
 public:
+    friend class IndexStreamReader;
     LoadedIndex(string path);
     ~LoadedIndex();
 };
@@ -21,18 +23,17 @@ public:
     uint64_t n_posts;
     uint64_t n_docs;
 
-    // Access & easily traverse the file
-    long int postings_start;
-    FILE * fd_;
-
-    IndexStreamReader(string word, string chunk_path);
+    IndexStreamReader(string word, LoadedIndex* index);
 private:
-    post* curr_loc;
+    // Access & easily traverse the file
+    LoadedIndex* index;
+
+    // Pointer to track locations in index postings buffer
+    uint8_t* postings_start_;
+    uint8_t* curr_loc_;
 
     // Return the current post/location for the given word
-    const inline post loc() {
-        return *curr_loc;
-    }
+    const inline post loc();
 
     // Advance the ISR to the next post in the index
     // @returns next post on success; {0, 0} if at last post
