@@ -18,16 +18,11 @@
 
 class QueryHandler {
     private:
-        IndexServer* index_server; // connection to index server to send outbound word requests to
         IndexStreamReader* isr;    // local ISR to query for words whose index chunks are on this machine
         ThreadPool pool;
 
     public:
-        QueryHandler(IndexServer* index_server, IndexStreamReader* isr, size_t n_threads = NUM_MACHINES) : pool(n_threads) {
-            // initialize connection to index server
-            this->index_server = index_server;
-            this->isr = isr;
-        }
+        QueryHandler(IndexStreamReader* isr, size_t n_threads = NUM_MACHINES) : pool(n_threads), isr(isr) { };
 
         // TODO: determine final input semantics for get_results
         vector<RankedPage> get_results(vector<string> query_words) {

@@ -25,7 +25,7 @@ int main(int argc, char* argv[]) {
     // TODO(charlie): input constructor args for ISR
     IndexServer index_server;
     IndexStreamReader isr;
-    QueryHandler qh(&index_server, &isr);
+    QueryHandler qh(&isr);
     vector<RankedPage> results = qh.get_results(query_words);
 
     Ranker r();
