@@ -10,8 +10,8 @@ constexpr uint8_t LOG_LEVEL = 2;
 constexpr const char* USER_AGENT = "Seamus the Search Engine (web crawler for university course)";
 
 // Global
-constexpr size_t NUM_MACHINES = 3;
-constexpr const char* MACHINES[NUM_MACHINES] = {"34.70.54.47", "136.119.91.226", "35.223.96.82"};
+constexpr size_t NUM_MACHINES = 18;
+constexpr const char* MACHINES[NUM_MACHINES] = {"136.119.122.181”, “34.41.200.76”, “34.122.197.142”, “34.16.67.187”, “136.112.229.222”, “136.114.229.124”, “35.238.21.122”, “34.9.161.79”, “34.136.74.60”, “34.55.208.73”, “34.44.13.147”, “34.30.238.129”, "34.55.179.213", "34.44.148.113", "136.111.182.222", "34.70.54.47", "136.119.91.226", "35.223.96.82"};
 
 inline const char* get_machine_addr(size_t machine_id) {
     assert(machine_id < NUM_MACHINES);
@@ -42,14 +42,18 @@ constexpr size_t CRAWLER_WORKER_SLEEP_MS = 10;              // Time (millisecond
 constexpr size_t CRAWLER_INSTRUMENTATION_INTERVAL_SEC = 20; // Time (seconds) between instrumentation drain cycles
 constexpr size_t CRAWLER_INSTRUMENTATION_BATCH_SIZE = 64;    // Number of successful crawls before submitting a batched metric update
 
-constexpr size_t CRAWLER_OUTBOUND_BATCH_SIZE = 1<<13;         // Number of crawl targets to buffer per machine before sending
+constexpr size_t CRAWLER_OUTBOUND_BATCH_SIZE = 256;         // Number of crawl targets to buffer per machine before sending
 constexpr size_t PRIORITY_BUCKETS = 8;
 constexpr size_t NUM_PARSERS = CRAWLER_THREADPOOL_SIZE;
 static_assert(NUM_PARSERS == CRAWLER_THREADPOOL_SIZE);      // TODO(hershey): make sure this assumption is valid
 
 
 // Seed URLs (loaded into priority bucket 0 on startup)
+<<<<<<< HEAD
 constexpr int SEED_LIST_SIZE = 103;
+=======
+constexpr int SEED_LIST_SIZE = 108;
+>>>>>>> d6bdc20 (consts fixes)
  
 constexpr const char* SEED_LIST[SEED_LIST_SIZE] = {
     "https://www.ed.gov/",
@@ -154,7 +158,12 @@ constexpr const char* SEED_LIST[SEED_LIST_SIZE] = {
     "https://www.gutenberg.org/",
     "https://www.rollingstone.com/",
     "https://www.ssrn.com/",
-    "https://www.researchgate.net/"
+    "https://www.researchgate.net/",
+    "https://www.janestreet.com",
+    "https://www.mlp.com/",
+    "https://www.imc.com/us",
+    "https://www.anduril.com/",
+    "https://www.databricks.com/",
 };
 
 
