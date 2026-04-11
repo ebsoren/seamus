@@ -10,8 +10,8 @@ constexpr uint8_t LOG_LEVEL = 3;
 constexpr const char* USER_AGENT = "Seamus the Search Engine (web crawler for university course)";
 
 // Global
-constexpr size_t NUM_MACHINES = 1;
-constexpr const char* MACHINES[NUM_MACHINES] = {"127.0.0.1"};
+constexpr size_t NUM_MACHINES = 3;
+constexpr const char* MACHINES[NUM_MACHINES] = {"34.55.208.73", "34.44.13.147", "34.30.238.129"};
 
 inline const char* get_machine_addr(size_t machine_id) {
     assert(machine_id < NUM_MACHINES);
@@ -40,9 +40,9 @@ constexpr size_t CRAWLER_PERSIST_INTERVAL_SEC = 60;         // Time (seconds) to
 constexpr size_t CRAWLER_FEED_INTERVAL_SEC = 1;             // Time (seconds) to wait between feeding in-memory priority buckets -> domain carousel
 constexpr size_t CRAWLER_WORKER_SLEEP_MS = 10;              // Time (milliseconds) for the crawler worker to sleep before moving to a new slot
 constexpr size_t CRAWLER_INSTRUMENTATION_INTERVAL_SEC = 20; // Time (seconds) between instrumentation drain cycles
-constexpr size_t CRAWLER_INSTRUMENTATION_BATCH_SIZE = 1;    // Number of successful crawls before submitting a batched metric update
+constexpr size_t CRAWLER_INSTRUMENTATION_BATCH_SIZE = 8192;    // Number of successful crawls before submitting a batched metric update
 
-constexpr size_t CRAWLER_OUTBOUND_BATCH_SIZE = 1<<8;         // Number of crawl targets to buffer per machine before sending
+constexpr size_t CRAWLER_OUTBOUND_BATCH_SIZE = 1<<13;         // Number of crawl targets to buffer per machine before sending
 constexpr size_t PRIORITY_BUCKETS = 8;
 constexpr size_t NUM_PARSERS = CRAWLER_THREADPOOL_SIZE;
 static_assert(NUM_PARSERS == CRAWLER_THREADPOOL_SIZE);      // TODO(hershey): make sure this assumption is valid
@@ -331,10 +331,10 @@ static constexpr size_t MAX_BASE_LEN = 256;
 static constexpr size_t MAX_HTML_SIZE = 100 * 1024; // 100 KB
 
 // URL Store
-static constexpr uint32_t MAX_STORE_URLS = (6*1e8)/18; // 600M/18
+static constexpr uint32_t MAX_STORE_URLS = (9*1e8)/18; // 900M/18
 static constexpr const char* URL_STORE_OUTPUT_DIR = "/var/seamus/urlstore_output";
 static const string URL_STORE_OUTPUT_DIR_STR = string(URL_STORE_OUTPUT_DIR);
-constexpr bool URL_FROM_SCRATCH = false; // whether to read from file or start from scratch on url_store bottup
+constexpr bool URL_FROM_SCRATCH = true; // whether to read from file or start from scratch on url_store bottup
 constexpr uint32_t URL_STORE_NUM_THREADS = 16;
                                                             // We cannot have multiple client listeners running concurrently calling read and update methods without locks
                                                             // At the same time, we do want multiple listeners, so we should add some locking mechanism better than a global one
