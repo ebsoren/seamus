@@ -11,7 +11,7 @@ constexpr const char* USER_AGENT = "Seamus the Search Engine (web crawler for un
 
 // Global
 constexpr size_t NUM_MACHINES = 3;
-constexpr const char* MACHINES[NUM_MACHINES] = {"34.55.208.73", "34.44.13.147", "34.30.238.129"};
+constexpr const char* MACHINES[NUM_MACHINES] = {"34.70.54.47", "136.119.91.226", "35.223.96.82"};
 
 inline const char* get_machine_addr(size_t machine_id) {
     assert(machine_id < NUM_MACHINES);
