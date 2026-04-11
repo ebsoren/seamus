@@ -64,7 +64,7 @@ private:
         const char* addr = get_machine_addr(machine_id);
         string host(addr, strlen(addr));
         if (!send_batch_urlstore_update(host, URL_STORE_PORT, batch)) {
-            logger::warn("Failed to send outbound batch to machine %zu (%s)", machine_id, addr);
+            logger::error("Failed to send outbound batch to machine %zu (%s)", machine_id, addr);
         }
     }
 };
