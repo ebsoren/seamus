@@ -10,7 +10,7 @@ constexpr uint8_t LOG_LEVEL = 3;
 constexpr const char* USER_AGENT = "Seamus the Search Engine (web crawler for university course)";
 
 // Global
-constexpr size_t NUM_MACHINES = 18;
+constexpr size_t NUM_MACHINES = 3;
 // MACHINE_IDS PER PERSON
 // Hershey - 0,1,2
 // David - 3,4,5
@@ -19,12 +19,7 @@ constexpr size_t NUM_MACHINES = 18;
 // Aiden - 12,13,14
 // Erik - 15,16,17
 constexpr const char* MACHINES[NUM_MACHINES] = {
-    "136.119.122.181", "34.41.200.76", "34.122.197.142",
-    "34.16.67.187", "136.112.229.222", "136.114.229.124",
-    "35.238.21.122", "34.9.161.79", "34.136.74.60",
     "34.55.208.73", "34.44.13.147", "34.30.238.129",
-    "34.55.179.213", "34.44.148.113", "136.111.182.222",
-    "34.70.54.47", "136.119.91.226", "35.223.96.82"
 };
 inline const char* get_machine_addr(size_t machine_id) {
     assert(machine_id < NUM_MACHINES);
