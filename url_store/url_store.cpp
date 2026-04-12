@@ -99,7 +99,6 @@ void UrlStore::batch_manage_frontier_and_update_url(BatchURLStoreUpdateRequest& 
 // Handles a BatchURLStoreUpdateRequest given an ephemeral socket fd
 void UrlStore::client_handler(int fd) {
     std::optional<BatchURLStoreUpdateRequest> req = recv_batch_urlstore_update(fd);
-    close(fd);
     if (!req) return;
 
     record_rpc_urls(req->reqs.size());
