@@ -223,8 +223,122 @@ inline bool has_bad_extension(const char* path, size_t len) {
     return false;
 }
 
+// Top-level domain filter
+static constexpr const char* ALLOWED_TLDS[] = {
+    // Generic
+    "com", "org", "net", "edu", "gov", "mil", "int",
+    // Tech
+    "io", "dev", "app", "ai", "co", "me", "cc", "tv", "fm", "ly",
+    "gg", "sh", "to", "xyz", "tech", "cloud", "so", "gl", "ws", "ac",
+    // Knowledge
+    "info", "wiki", "news", "pro", "museum", "jobs",
+    "page", "blog", "science", "health", "media",
+    // English-speaking countries
+    "uk", "us", "au", "ca", "nz", "ie", "za", "sg", "hk", "in",
+};
+static constexpr size_t ALLOWED_TLDS_COUNT = sizeof(ALLOWED_TLDS) / sizeof(ALLOWED_TLDS[0]);
+
+inline bool has_allowed_tld(const char* in, size_t host_start, size_t host_end) {
+    size_t last_dot = host_end;
+    for (size_t i = host_end; i > host_start; i--) {
+        if (in[i - 1] == '.') { last_dot = i; break; }
+    }
+    if (last_dot >= host_end) return false;
+    size_t tld_len = host_end - last_dot;
+    for (size_t i = 0; i < ALLOWED_TLDS_COUNT; i++) {
+        size_t alen = strlen(ALLOWED_TLDS[i]);
+        if (tld_len != alen) continue;
+        bool match = true;
+        for (size_t j = 0; j < alen; j++) {
+            char c = in[last_dot + j];
+            if (c >= 'A' && c <= 'Z') c += 32;
+            if (c != ALLOWED_TLDS[i][j]) { match = false; break; }
+        }
+        if (match) return true;
+    }
+    return false;
+}
+
+// non-english country codes
+static constexpr const char* NON_ENGLISH_CODES[] = {
+    "ar", "bg", "bn", "cs", "da", "de", "el", "es", "fa", "fi",
+    "fr", "he", "hi", "hr", "hu", "id", "it", "ja", "ko", "ms",
+    "nl", "no", "pl", "pt", "ro", "ru", "sk", "sl", "sr", "sv",
+    "th", "tr", "vi", "zh",
+};
+static constexpr size_t NON_ENGLISH_CODES_COUNT = sizeof(NON_ENGLISH_CODES) / sizeof(NON_ENGLISH_CODES[0]);
+
+inline bool is_non_english_code(const char* s) {
+    char a = s[0], b = s[1];
+    if (a >= 'A' && a <= 'Z') a += 32;
+    if (b >= 'A' && b <= 'Z') b += 32;
+    for (size_t i = 0; i < NON_ENGLISH_CODES_COUNT; i++) {
+        if (a == NON_ENGLISH_CODES[i][0] && b == NON_ENGLISH_CODES[i][1]) return true;
+    }
+    return false;
+}
+
+inline bool has_non_english_code(const char* in, size_t host_start, size_t host_end, size_t path_start, size_t path_end) {
+    if (host_end - host_start > 3 && in[host_start + 2] == '.') {
+        if (is_non_english_code(in + host_start)) return true;
+    }
+    // Path prefix: /xx/ or /xx- (language-region like /zh-cn/)
+    if (path_end - path_start >= 4 && in[path_start] == '/') {
+        char after = in[path_start + 3];
+        if (after == '/' || after == '-') {
+            if (is_non_english_code(in + path_start + 1)) return true;
+        }
+    }
+    return false;
+}
+
+// Avoid dead end pages
+static constexpr const char* JUNK_PATH_SEGMENTS[] = {
+    "/login", "/signin", "/logout", "/signout",
+    "/api/",
+    "/feed/", "/rss", "/atom",
+    "/print/", "/share/",
+    "/calendar/",
+    "/tag/", "/tags/", "/category/", "/categories/",
+    "/search?", "/search/",
+    "/wp-admin", "/wp-content/", "/wp-includes/", "/wp-json/",
+    "/admin/", "/cgi-bin/",
+    "/cart", "/checkout",
+};
+static constexpr size_t JUNK_PATH_SEGMENTS_COUNT = sizeof(JUNK_PATH_SEGMENTS) / sizeof(JUNK_PATH_SEGMENTS[0]);
+
+inline bool has_junk_path(const char* path, size_t len) {
+    for (size_t i = 0; i < JUNK_PATH_SEGMENTS_COUNT; i++) {
+        const char* seg = JUNK_PATH_SEGMENTS[i];
+        size_t slen = strlen(seg);
+        if (slen > len) continue;
+        for (size_t j = 0; j <= len - slen; j++) {
+            bool match = true;
+            for (size_t k = 0; k < slen; k++) {
+                char c = path[j + k];
+                if (c >= 'A' && c <= 'Z') c += 32;
+                if (c != seg[k]) { match = false; break; }
+            }
+            if (match) return true;
+        }
+    }
+    return false;
+}
+
+// Avoid ridiculously long paths
+static constexpr size_t MAX_PATH_DEPTH = 8;
+
+inline bool exceeds_path_depth(const char* in, size_t path_start, size_t path_end) {
+    size_t depth = 0;
+    for (size_t i = path_start; i < path_end; i++) {
+        if (in[i] == '/') depth++;
+        if (depth > MAX_PATH_DEPTH) return true;
+    }
+    return false;
+}
+
 // Normalize a URL in place. Returns an empty string if the URL should be
-// dropped entirely (non-http(s), bad extension, too long, NSFW).
+// dropped entirely (non-http(s), bad extension, too long, non-English, junk path).
 //
 // Transformations applied:
 //  - scheme lowercased; non-http(s) rejected
@@ -232,6 +346,10 @@ inline bool has_bad_extension(const char* path, size_t len) {
 //  - host lowercased
 //  - default ports (:80/:443) stripped
 //  - fragment (#...) stripped
+//  - non-allowed TLDs rejected
+//  - non-English locale in subdomain/path rejected
+//  - junk path patterns rejected (login, admin, wp-*, etc.)
+//  - excessive path depth (>8) rejected
 //  - tracking/session query params dropped (utm_*, fbclid, jsessionid, ...)
 //  - trailing '/' stripped (except on root path)
 inline string normalize_url(const string& url) {
@@ -292,6 +410,18 @@ inline string normalize_url(const string& url) {
 
     // Reject binary/media file extensions (based on path, not query)
     if (has_bad_extension(in + path_start, query_start - path_start)) return string("", 0);
+
+    // Reject non-allowed TLDs
+    if (!has_allowed_tld(in, host_start, host_content_end)) return string("", 0);
+
+    // Reject non-English locale in subdomain or path prefix
+    if (has_non_english_code(in, host_start, host_content_end, path_start, query_start)) return string("", 0);
+
+    // Reject junk path patterns
+    if (has_junk_path(in + path_start, query_start - path_start)) return string("", 0);
+
+    // Reject excessive path depth
+    if (exceeds_path_depth(in, path_start, query_start)) return string("", 0);
 
     // Build normalized output into scratch buffer.
     char buf[2048];
