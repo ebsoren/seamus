@@ -273,6 +273,9 @@ void UrlStore::persist(bool final_persist) {
 
             fwrite(&data.eod, sizeof(uint16_t), 1, fd);
 
+            fwrite(&data.domain_dist, sizeof(uint16_t), 1, fd);
+            fwrite(&data.crawled, sizeof(bool), 1, fd);
+
             uint32_t num_freqs = static_cast<uint32_t>(data.anchor_freqs.size());
             fwrite(&num_freqs, sizeof(uint32_t), 1, fd);
 
@@ -345,6 +348,8 @@ void UrlStore::readFromFile(const int worker_number) {
         url_data[url].title = string(title_buf, title_len);
         
         fread(&url_data[url].eod, sizeof(uint16_t), 1, fd);
+        fread(&url_data[url].domain_dist, sizeof(uint16_t), 1, fd);
+        fread(&url_data[url].crawled, sizeof(bool), 1, fd);
 
         uint32_t num_anchor_freqs;
         fread(&num_anchor_freqs, sizeof(uint32_t), 1, fd);
