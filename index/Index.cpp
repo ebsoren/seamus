@@ -223,9 +223,10 @@ void IndexChunk::persist() {
                 uint64_t pad = SKIP_LIST_SIZE - skip_bytes_written;
                 while (pad > 0) {
                     size_t n = pad < sizeof(ZERO_BUF) ? static_cast<size_t>(pad) : sizeof(ZERO_BUF);
-                    fwrite(ZERO_BUF, 1, n, fd);
+                    fwrite(ZERO_BUF, sizeof(char), n, fd);
                     pad -= n;
                 }
+                logger::debug("Wrote %u bytes of padding for %s.", pad, alphabetized_entries[i].data());
             }
         }
 

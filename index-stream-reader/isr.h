@@ -46,8 +46,8 @@ private:
     // @returns post just read on success; {0, 0} if at last post
     post advance();
 
-    // Advance the ISR to the first post of a given document, if one exists
-    // If no posts exist for that document, the ISR remains at the current location
-    // @returns first post of the doc on success; {0, 0} if no posts exist for that document
+    // Advance the ISR to the first post at or after the given document, if one exists
+    // If no posts exist for that document, the ISR returns the first post at a document AFTER
+    // @returns first post of the doc (or first doc after) on success ; {0, 0} if no posts exist for/after that document
     post advance_to(uint32_t doc);
 };
