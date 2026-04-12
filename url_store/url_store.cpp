@@ -14,7 +14,7 @@ UrlStore::UrlStore(DomainCarousel* dc, const int worker_num) : dc(dc) {
     
     rpc_listener = new RPCListener(URL_STORE_PORT, URL_STORE_NUM_THREADS);
     listener_thread = std::thread([this]() {
-        rpc_listener->listener_loop([this](int fd) { client_handler(fd); });
+        rpc_listener->listenDer_loop([this](int fd) { client_handler(fd); });
     });
 
     mkdir(URL_STORE_OUTPUT_DIR, 0755);   // no-op if already exists
@@ -99,6 +99,7 @@ void UrlStore::batch_manage_frontier_and_update_url(BatchURLStoreUpdateRequest& 
 // Handles a BatchURLStoreUpdateRequest given an ephemeral socket fd
 void UrlStore::client_handler(int fd) {
     std::optional<BatchURLStoreUpdateRequest> req = recv_batch_urlstore_update(fd);
+    close(fd);
     if (!req) return;
 
     record_rpc_urls(req->reqs.size());
