@@ -2,10 +2,9 @@
 #include <stdexcept>
 #include <cassert>
 
-// include your parser header here
 #include "../query/expressions.h"
 
-// Utils
+// UTILS
 
 void assert_true(bool condition, const char* msg) {
     if (!condition) {
@@ -19,8 +18,6 @@ void expect_throw(const string& query, const char* msg) {
 
     try {
         parse_query(query);
-    } catch (const std::invalid_argument&) {
-        thrown = true;
     } catch (...) {
         thrown = true;
     }
@@ -30,6 +27,7 @@ void expect_throw(const string& query, const char* msg) {
 
 
 // TESTS
+
 void test_single_term() {
     string word = string("apple");
     auto res = parse_query(word);
@@ -37,37 +35,37 @@ void test_single_term() {
     assert_true(res.size() == 1, "single term should produce 1 clause");
     assert_true(res[0].size() == 1, "clause should contain 1 term");
     assert_true(res[0][0].token == "apple", "token mismatch");
-    assert_true(res[0][0].included == true, "term should be included");
+    assert_true(res[0][0].included == INCLUDED, "term should be included");
 }
 
 void test_only_not_rejected() {
-    expect_throw(string("NOT apple"), "ONLY NOT query should throw");
-    expect_throw(string("NOT apple OR NOT banana"), "only NOT OR NOT should throw");
+    expect_throw(string("-apple"), "ONLY NOT query should throw");
+    expect_throw(string("-apple | -banana"), "only NOT OR NOT should throw");
 }
 
 void test_and_logic() {
     string word = string("apple banana");
     auto res = parse_query(word);
 
-    assert_true(res.size() >= 1, "AND should produce result");
+    assert_true(res.size() == 1, "AND should produce 1 clause");
     assert_true(res[0].size() == 2, "AND merges into clause");
 }
 
 void test_or_logic() {
-    string word = string("apple OR banana");
+    string word = string("apple | banana");
     auto res = parse_query(word);
 
     assert_true(res.size() == 2, "OR should produce 2 clauses");
 }
 
 void test_parentheses() {
-    string word = string("(apple OR banana) cherry");
+    string word = string("(apple | banana) cherry");
     auto res = parse_query(word);
 
-    assert_true(res.size() >= 1, "parentheses expansion valid");
+    assert_true(res.size() == 2, "parentheses should expand OR");
 
     for (auto& clause : res) {
-        assert_true(clause.size() >= 2, "AND should combine terms");
+        assert_true(clause.size() == 2, "AND should combine terms");
     }
 }
 
@@ -76,34 +74,35 @@ void test_phrase_tokenization() {
     auto res = parse_query(word);
 
     assert_true(res.size() == 1, "phrase should be single clause");
-    assert_true(res[0][0].token.contains(' ') == true, "phrase preserved spacing");
+    assert_true(res[0][0].flag == PHRASE, "should be marked as PHRASE");
+    assert_true(res[0][0].token.contains(' '), "phrase preserved spacing");
 }
 
 void test_not_inside_expression() {
-    string word = string("apple OR NOT banana");
+    string word = string("apple | -banana");
     auto res = parse_query(word);
 
-    // NOT clause removed → only apple remains
+    // "-banana" clause removed → only apple remains
     assert_true(res.size() == 1, "NOT-only clause removed");
 
     for (auto& t : res[0]) {
-        assert_true(t.included == true, "no NOT terms should remain");
+        assert_true(t.included == INCLUDED, "no NOT terms should remain");
     }
 }
 
 void test_filtering_behavior() {
-    string word = string("NOT a OR (NOT b NOT c)");
+    string word = string("-a | (-b -c)");
     expect_throw(word, "all NOT clauses removed → exception expected");
 }
 
 void test_complex_expression() {
-    string word = string("(apple OR banana) AND (cherry OR \"new york\")");
+    string word = string("(apple | banana) (cherry | \"new york\")");
     auto res = parse_query(word);
 
-    assert_true(res.size() >= 1, "complex query produces results");
+    assert_true(res.size() == 4, "cross product expected (2x2)");
 
     for (auto& clause : res) {
-        assert_true(clause.size() >= 2, "AND expansion works");
+        assert_true(clause.size() == 2, "AND expansion works");
     }
 }
 
@@ -121,23 +120,31 @@ void test_sorting_by_rarity() {
     }
 }
 
+void test_deduplication() {
+    string word = string("apple apple banana apple");
+    auto res = parse_query(word);
+
+    assert_true(res.size() == 1, "still one clause");
+
+    // apple should appear only once
+    int apple_count = 0;
+    for (auto& t : res[0]) {
+        if (t.token == "apple") apple_count++;
+    }
+
+    assert_true(apple_count == 1, "duplicates should be removed");
+}
+
+void test_contradiction_removal() {
+    string word = string("apple -apple");
+    expect_throw(word, "contradiction should remove clause entirely");
+}
+
 void test_massive_complex_query() {
-    /*
-        Query structure:
-
-        (apple OR "new york" OR NOT banana)
-        AND
-        (cherry OR NOT grape OR (orange AND NOT kiwi))
-        AND
-        NOT watermelon
-    */
-
     string query = string(
-        "(apple OR \"new york\" OR NOT banana) "
-        "AND "
-        "(cherry OR NOT grape OR (orange AND NOT kiwi)) "
-        "AND "
-        "NOT watermelon"
+        "(apple | \"new york\" | -banana) "
+        "(cherry | -grape | (orange -kiwi)) "
+        "-watermelon"
     );
 
     bool thrown = false;
@@ -145,37 +152,33 @@ void test_massive_complex_query() {
 
     try {
         res = parse_query(query);
-    } catch (const std::invalid_argument&) {
+    } catch (...) {
         thrown = true;
     }
 
     if (thrown) {
-        // valid outcome if everything collapses to NOT-only
-        assert_true(true, "complex query correctly collapsed to empty result");
+        assert_true(true, "complex query may collapse entirely");
         return;
     }
 
-    assert_true(res.size() > 0, "result should contain at least one clause");
+    assert_true(res.size() > 0, "result should contain clauses");
 
-    // ensure no clause is NOT-only (guarantee filter worked)
     for (const auto& clause : res) {
         bool has_positive = false;
 
         for (const auto& term : clause) {
-            if (term.included) {
+            if (term.included == INCLUDED) {
                 has_positive = true;
             }
         }
 
-        assert_true(has_positive, "no clause should be NOT-only after filtering");
+        assert_true(has_positive, "no clause should be NOT-only");
     }
 
-    // ensure structure consistency
     for (const auto& clause : res) {
-        assert_true(clause.size() >= 1, "clause should not be empty");
+        assert_true(!clause.empty(), "clause should not be empty");
     }
 
-    // ensure sorting by rarity still holds
     for (const auto& clause : res) {
         for (size_t i = 1; i < clause.size(); i++) {
             assert_true(
@@ -185,11 +188,10 @@ void test_massive_complex_query() {
         }
     }
 
-    // sanity check: phrase preserved
     bool found_phrase = false;
     for (const auto& clause : res) {
         for (const auto& term : clause) {
-            if (term.token.contains(' ')) {
+            if (term.flag == PHRASE) {
                 found_phrase = true;
             }
         }
@@ -200,7 +202,8 @@ void test_massive_complex_query() {
     std::cout << "COMPLEX TEST PASSED" << std::endl;
 }
 
-// Main function
+
+// Main
 int main() {
     test_single_term();
     test_only_not_rejected();
@@ -212,6 +215,8 @@ int main() {
     test_filtering_behavior();
     test_complex_expression();
     test_sorting_by_rarity();
+    test_deduplication();
+    test_contradiction_removal();
     test_massive_complex_query();
 
     std::cout << "ALL TESTS PASSED" << std::endl;

@@ -6,6 +6,13 @@
 #include <cassert>
 #include <cstring>
 
+// LOGIC:
+// "..." → PHRASE
+// - → NOT
+// | → OR
+// space → AND
+
+
 // LOGIC FOR EXPRESSIONS IS AS FOLLOWS:
 // 1) Words surrounded by "" are a phrase and must be found in that specific order
 // 2) NOT means the word is NOT included in the query. There cannot ONLY be NOTs in a query
@@ -22,22 +29,29 @@
 // Each vector<Term> should be organized from least common Term to most common so search is able to 
 // be done more efficiently. This should be kept in mind by the user
 
+enum PhraseFlag {
+    INDIV,
+    PHRASE
+};
 
-// TODO: SHOULD CALL INDEX TO GET RARITY HERE!
-double getRarity(string_view token) {
-    if(!token.contains(' ')) {
-        return 1.0; // placeholder for index call
-    }
-    return 0.0; // we assign the lowest probability value to multi-word phrases
+enum IncludedFlag {
+    NOT_INCLUDED,
+    INCLUDED
+};
+
+double getRarity(string_view token, PhraseFlag flag) {
+    if(flag == PHRASE) return 0.0;
+    return 1.0;
 }
 
 struct Term {
     string_view token;
-    bool included;
-    double rarity; 
+    IncludedFlag included;
+    double rarity;
+    PhraseFlag flag;
 
-    Term(string_view token_init, bool included_init) : 
-        token(token_init), included(included_init), rarity(getRarity(token_init)) { }
+    Term(string_view t, IncludedFlag i, PhraseFlag f = INDIV)
+        : token(t), included(i), rarity(getRarity(t, f)), flag(f) {}
 };
 
 inline bool termComp(const Term& a, const Term& b) {
@@ -47,9 +61,14 @@ inline bool termComp(const Term& a, const Term& b) {
 using Clause = vector<Term>;
 using Result = vector<Clause>;
 
+struct Token {
+    string_view text;
+    PhraseFlag flag;
+};
+
 class QueryParser {
 private:
-    vector<string_view> tokens;
+    vector<Token> tokens;
     size_t i = 0;
     string_view input;
 
@@ -65,15 +84,15 @@ public:
 
 private:
 
-    // Tokenize the input
     void tokenize() {
         size_t n = input.size();
 
         for (size_t j = 0; j < n;) {
             if (isspace(input[j])) { j++; continue; }
 
-            if (input[j] == '(' || input[j] == ')') {
-                tokens.emplace_back(input.data() + j, 1);
+            if (input[j] == '(' || input[j] == ')' ||
+                input[j] == '|' || input[j] == '-') {
+                tokens.push_back({string_view(input.data() + j, 1), INDIV});
                 j++;
                 continue;
             }
@@ -81,7 +100,12 @@ private:
             if (input[j] == '"') {
                 size_t k = j + 1;
                 while (k < n && input[k] != '"') k++;
-                tokens.emplace_back(input.data() + j + 1, k - j - 1);
+
+                tokens.push_back({
+                    string_view(input.data() + j + 1, k - j - 1),
+                    PHRASE
+                });
+
                 j = k + 1;
                 continue;
             }
@@ -90,28 +114,31 @@ private:
             while (k < n &&
                    !isspace(input[k]) &&
                    input[k] != '(' &&
-                   input[k] != ')') {
+                   input[k] != ')' &&
+                   input[k] != '|' &&
+                   input[k] != '-') {
                 k++;
             }
 
-            tokens.emplace_back(input.data() + j, k - j);
+            tokens.push_back({
+                string_view(input.data() + j, k - j),
+                INDIV
+            });
+
             j = k;
         }
     }
 
-    // Parse the input according to the logic
-
     Result parseExpression() {
         Result left = parseTerm();
 
-        while (i < tokens.size() && tokens[i] == "OR") {
+        while (i < tokens.size() && tokens[i].text == "|") {
             i++;
             Result right = parseTerm();
 
             left.reserve_exact(left.size() + right.size());
-
-            for (size_t k = 0; k < right.size(); ++k) {
-                left.emplace_back(std::move(right[k]));
+            for (auto& c : right) {
+                left.emplace_back(std::move(c));
             }
         }
 
@@ -120,11 +147,11 @@ private:
 
     Result parseTerm() {
         Result result;
-        result.emplace_back(); // start with one empty clause
+        result.emplace_back();
 
         while (i < tokens.size() &&
-               !(tokens[i] == ")") &&
-               !(tokens[i] == "OR")) {
+               !(tokens[i].text == ")") &&
+               !(tokens[i].text == "|")) {
 
             Result next = parseFactor();
             result = combineAND(result, next);
@@ -136,47 +163,31 @@ private:
     Result parseFactor() {
         bool negate = false;
 
-        if (tokens[i] == "NOT") {
+        if (tokens[i].text == "-") {
             negate = true;
             i++;
         }
 
         Result res;
 
-        if (tokens[i] == "(") {
+        if (tokens[i].text == "(") {
             i++;
             Result inner = parseExpression();
-            assert(tokens[i] == ")");
+            assert(tokens[i].text == ")");
             i++;
 
             if (negate) {
                 Clause merged;
 
-                // precompute total size
-                size_t total = 0;
-                for (const auto& c : inner) total += c.size();
-
-                merged.reserve_exact(total);
-
-                size_t offset = 0;
-
                 for (const auto& c : inner) {
-                    memcpy(
-                        merged.data() + offset,
-                        c.data(),
-                        c.size() * sizeof(Term)
-                    );
+                    for (const auto& t : c) {
+                        IncludedFlag flipped =
+                            (t.included == INCLUDED) ? NOT_INCLUDED : INCLUDED;
 
-                    // flip flags in-place
-                    for (size_t j = 0; j < c.size(); ++j) {
-                        merged.data()[offset + j].included =
-                            !merged.data()[offset + j].included;
+                        merged.emplace_back(t.token, flipped, t.flag);
                     }
-
-                    offset += c.size();
                 }
 
-                merged.unsafe_set_size(total);
                 res.emplace_back(std::move(merged));
             } else {
                 return inner;
@@ -184,12 +195,14 @@ private:
         }
         else {
             Clause clause;
-            clause.reserve_exact(1);
 
-            clause.emplace_back(Term(
-                tokens[i],
-                !negate
-            ));
+            IncludedFlag inc = negate ? NOT_INCLUDED : INCLUDED;
+
+            clause.emplace_back(
+                tokens[i].text,
+                inc,
+                tokens[i].flag
+            );
 
             i++;
             res.emplace_back(std::move(clause));
@@ -198,35 +211,18 @@ private:
         return res;
     }
 
-    // AND logic
-
     static Result combineAND(const Result& a, const Result& b) {
         Result res;
+        res.reserve_exact(a.size() * b.size());
 
-        size_t total = a.size() * b.size();
-        res.reserve_exact(total);
-
-        for (size_t i = 0; i < a.size(); ++i) {
-            for (size_t j = 0; j < b.size(); ++j) {
-
-                const Clause& ca = a[i];
-                const Clause& cb = b[j];
-
-                size_t new_size = ca.size() + cb.size();
+        for (const auto& ca : a) {
+            for (const auto& cb : b) {
 
                 Clause merged;
-                merged.reserve_exact(new_size);
+                merged.reserve_exact(ca.size() + cb.size());
 
-                // memcpy both blocks
-                for (const auto& t : ca) {
-                    merged.emplace_back(t);
-                }
-
-                for (const auto& t : cb) {
-                    merged.emplace_back(t);
-                }
-
-                merged.unsafe_set_size(new_size);
+                for (const auto& t : ca) merged.emplace_back(t);
+                for (const auto& t : cb) merged.emplace_back(t);
 
                 res.emplace_back(std::move(merged));
             }
@@ -237,7 +233,50 @@ private:
 };
 
 
-// doesn't allow clauses with only NOTs
+// 🔥 REMOVE DUPES + CONTRADICTIONS
+inline void dedupe_and_clean(Result& res) {
+    Result cleaned;
+
+    for (auto& clause : res) {
+
+        Clause new_clause;
+        bool contradiction = false;
+
+        for (const auto& t : clause) {
+
+            bool found = false;
+
+            for (auto& existing : new_clause) {
+                if (existing.token == t.token &&
+                    existing.flag == t.flag) {
+
+                    if (existing.included != t.included) {
+                        contradiction = true;
+                        break;
+                    }
+
+                    found = true;
+                    break;
+                }
+            }
+
+            if (contradiction) break;
+
+            if (!found) {
+                new_clause.emplace_back(t);
+            }
+        }
+
+        if (!contradiction && !new_clause.empty()) {
+            cleaned.emplace_back(std::move(new_clause));
+        }
+    }
+
+    res = std::move(cleaned);
+}
+
+
+// remove clauses with only NOTs
 inline void filter_query(Result& res) {
     Result filtered;
 
@@ -245,7 +284,7 @@ inline void filter_query(Result& res) {
         bool has_positive = false;
 
         for (const auto& term : clause) {
-            if (term.included) {
+            if (term.included == INCLUDED) {
                 has_positive = true;
                 break;
             }
@@ -259,20 +298,19 @@ inline void filter_query(Result& res) {
     res = std::move(filtered);
 }
 
-// USER INTERFACE RIGHT HERE!
+
+// USER INTERFACE
 inline Result parse_query(const string& query) {
     QueryParser p(query);
     Result res = p.parse();
 
-    // remove clauses that are ONLY NOT terms using a filter function
+    dedupe_and_clean(res);   // 🔥 new
     filter_query(res);
 
-    // if nothing remains → error
     if (res.empty()) {
         throw std::invalid_argument("Query cannot contain only NOT terms");
     }
 
-    // sort each clause by rarity
     for (Clause &c : res) {
         if (!c.empty()) {
             quickSort(c, 0, c.size() - 1, termComp);
