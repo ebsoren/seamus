@@ -3,14 +3,15 @@
 #include <cstdint>
 #include <cstdlib>
 #include <mutex>
-#include "lib/consts.h"
-#include "word_array.h"
+
 #include "../lib/logger.h"
 #include "../lib/rpc_urlstore.h"
 #include "../lib/string.h"
 #include "../lib/url_filter.h"
 #include "../lib/vector.h"
 #include "../url_store/url_store.h"
+#include "lib/consts.h"
+#include "word_array.h"
 
 // Rename this to parser's local url buffer or something
 // Add global data that mimics that of crawler outbound (buffer, locks for each slot)
@@ -18,34 +19,41 @@
 // We'll lock around the URL inclusion loop and push to the buffer
 class OutboundUrlBuffer {
 public:
-    OutboundUrlBuffer() : ME(-1), urlStore(nullptr) {
+    OutboundUrlBuffer()
+        : ME(-1)
+        , urlStore(nullptr) {
         for (size_t i = 0; i < NUM_MACHINES; i++) {
             buffers[i] = vector<URLStoreUpdateRequest>();
         }
     }
 
-    OutboundUrlBuffer(size_t machine_id, UrlStore* local_store)
-        : ME(machine_id), urlStore(local_store) {
+    OutboundUrlBuffer(size_t machine_id, UrlStore *local_store)
+        : ME(machine_id)
+        , urlStore(local_store) {
         for (size_t i = 0; i < NUM_MACHINES; i++) {
             buffers[i] = vector<URLStoreUpdateRequest>();
         }
     }
 
     // Invariant: lock must be called by the LOCAL buffer outside of add_url being invoked
-    void add_url(size_t machine_id, URLStoreUpdateRequest&& target) {
+    void add_url(size_t machine_id, URLStoreUpdateRequest &&target) {
         buffers[machine_id].push_back(move(target));
-        if (buffers[machine_id].size() >= CRAWLER_OUTBOUND_BATCH_SIZE) {
+        if (buffers[machine_id].size() >= CRAWLER_OUTBOUND_BATCH_SIZE
+            || (buffers[machine_id].size() >= CRAWLER_STARTUP_OUTBOUND_BATCH_SIZE && num_sent < 16 * 18) ) {
             // logger::info("pushing urls to machine %zd", machine_id);
             flush(machine_id);
+            num_sent++;
         }
     }
 
     friend class LocalUrlBuffer;
+
 private:
     vector<URLStoreUpdateRequest> buffers[NUM_MACHINES];
     std::mutex locks[NUM_MACHINES];
     size_t ME;
-    UrlStore* urlStore;
+    UrlStore *urlStore;
+    std::atomic<size_t> num_sent{0};
 
     void flush(size_t machine_id) {
         BatchURLStoreUpdateRequest batch;
@@ -60,8 +68,8 @@ private:
         }
     }
 
-    void flush_async(size_t machine_id, BatchURLStoreUpdateRequest batch){
-        const char* addr = get_machine_addr(machine_id);
+    void flush_async(size_t machine_id, BatchURLStoreUpdateRequest batch) {
+        const char *addr = get_machine_addr(machine_id);
         string host(addr, strlen(addr));
         if (!send_batch_urlstore_update(host, URL_STORE_PORT, batch)) {
             logger::error("Failed to send outbound batch to machine %zu (%s)", machine_id, addr);
@@ -71,10 +79,12 @@ private:
 
 class LocalUrlBuffer {
 public:
-    LocalUrlBuffer() : ME(-1) {}
+    LocalUrlBuffer()
+        : ME(-1) {}
 
-    LocalUrlBuffer(size_t machine_id, OutboundUrlBuffer* outbound_buff)
-    : outboundBuffer(outbound_buff), ME(machine_id) {}
+    LocalUrlBuffer(size_t machine_id, OutboundUrlBuffer *outbound_buff)
+        : outboundBuffer(outbound_buff)
+        , ME(machine_id) {}
 
     bool add_urls(buffer_array<MAX_LINK_MEMORY> &urls) {
         /**
@@ -89,14 +99,14 @@ public:
          *      [anchor text word 1] ... [anchor text word n]
          * ]
          * </doc>
-        */
+         */
         if (ME == -1) {
             logger::error("Local URL buffer not initialized! add_urls failing.");
             return false;
         }
 
-        const char* p = urls.data();
-        const char* const end = p + urls.size();
+        const char *p = urls.data();
+        const char *const end = p + urls.size();
         bool ok = true;
         logger::debug("add_urls: parsing %zu bytes of link data", urls.size());
 
@@ -106,13 +116,13 @@ public:
 
             // Expect start of document token
             if (p + 5 > end || memcmp(p, "<doc>", 5) != 0) {
-                logger::warn("add_urls: missing <doc> token at offset %zu (remaining=%zu)",
-                             (size_t)(p - urls.data()), (size_t)(end - p));
+                logger::warn("add_urls: missing <doc> token at offset %zu (remaining=%zu)", (size_t) (p - urls.data()),
+                             (size_t) (end - p));
                 ok = false;
                 break;
             }
 
-            p += 6; // Skip <doc>\n
+            p += 6;   // Skip <doc>\n
             if (p >= end) {
                 logger::warn("add_urls: truncated data after <doc> tag");
                 ok = false;
@@ -120,7 +130,7 @@ public:
             }
 
             // Read number (TODO: Test this use of strtol)
-            char* next;
+            char *next;
             hops = strtol(p, &next, 10);
             domain_hops = strtol(next, &next, 10);
 
@@ -133,7 +143,7 @@ public:
             }
 
             // Read the domain of the page the URLs were found on
-            const char* word_start = p;
+            const char *word_start = p;
             while (p < end && *p != '\n') p++;
             if (p >= end) {
                 logger::warn("add_urls: truncated data while reading domain");
@@ -146,7 +156,10 @@ public:
             // Parse URLs until </doc> is reached
             while (p + 6 <= end && memcmp(p, "</doc>", 6) != 0) {
                 // Skip blank lines (can appear when flush terminates a partial line)
-                if (*p == '\n') { p++; continue; }
+                if (*p == '\n') {
+                    p++;
+                    continue;
+                }
                 // Get the URL itself
                 word_start = p;
                 while (p < end && *p != '\n') p++;
@@ -157,7 +170,7 @@ public:
                 }
 
                 if (p - word_start == 6 && memcmp(word_start, "</doc>", 6) == 0) {
-                    p = word_start; // rewind so the outer loop sees </doc>
+                    p = word_start;   // rewind so the outer loop sees </doc>
                     break;
                 }
                 string raw_url(word_start, p - word_start);
@@ -184,16 +197,15 @@ public:
                     if (p < end && *p == ' ') p++;
                 }
                 if (p >= end) {
-
                     logger::warn("add_urls: truncated data while reading anchor text");
                     ok = false;
                     break;
                 }
-                p++; // skip the '\n' after anchor text line
+                p++;   // skip the '\n' after anchor text line
 
                 size_t recipient = get_destination_machine_from_url(url);
 
-                URLStoreUpdateRequest rpc{
+                URLStoreUpdateRequest rpc {
                     move(url),
                     move(anchor_words),
                     1,
@@ -207,14 +219,13 @@ public:
             if (!ok) break;
 
             if (p + 6 > end) {
-                if (p >= urls.data() + 7 && memcmp(p - 7, "</doc>\n", 7) == 0)
-                    break;
+                if (p >= urls.data() + 7 && memcmp(p - 7, "</doc>\n", 7) == 0) break;
                 logger::warn("add_urls: truncated data, missing </doc> tag");
                 ok = false;
                 break;
             }
 
-            p += 7; // Skip </doc>\n
+            p += 7;   // Skip </doc>\n
         }
 
         // Always dispatch parsed URLs — even on truncation, the complete
@@ -225,7 +236,7 @@ public:
 
 private:
     vector<URLStoreUpdateRequest> url_updates[NUM_MACHINES];
-    OutboundUrlBuffer* outboundBuffer;
+    OutboundUrlBuffer *outboundBuffer;
     size_t ME;
 
     // Once all URLs have been parsed into update requests, pass to outbound buffer
@@ -235,7 +246,7 @@ private:
             vector<URLStoreUpdateRequest> batch = std::move(url_updates[i]);
             url_updates[i] = vector<URLStoreUpdateRequest>();
             std::lock_guard<std::mutex> lock(outboundBuffer->locks[i]);
-            for (URLStoreUpdateRequest& req : batch) {
+            for (URLStoreUpdateRequest &req : batch) {
                 outboundBuffer->add_url(i, std::move(req));
             }
         }

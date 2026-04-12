@@ -56,6 +56,7 @@ constexpr size_t CRAWLER_INSTRUMENTATION_INTERVAL_SEC = 20; // Time (seconds) be
 constexpr size_t CRAWLER_INSTRUMENTATION_BATCH_SIZE = 64;    // Number of successful crawls before submitting a batched metric update
 
 constexpr size_t CRAWLER_OUTBOUND_BATCH_SIZE = 256;         // Number of crawl targets to buffer per machine before sending
+constexpr size_t CRAWLER_STARTUP_OUTBOUND_BATCH_SIZE = 16; // Slow start
 constexpr size_t PRIORITY_BUCKETS = 8;
 constexpr size_t NUM_PARSERS = CRAWLER_THREADPOOL_SIZE;
 static_assert(NUM_PARSERS == CRAWLER_THREADPOOL_SIZE);      // TODO(hershey): make sure this assumption is valid
