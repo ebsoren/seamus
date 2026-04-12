@@ -1,7 +1,7 @@
 ### Initialize VM (run once on first boot)
 
 ```bash
-curl -sL https://raw.githubusercontent.com/hershyz/seamus/main/scripts/vm_setup.sh | bash
+curl -sL https://raw.githubusercontent.com/hershyz/seamus/main/scripts/vm_init.sh | bash
 ```
 Installs required packages, and clones monorepo, and creates output dirs.
 
