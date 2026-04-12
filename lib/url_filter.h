@@ -229,7 +229,7 @@ static constexpr const char* ALLOWED_TLDS[] = {
     "com", "org", "net", "edu", "gov", "mil", "int",
     // Tech
     "io", "dev", "app", "ai", "co", "me", "cc", "tv", "fm", "ly",
-    "gg", "sh", "to", "xyz", "tech", "cloud", "so", "gl", "ws", "ac",
+    "gg", "sh", "to", "xyz", "tech", "cloud", "so", "gl", "is", "ws", "ac",
     // Knowledge
     "info", "wiki", "news", "pro", "museum", "jobs",
     "page", "blog", "science", "health", "media",
@@ -262,9 +262,9 @@ inline bool has_allowed_tld(const char* in, size_t host_start, size_t host_end) 
 // non-english country codes
 static constexpr const char* NON_ENGLISH_CODES[] = {
     "ar", "bg", "bn", "cs", "da", "de", "el", "es", "fa", "fi",
-    "fr", "he", "hi", "hr", "hu", "id", "it", "ja", "ko", "ms",
-    "nl", "no", "pl", "pt", "ro", "ru", "sk", "sl", "sr", "sv",
-    "th", "tr", "vi", "zh",
+    "fr", "he", "hi", "hu", "ja", "ko",
+    "nl", "pl", "pt", "ro", "ru", "sk", "sl", "sr", "sv",
+    "th", "vi", "zh",
 };
 static constexpr size_t NON_ENGLISH_CODES_COUNT = sizeof(NON_ENGLISH_CODES) / sizeof(NON_ENGLISH_CODES[0]);
 
