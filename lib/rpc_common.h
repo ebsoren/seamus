@@ -9,12 +9,10 @@
 #include <cstring>
 #include <optional>
 
-
-// Send a buffer to an end host over TCP
-// This operation spins up a short-lived socket but is completely stateless beyond the success of the creation of the socket
-inline bool send_buffer(const string& host, uint16_t port, const void* buf, size_t len) {
+// Spin up a socket and connect. Returns the connected socket fd, or -1 on failure.
+inline int connect_to_host(const string& host, uint16_t port) {
     int sockfd = socket(AF_INET, SOCK_STREAM, 0);
-    if (sockfd < 0) return false;
+    if (sockfd < 0) return -1;
 
     struct sockaddr_in addr{};
     addr.sin_family = AF_INET;
@@ -22,28 +20,47 @@ inline bool send_buffer(const string& host, uint16_t port, const void* buf, size
 
     if (inet_pton(AF_INET, host.data(), &addr.sin_addr) <= 0) {
         close(sockfd);
-        return false;
+        return -1;
     }
 
     if (connect(sockfd, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
         close(sockfd);
-        return false;
+        return -1;
     }
 
+    return sockfd;
+}
+
+// Send a buffer to an end host over TCP
+// This operation spins up a short-lived socket but is completely stateless beyond the success of the creation of the socket
+inline bool send_buffer(const string& host, uint16_t port, const void* buf, size_t len) {
+    int sockfd = connect_to_host(host, port);
+    if (sockfd < 0) return false;
+
+    bool result = send_exact(sockfd, buf, len);
+    close(sockfd);
+    return result;
+}
+
+inline bool send_exact(int fd, const void* buf, size_t len) {
     size_t total_sent = 0;
     while (total_sent < len) {
-        ssize_t sent = send(sockfd, (const char*)buf + total_sent, len - total_sent, 0);
-        if (sent <= 0) {
-            close(sockfd);
-            return false;
-        }
+        ssize_t sent = send(fd, (const char*)buf + total_sent, len - total_sent, 0);
+        if (sent <= 0) return false;
         total_sent += sent;
     }
-
-    close(sockfd);
     return true;
 }
 
+inline bool send_u32(int fd, uint32_t val) {
+    uint32_t net = htonl(val);
+    return send_exact(fd, &net, sizeof(uint32_t));
+}
+
+inline bool send_string(int fd, const string& s) {
+    if (!send_u32(fd, s.size())) return false; // Send 4-byte header
+    return send_exact(fd, s.data(), s.size()); // Send characters
+}
 
 // Receive exactly `len` bytes from an ephemeral socket fd into buf
 // Useful for wire formats where a fixed size metadata region tells us the variable size of a subsequent data region

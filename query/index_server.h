@@ -11,7 +11,19 @@ class IndexServer {
     private:
         RPCListener* rpc_listener;      // Listener for client requests
         std::thread listener_thread;    // Thread running the listener loop
-        void client_handler(int fd);    // Detached handler for external word retrieval requests
+        void client_handler(int fd) {
+            std::optional<string> word_opt = recv_string(fd);
+            if (!word_opt) {
+                close(fd);
+                return;
+            }
+
+            RankedPageResponse results;
+            // TODO(charlie): fetch doc results here
+            
+            send_word_response(fd, results);
+            close(fd);
+        }
 
     public:
         IndexServer() {

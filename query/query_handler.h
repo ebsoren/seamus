@@ -46,18 +46,15 @@ class QueryHandler {
 
                     // TODO: might need to make copy of word otherwise, original word value might get deleted before the task runs and we try to access it in the task
                     pool.enqueue_task([this, &word, i, task_promise]() {
-                        
-                        
+                        vector<RankedPage> local_hits;
                         
                         // ... Send RPC request to Machine 'i' for 'word' ...
                         if (i == my_machine_id()) {
-                            this->isr->advance_to_doc(123); // TODO: need to determine how to use the ISR to get the relevant info for the word on this machine
+                            local_hits = this->isr->advance_to_doc(123); // TODO: need to determine how to use the ISR to get the relevant info for the word on this machine
                         } else {
-                            // send out RPC request to machine i
-                            send_word_request(i, word);
+                            local_hits = send_recv_word_data(string(get_machine_addr(i)), INDEX_SERVER_PORT, word); // TODO: need to implement this function to send the RPC request to machine i and parse the response into a vector of RankedPages
                         }
-                        // ... Parse the network response and fill 'local_hits' ...
-                        vector<RankedPage> local_hits = recv_word_response(i); // TODO: need to implement this function to parse the response from the machine and create a vector of RankedPages for the hits for this word on that machine
+                         
                         task_promise->set_value(std::move(local_hits));
                     });
                 }
