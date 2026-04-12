@@ -10,7 +10,7 @@ constexpr uint8_t LOG_LEVEL = 3;
 constexpr const char* USER_AGENT = "Seamus the Search Engine (web crawler for university course)";
 
 // Global
-constexpr size_t NUM_MACHINES = 3;
+constexpr size_t NUM_MACHINES = 18;
 // MACHINE_IDS PER PERSON
 // Hershey - 0,1,2
 // David - 3,4,5
