@@ -13,6 +13,7 @@
 
 #include "../url_store/url_store.h"
 #include "crawler_metrics.h"
+#include <dirent.h>
 
 
 class CrawlerInstrumentation {
@@ -163,6 +164,14 @@ private:
                 logger::instr("mem | urlstore total: %.1f MB | shard slots: %.1f MB | entry heap: %.1f MB | anchor dict: %.1f MB | load: %.2f (%zu/%zu)\n",
                     total_mb, slots_mb, entry_mb, anchor_mb, load, ms.total_entries, ms.total_slots);
             }
+
+            size_t fd_count = 0;
+            if (DIR* d = opendir("/proc/self/fd")) {
+                while (readdir(d)) fd_count++;
+                closedir(d);
+                fd_count -= 2; // . and ..
+            }
+            logger::instr("open fds: %zu\n", fd_count);
         }
     }
 };
