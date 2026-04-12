@@ -158,3 +158,14 @@ cc_test(
         "//lib:string",
     ],
 )
+
+cc_test(
+    name = "query_expressions_test",
+    srcs = ["query_expressions_test.cpp"],
+    deps = [
+        "//query:expressions",
+        "//lib:algorithm",
+        "//lib:string",
+        "//lib:vector",
+    ],
+)

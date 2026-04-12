@@ -34,6 +34,15 @@ public:
         return len;
     }
 
+    bool contains(char target) const {
+        for (size_t i = 0; i < len; ++i) {
+            if (data_[i] == target) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     const char& operator[](const size_t i) const noexcept {
         assert(i < len);
         return data_[i];
@@ -307,6 +316,10 @@ public:
         }
     }
 
+    bool operator!=(const string &other) const {
+        return !operator==(other);
+    }
+
 
     friend bool operator==(const string& lhs, const char* rhs) {
         if (rhs == nullptr) return false; // Safety first
@@ -325,11 +338,19 @@ public:
         }
     }
 
+    friend bool operator!=(const string& lhs, const char* rhs) {
+        return !(lhs == rhs);
+    }
+
     bool operator==(const string_view& rhs) const {
         if (size() != rhs.size()) return false;
 
         if (rhs.data() == data()) return true;
         return memcmp(data(), rhs.data(), size()) == 0;
+    }
+
+    bool operator!=(const string_view& rhs) const {
+        return !(operator!=(rhs));
     }
 };
 

@@ -71,6 +71,7 @@ public:
         }
     }
 
+    // clears dis vector good and deletes that region
     void clear() {
         for (size_t i = 0; i < vec_size; ++i) {
             alloc_region[i].~T();
@@ -154,6 +155,13 @@ public:
     }
 
 
+    // Allows me to reserve an exact size for the vector
+    void reserve_exact(size_t new_cap) {
+        if (new_cap <= alloc_capacity) return;
+        realloc_(new_cap);
+    }
+
+
     void resize(size_t newCapacity) {
         if (newCapacity < vec_size) {
             // Shrink: destroy excess elements
@@ -169,6 +177,13 @@ public:
                 vec_size++;
             }
         }
+    }
+
+
+    // don't use this unless you're sure what you're doing here
+    void unsafe_set_size(size_t new_size) {
+        assert(new_size <= alloc_capacity);
+        vec_size = new_size;
     }
 
 
@@ -249,6 +264,39 @@ public:
         new (alloc_region + vec_size) T(x);
         vec_size++;
     }
+
+    // bulk append a range 
+    void append_range(const T* first, const T* last) {
+        size_t count = last - first;
+
+        if (vec_size + count > alloc_capacity) {
+            size_t new_cap = alloc_capacity ? alloc_capacity : 1;
+            while (new_cap < vec_size + count) new_cap *= REALLOC_FACTOR;
+            realloc_(new_cap);
+        }
+
+        for (size_t i = 0; i < count; ++i) {
+            new (alloc_region + vec_size + i) T(first[i]);
+        }
+
+        vec_size += count;
+    }
+
+    // emplace back function to avoid copies and such especially with strings
+    template<typename... Args>
+    void emplace_back(Args&&... args) {
+        if (vec_size == alloc_capacity) {
+            size_t new_alloc_capacity = (vec_size == 0) ? 1 : vec_size * REALLOC_FACTOR;
+            realloc_(new_alloc_capacity);
+        }
+
+        new (alloc_region + vec_size) T(std::forward<Args>(args)...);
+        vec_size++;
+    }
+
+    T* data() { return alloc_region; }
+    
+    const T* data() const { return alloc_region; }
 
 
     // REQUIRES: Nothing
