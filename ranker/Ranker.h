@@ -13,6 +13,7 @@
 #include "../lib/utils.h"
 #include "../lib/consts.h"
 #include "../lib/logger.h"
+#include "../query/expressions.h"
 #include "ranker_consts.h"
 #include <optional>
 
@@ -46,6 +47,8 @@ bool is_digit(char c) {
     return c >= '0' && c <= '9';
 }
 
+
+// TODO MAKE SURE TO EDIT THIS AT SOME POINT!!
 unordered_map<string,double> makeTldWeight() {
     unordered_map<string, double> m(32);
 
@@ -200,29 +203,30 @@ double word_pos_score(const vector<vector<size_t>> &positions, int unique_words_
     return normalized;
 }
 
-double calc_dynamic_score(RankedPage &r, size_t unique_words_in_query) {
+double calc_dynamic_score(RankedPage &r, vector<Term> query_clause) {
+    size_t query_size = query_clause.size();
     // This factor checks frequency of unique words and proximity scores of the unique words to other unique words in the query 
-    double factor_1 = word_pos_score(r.word_positions, r.doc_len, unique_words_in_query); // this score should be given extra weight in calculations
+    double factor_1 = word_pos_score(r.word_positions, r.doc_len, query_size); // this score should be given extra weight in calculations
 
     // This factor scores based on number of times the link was seen during crawling
     double factor_2 = max(1.0 / (1.0 + double_pow(e, -k * (r.times_seen - n_0))), 0.2);
 
     // This factor scores based on how many unique words in the query were found in the title but penalized on length of the title
-    double factor_3 = (r.num_unique_words_found_title / unique_words_in_query) * double_pow(e, (-Gamma_title * r.title.size()));
+    double factor_3 = (r.num_unique_words_found_title / query_size) * double_pow(e, (-Gamma_title * r.title.size()));
 
     // This factor scores based on how many unique words in the query were found in the description but penalized on length of the description
-    double factor_4 = (r.num_unique_words_found_descr / unique_words_in_query) * double_pow(e, (-Gamma_desc * r.description_len));
+    double factor_4 = (r.num_unique_words_found_descr / query_size) * double_pow(e, (-Gamma_desc * r.description_len));
 
     // This factor checks unique words in the query found in the anchor texts pointing to the link
     // PROBABLY WANT TO ADD MORE TO THIS FACTOR ONCE I KNOW MORE ABOUT ANCHOR TEXT
-    double factor_5 = (r.num_unique_words_found_anchor / unique_words_in_query); 
+    double factor_5 = (r.num_unique_words_found_anchor / query_size); 
 
     // This factor checks the URL for keywords in it
-    double factor_6 = (r.num_unique_words_found_url / unique_words_in_query) * double_pow(e, (-Gamma_url * r.url.size()));
+    double factor_6 = (r.num_unique_words_found_url / query_size) * double_pow(e, (-Gamma_url * r.url.size()));
 
     // final score returned here with extra weightings 
     return(((factor_1 * factor_1_weight) + (factor_2 * factor_2_weight) + (factor_3 * factor_3_weight)
-         + (factor_4 * factor_4_weight) + (factor_5 * factor_5_weight)) / dynamic_weight_sum);
+         + (factor_4 * factor_4_weight) + (factor_5 * factor_5_weight) + (factor_6 * factor_6_weight)) / dynamic_weight_sum);
 }
 
 // LeanPage input_total_score(RankedPage r, double dynamic_weight, size_t unique_words_in_query) {
@@ -245,13 +249,13 @@ class Ranker {
 private:
     priority_queue<LeanPage, vector<LeanPage>, RankedCompare> pq;
     double dynamic_weight;
-    size_t unique_words_in_query;
+    vector<Term> query_clause;
     size_t size_lim;
     bool verbose_mode;
 
 public:
-    Ranker(size_t unique_words_in_query_init, size_t size_lim_init, double dynamic_weight_init = DEFAULT_DYNAMIC_WEIGHT, bool verbose_init = false) : pq(RankedCompare(dynamic_weight_init, unique_words_in_query)), 
-        dynamic_weight(dynamic_weight_init), unique_words_in_query(unique_words_in_query_init), size_lim(size_lim_init), verbose_mode(verbose_init) { 
+    Ranker(size_t unique_words_in_query_init, size_t size_lim_init, double dynamic_weight_init = DEFAULT_DYNAMIC_WEIGHT, bool verbose_init = false) : 
+        dynamic_weight(dynamic_weight_init), size_lim(size_lim_init), verbose_mode(verbose_init) { 
         
         if(verbose_mode) {
             logger::debug("Ranker is initialized with size limit of %zu, dynamic weighting of %f, and unique words in query of %zu", 
@@ -266,11 +270,15 @@ public:
         pq.clear();
     }
 
-    void change_words_in_query(size_t num_words) {
-        unique_words_in_query = num_words;
+    void change_query_clause(vector<Term> clause) {
+        query_clause = clause;
         if(verbose_mode) {
-            logger::debug("Ranker has been changed to serving an amount of %zu unique words in the query", num_words);
+            logger::debug("Ranker has been changed to serving an amount of %zu unique words in the query", clause.size());
         }
+        pq = priority_queue<LeanPage, vector<LeanPage>, RankedCompare>(
+            RankedCompare(dynamic_weight, clause.size()),
+            vector<LeanPage>()
+        );
     }
 
     vector<LeanPage> get_top_x(int x) {
@@ -298,9 +306,9 @@ public:
                 input.push_back(LeanPage{std::move(v[i].url), 
                     std::move(v[i].title), 
                     (calc_static_score(v[i]) * (1-dynamic_weight) + 
-                    calc_dynamic_score(v[i], unique_words_in_query) * dynamic_weight)});
+                    calc_dynamic_score(v[i], query_clause) * dynamic_weight)});
                 if(verbose_mode) {
-                    double r_score = calc_static_score(v[i]) * (1-dynamic_weight) + calc_dynamic_score(v[i], unique_words_in_query) * dynamic_weight;
+                    double r_score = calc_static_score(v[i]) * (1-dynamic_weight) + calc_dynamic_score(v[i], query_clause) * dynamic_weight;
                     logger::debug("The URL %s earned a score of: %.6f", v[i].url.data(), r_score);
                 }
             }
@@ -308,7 +316,7 @@ public:
         pq = priority_queue<LeanPage, vector<LeanPage>, RankedCompare>(
             v.begin(),
             end_it,
-            RankedCompare(dynamic_weight, unique_words_in_query),
+            RankedCompare(dynamic_weight, query_clause.size()),
             vector<LeanPage>()
         );
         if(verbose_mode) {
