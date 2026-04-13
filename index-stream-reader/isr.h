@@ -24,6 +24,23 @@ public:
     uint64_t n_docs;
 
     IndexStreamReader(string word, LoadedIndex* index);
+
+    // Return the current post/location for the given word
+    const inline post loc();
+
+    // Advance the ISR to the next post in the index
+    // @returns post just read on success; {0, 0} if at last post
+    post advance();
+
+    // Advance the ISR to the first post at or after the given document, if one exists
+    // If no posts exist for that document, the ISR returns the first post at a document AFTER
+    // @returns first post of the doc (or first doc after) on success ; {0, 0} if no posts exist for/after that document
+    post advance_to(uint32_t doc);
+
+    const inline string get_url(uint32_t doc) {
+        return string(index->urls[doc].data());
+    }
+
 private:
     // Access & easily traverse the file
     LoadedIndex* index;
@@ -38,16 +55,4 @@ private:
     // Track the current deltas
     uint32_t doc_offset_ = 0;
     uint32_t loc_offset_ = 0;
-
-    // Return the current post/location for the given word
-    const inline post loc();
-
-    // Advance the ISR to the next post in the index
-    // @returns post just read on success; {0, 0} if at last post
-    post advance();
-
-    // Advance the ISR to the first post at or after the given document, if one exists
-    // If no posts exist for that document, the ISR returns the first post at a document AFTER
-    // @returns first post of the doc (or first doc after) on success ; {0, 0} if no posts exist for/after that document
-    post advance_to(uint32_t doc);
 };
