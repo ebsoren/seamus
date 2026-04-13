@@ -41,6 +41,10 @@ public:
         return string(index->urls[doc].data());
     }
 
+    const inline void reset() {
+        curr_loc_ = postings_start_;
+    }
+
 private:
     // Access & easily traverse the file
     LoadedIndex* index;
