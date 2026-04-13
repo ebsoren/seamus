@@ -229,7 +229,7 @@ constexpr uint32_t INDEX_SERVER_PORT = 9100;
 // Query Handler
 constexpr uint32_t QUERY_HANDLER_PORT = 9200;
 constexpr size_t QUERY_NUM_LISTENING_THREADS = 16;
-constexpr uint16_t NUM_RESULTS_RETURN = 20;
+constexpr uint16_t NUM_RESULTS_RETURN = 10;
 
 typedef uint32_t Unicode;
 typedef uint8_t  Utf8;

@@ -27,17 +27,16 @@ class QueryHandler {
             vector<RankedPage> ranked_pages;
             for (const Clause& clause : query_combinations) {
                 vector<std::future<vector<RankedPage>>> futures;
-                // takes words and starts with rarest first
+                // 3 thread pools needed:
+                    // spawn ISRs per unique term in the query
+                    // use big thread pool to craw local index chunks
+                        // use fix sized inner thread pool to query each index chunk for multiple words
+                    // use another thread pool to fan out rpc query indices to other indexServer
 
-                // for each word
-                    // fan out requests to all machines to retrieve a total list of all docs that word appears in
-                    // response needs to include enough information for each page to create a RankedPage
-                        // this each machine needs to:
-                            // given a word, retrieve list of docIDs and word positions
-                            // find the corresponding url to that docID and query the urlStore for url info
-                            // batch all of this data back in the response sent back to this queryHandler
-                        // as we get responses about documents for a word, merge them into the ongoing set of results we are storing and return
+                // OR use queue of tasks
                 for (auto& word : clause) {
+                    // if "the quick brown" then itll be one term w/o quotes, there will still be a tag and it can be phrase
+
                     for (size_t i = 0; i < NUM_MACHINES; ++i) {
                         auto task_promise = std::make_shared<std::promise<vector<RankedPage>>>();
                         futures.push_back(task_promise->get_future());

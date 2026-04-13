@@ -76,6 +76,6 @@ class IndexServer {
 
         // some internal method that this machine's query handler can traverse this index without needing to make a network call
         vector<RankedPage> local_retrieve(const string_view& wordview) {
-            return handle_request(word).pages;
+            return handle_request(wordview.to_string()).pages;
         }
 };

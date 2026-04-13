@@ -18,6 +18,17 @@ Query Language Syntax:
         - can add error handling if needed
     - if words in quotes, there must be an exact match
 */
+
+// 3 thread pools needed:
+// spawn ISRs per unique term in the query
+// use big thread pool to craw local index chunks
+    // use fix sized inner thread pool to query each index chunk for multiple words
+// use another thread pool to fan out rpc query indices to other indexServers (17 other machines to fanout too)
+
+// retrieve top 10 best page results from other machines
+// top 10 best pages from this machine
+// total of 180 pages to rank, then return top 10 amongst those to the client
+
 int main(int argc, char* argv[]) {
     vector<LoadedIndex> indexChunks;
     recover_index_chunks(indexChunks);
