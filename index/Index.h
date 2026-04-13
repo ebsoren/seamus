@@ -27,7 +27,8 @@ private:
     uint32_t curr_doc_;
     uint32_t chunk;
 
-    size_t doc_count;
+    size_t docs_in_chunk_;
+    size_t posts_bytes_;
 
     const uint32_t WORKER_NUMBER;
 

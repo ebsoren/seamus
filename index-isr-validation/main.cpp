@@ -28,8 +28,9 @@ constexpr size_t WORDS_PER_LETTER = 100;
 constexpr size_t MIN_WORD_LEN     = 3;
 constexpr size_t MAX_WORD_LEN     = 10;
 
-// Fixed seed so the benchmark is reproducible.
-constexpr uint64_t RNG_SEED = 0xBEEFCAFEULL;
+// Fixed seed for the word pool: we always want the same 36 buckets of
+// words so the dictionary under test is stable across runs.
+constexpr uint64_t POOL_RNG_SEED = 0xBEEFCAFEULL;
 
 // Where to write the generated parser-format doc files.
 constexpr const char* BENCH_DOC_DIR = "/tmp/index_isr_validation";
@@ -45,11 +46,15 @@ constexpr size_t DUMP_POSTS_PER_LIST  = 15; // first N posts per posting list
 
 // ---- Word pool -------------------------------------------------------------
 //
-// A single flat vector of words. Entries are grouped by starting letter:
+// A single flat vector of words. Entries are grouped by starting character:
 // [0 .. WORDS_PER_LETTER)          start with 'a'
 // [WORDS_PER_LETTER .. 2*WPL)      start with 'b'
 // ...
-// All words are pure lowercase [a-z].
+// [25*WPL .. 26*WPL)               start with 'z'
+// [26*WPL .. 27*WPL)               start with '0'
+// ...
+// [35*WPL .. 36*WPL)               start with '9'
+// First char is the bucket character; remaining chars are lowercase [a-z].
 
 struct WordPool {
     vector<string> words;
@@ -58,7 +63,7 @@ struct WordPool {
 
 static WordPool build_word_pool(std::mt19937_64& rng) {
     WordPool pool;
-    pool.words.reserve(26 * bench::WORDS_PER_LETTER);
+    pool.words.reserve(36 * bench::WORDS_PER_LETTER);
 
     std::uniform_int_distribution<size_t> len_dist(bench::MIN_WORD_LEN, bench::MAX_WORD_LEN);
     std::uniform_int_distribution<int>    tail_dist('a', 'z');
@@ -69,6 +74,17 @@ static WordPool build_word_pool(std::mt19937_64& rng) {
         for (size_t i = 0; i < bench::WORDS_PER_LETTER; ++i) {
             size_t len = len_dist(rng);
             buf[0] = static_cast<char>('a' + letter);
+            for (size_t k = 1; k < len; ++k) {
+                buf[k] = static_cast<char>(tail_dist(rng));
+            }
+            pool.words.push_back(string(buf, len));
+        }
+    }
+
+    for (int digit = 0; digit < 10; ++digit) {
+        for (size_t i = 0; i < bench::WORDS_PER_LETTER; ++i) {
+            size_t len = len_dist(rng);
+            buf[0] = static_cast<char>('0' + digit);
             for (size_t k = 1; k < len; ++k) {
                 buf[k] = static_cast<char>(tail_dist(rng));
             }
@@ -86,6 +102,20 @@ static void log_word_pool(const WordPool& pool) {
         line[pos++] = static_cast<char>('a' + letter);
         line[pos++] = ':';
         size_t start = letter * bench::WORDS_PER_LETTER;
+        size_t end   = start + bench::WORDS_PER_LETTER;
+        for (size_t i = start; i < end && pos + pool.words[i].size() + 2 < sizeof(line); ++i) {
+            line[pos++] = ' ';
+            memcpy(line + pos, pool.words[i].data(), pool.words[i].size());
+            pos += pool.words[i].size();
+        }
+        line[pos] = '\0';
+        logger::instr("%s", line);
+    }
+    for (int digit = 0; digit < 10; ++digit) {
+        size_t pos = 0;
+        line[pos++] = static_cast<char>('0' + digit);
+        line[pos++] = ':';
+        size_t start = (26 + digit) * bench::WORDS_PER_LETTER;
         size_t end   = start + bench::WORDS_PER_LETTER;
         for (size_t i = start; i < end && pos + pool.words[i].size() + 2 < sizeof(line); ++i) {
             line[pos++] = ' ';
@@ -392,11 +422,12 @@ static void dump_index_chunk(const string& path) {
 
     // ---- Dictionary lookup table --------------------------------------
     //
-    // Layout (26 fixed entries):
-    //   <1B letter> <8B offset>\n
+    // Layout (36 fixed entries: 26 letters + 10 digits):
+    //   <1B char> <8B offset>\n
     //   \n                       (separator)
-    logger::instr("=== Dictionary ToC (letter -> byte offset into dict) ===");
-    for (int i = 0; i < 26; ++i) {
+    logger::instr("=== Dictionary ToC (char -> byte offset into dict) ===");
+    constexpr int TOC_ENTRIES = 36;
+    for (int i = 0; i < TOC_ENTRIES; ++i) {
         char     letter, sp;
         uint64_t off;
         fread(&letter, 1, 1, fd);
@@ -599,8 +630,8 @@ static vector<vector<uint32_t>> rebuild_docs_from_index(
     fseek(fd, static_cast<long>(urls_bytes), SEEK_CUR);
     fgetc(fd); // separator '\n'
 
-    // Skip the dict ToC: 26 fixed 11-byte entries, then \n separator.
-    fseek(fd, 26 * 11, SEEK_CUR);
+    // Skip the dict ToC: INDEX_DICTIONARY_TOC_SIZE bytes, then \n separator.
+    fseek(fd, static_cast<long>(INDEX_DICTIONARY_TOC_SIZE), SEEK_CUR);
     fgetc(fd); // separator '\n'
 
     // Parse the dictionary to get the word list in posting-list order.
@@ -625,8 +656,9 @@ static vector<vector<uint32_t>> rebuild_docs_from_index(
     }
 
     const size_t SKIP_LIST_ENTRY_SIZE = 4 + 1 + 8 + 1;
-    const size_t SKIP_LIST_SIZE =
-        (DOCS_PER_INDEX_CHUNK / INDEX_SKIP_SIZE) * SKIP_LIST_ENTRY_SIZE;
+    // const size_t SKIP_LIST_SIZE =
+    //     (DOCS_PER_INDEX_CHUNK / INDEX_SKIP_SIZE) * SKIP_LIST_ENTRY_SIZE;
+    const size_t SKIP_LIST_SIZE = 0;
 
     // Walk every posting list and populate rebuilt[doc-1][loc-1].
     for (size_t i = 0; i < dict.size(); ++i) {
@@ -742,13 +774,22 @@ int main(int /*argc*/, char* /*argv*/[]) {
     mkdir_p(INDEX_OUTPUT_DIR);
     cleanup_worker0_chunks();
 
-    std::mt19937_64 rng(bench::RNG_SEED);
-
-    WordPool pool = build_word_pool(rng);
-    logger::instr("Built word pool: 26 letters x %zu words", bench::WORDS_PER_LETTER);
+    // Word pool: fixed seed. Same 36 buckets every run so the dictionary
+    // under test is stable.
+    std::mt19937_64 pool_rng(bench::POOL_RNG_SEED);
+    WordPool pool = build_word_pool(pool_rng);
+    logger::instr("Built word pool: 36 buckets (26 letters + 10 digits) x %zu words", bench::WORDS_PER_LETTER);
     log_word_pool(pool);
 
-    Corpus corpus = generate_corpus(pool, rng);
+    // Corpus: non-deterministic seed drawn from random_device so each run
+    // exercises the dictionary against a different set of documents. The
+    // seed is logged so a specific run can be reproduced on failure.
+    std::random_device rd;
+    uint64_t corpus_seed = (static_cast<uint64_t>(rd()) << 32) | rd();
+    logger::instr("Corpus RNG seed: 0x%016llx", (unsigned long long)corpus_seed);
+    std::mt19937_64 corpus_rng(corpus_seed);
+
+    Corpus corpus = generate_corpus(pool, corpus_rng);
     logger::instr("Generated corpus: %zu files x %zu docs x %zu words",
                   bench::NUM_FILES, bench::DOCS_PER_FILE, bench::WORDS_PER_DOC);
 

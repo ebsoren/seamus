@@ -25,7 +25,7 @@ string IndexChunk::get_index_chunk_path() const {
 }
 
 
-IndexChunk::IndexChunk(uint32_t worker_number) : curr_doc_(1), chunk(0), doc_count(0), WORKER_NUMBER(worker_number){
+IndexChunk::IndexChunk(uint32_t worker_number) : curr_doc_(1), chunk(0), docs_in_chunk_(0), posts_bytes_(0), WORKER_NUMBER(worker_number){
     // Important: Init curr_doc_ to 1 to allow for 00 to be used as new doc flag
     // Find the latest chunk ID for this thread
     while (file_exists(get_index_chunk_path())) chunk++;
@@ -71,6 +71,8 @@ void IndexChunk::persist() {
     // Each skip entry: <4B doc_id> <1B space> <8B offset> <1B '\n'>
     const uint64_t SKIP_LIST_ENTRY_SIZE = 4 + 1 + 8 + 1;
     const uint64_t SKIP_LIST_SIZE = (DOCS_PER_INDEX_CHUNK / INDEX_SKIP_SIZE) * SKIP_LIST_ENTRY_SIZE;
+    // Toggle: when false, skip-list code is kept but does nothing (no bytes reserved, no bytes written).
+    constexpr bool WRITE_SKIP_LIST = false;
 
     /**
      * FIRST PASS over postings
@@ -82,20 +84,24 @@ void IndexChunk::persist() {
     vector<uint64_t> posting_list_locations(N);
     uint64_t posting_list_size = 0;
 
-    uint64_t dict_offsets[26];
-    dict_offsets[0] = 0;
+    constexpr size_t DICT_SLOTS = 36;
+    constexpr uint64_t NO_ENTRY = UINT64_MAX;
+    uint64_t dict_offsets[DICT_SLOTS];
+
+    for (size_t i = 0; i < DICT_SLOTS; i++) dict_offsets[i] = NO_ENTRY;
     uint64_t curr_offset = 0;
-    char curr_char = 'a';
 
     for (uint32_t i = 0; i < N; i++) {
-        // First word starting with this letter -- add its offset to the dict lookup table
-        if (alphabetized_entries[i][0] > curr_char) {
-            curr_char = alphabetized_entries[i][0];
-            dict_offsets[curr_char - 'a'] = curr_offset;
+
+        unsigned char first = static_cast<unsigned char>(alphabetized_entries[i][0]);
+        size_t slot = (first >= 'a') ? static_cast<size_t>(first - 'a')
+                                     : static_cast<size_t>(26 + (first - '0'));
+        if (dict_offsets[slot] == NO_ENTRY) {
+            dict_offsets[slot] = curr_offset;
         }
 
         // One byte per char, 6 bytes for posting list offset, 1 byte each for space and new line
-        curr_offset += alphabetized_entries[i].size() + 6 + 2; 
+        curr_offset += alphabetized_entries[i].size() + 6 + 2;
 
         // Mark where the byte offset where current word's posting list begins
         posting_list_locations[i] = posting_list_size;
@@ -128,13 +134,29 @@ void IndexChunk::persist() {
         }
 
         // Extra 1 for newline at end of each word's posting list
-        posting_list_size += SKIP_LIST_SIZE + 1;
+        posting_list_size += (WRITE_SKIP_LIST ? SKIP_LIST_SIZE : 0) + 1;
+    }
+
+    // Fill gaps in dict sort order (digits precede letters in the sorted dict).
+    // Reverse order is: 'z','y',...,'a', then '9','8',...,'0'. Any empty slot
+    // inherits the next-greater slot's offset, so a range read against an
+    // empty slot is a legitimate empty range instead of stale memory.
+    {
+        uint64_t fill = curr_offset;
+        for (int i = 25; i >= 0; i--) {
+            if (dict_offsets[i] == NO_ENTRY) dict_offsets[i] = fill;
+            else fill = dict_offsets[i];
+        }
+        for (int i = 35; i >= 26; i--) {
+            if (dict_offsets[i] == NO_ENTRY) dict_offsets[i] = fill;
+            else fill = dict_offsets[i];
+        }
     }
 
     // Write dictionary lookup table
-    // <1B LETTER> <64b OFFSET>\n
-    for (int i = 0; i < 26; i++) {
-        char c = char(i + 'a');
+    // <1B CHAR> <64b OFFSET>\n  — slots 0..25 are 'a'..'z', 26..35 are '0'..'9'.
+    for (size_t i = 0; i < DICT_SLOTS; i++) {
+        char c = (i < 26) ? char(i + 'a') : char((i - 26) + '0');
         fwrite(&c, sizeof(char), 1, fd);
         fwrite(" ", sizeof(char), 1, fd);
         fwrite(dict_offsets + i, sizeof(uint64_t), 1, fd);
@@ -177,7 +199,7 @@ void IndexChunk::persist() {
         // Plus one entry per new doc encountered.
         // The region is padded out to SKIP_LIST_SIZE bytes so the first-pass
         // size accounting in posting_list_locations stays correct.
-        {
+        if constexpr (WRITE_SKIP_LIST) {
             uint32_t scan_last_doc = 0;
             uint32_t scan_last_loc = 0;
             uint64_t scan_offset = 0;
@@ -282,7 +304,8 @@ void IndexChunk::persist() {
 void IndexChunk::reset() {
     index = unordered_map<string, postings>();
     urls = vector<string>();
-    doc_count = 0;
+    docs_in_chunk_ = 0;
+    posts_bytes_ = 0;
     curr_doc_ = 1; // Curr_doc must start at 1, 0 reserved for flag
 }
 
@@ -298,8 +321,22 @@ vector<string> IndexChunk::sort_entries() {
     vector<string> res;
     res.reserve(index.size());
 
+    // Dictionary TOC has 36 slots (a-z + 0-9). Anything else is upstream garbage
+    // and would break persist()'s dict_offsets indexing; drop it here and log.
+    size_t dropped = 0;
     for (auto it = index.begin(); it != index.end(); ++it) {
-        res.push_back(string((*it).key.data(), (*it).key.size()));
+        auto& key = (*it).key;
+        if (key.size() == 0) { dropped++; continue; }
+        unsigned char first = static_cast<unsigned char>(key.data()[0]);
+        bool is_letter = (first >= 'a' && first <= 'z');
+        bool is_digit  = (first >= '0' && first <= '9');
+        if (!is_letter && !is_digit) { dropped++; continue; }
+        res.push_back(string(key.data(), key.size()));
+    }
+
+    if (dropped > 0) {
+        logger::warn("Worker %u: sort_entries dropped %zu/%zu entries with non-[a-z0-9] first byte",
+                     WORKER_NUMBER, dropped, index.size());
     }
 
     radix_sort(res);
@@ -371,6 +408,7 @@ bool IndexChunk::index_file(const string &path) {
                 }
 
                 index[word_view].posts.push_back({doc, ++loc});
+                posts_bytes_ += sizeof(post);
             }
         }
 
@@ -379,13 +417,13 @@ bool IndexChunk::index_file(const string &path) {
             fclose(fd);
             return false;
         }
+
+        if (++docs_in_chunk_ >= DOCS_PER_INDEX_CHUNK || posts_bytes_ >= CHUNK_MEM_BUDGET) {
+            flush();
+        }
     }
 
     fclose(fd);
     logger::info("Worker %u: indexed file: %s", WORKER_NUMBER, path.data());
-
-    if (++doc_count == DOCS_PER_INDEX_CHUNK) {
-        flush();
-    }
     return true;
 }
