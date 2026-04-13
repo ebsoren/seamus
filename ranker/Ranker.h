@@ -355,7 +355,7 @@ public:
             logger::debug("Ranker has been changed to serving an amount of %zu unique words in the query", s.size());
         }
         pq = priority_queue<LeanPage, vector<LeanPage>, RankedCompare>(
-            RankedCompare(dynamic_weight, clause.size()),
+            RankedCompare(dynamic_weight, unique_query_words.size()),
             vector<LeanPage>()
         );
     }
