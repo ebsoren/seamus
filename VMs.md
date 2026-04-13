@@ -19,7 +19,8 @@ Spawns the crawler with correct resource limits for the VM, and detaches the pro
 \
 To manage it later from any session:
 ```bash
-  - sudo systemctl status crawler — check state
-  - sudo journalctl -u crawler -f — tail logs
-  - sudo systemctl stop crawler — stop it
+sudo systemctl status crawler (check process state)
+sudo journalctl -u crawler -f (live tail logs)
+sudo systemctl stop crawler  (stop crawler)
+sudo systemctl disable crawler (disable crawler systemctl service -- IMPORTANT TO RUN THIS BEFORE SHUTTING DOWN VMs!)
 ```
