@@ -12,19 +12,16 @@
 
 #include <thread>
 
-
 #include "../ranker/Ranker.h"
 #include <future>
 
 class QueryHandler {
     private:
-        IndexStreamReader* isr;    // local ISR to query for words whose index chunks are on this machine
+        Ranker *r;
         ThreadPool pool;
+        RPCListener rpc_listener;
+        IndexServer *index_server;
 
-    public:
-        QueryHandler(IndexStreamReader* isr, size_t n_threads = NUM_MACHINES) : pool(n_threads), isr(isr) { };
-
-        // TODO: determine final input semantics for get_results
         vector<RankedPage> get_results(Result query_combinations) {
             // TODO(charlie): after all results are created, determine if any RankedPage results should just be pruned altogether to save ranker work
             vector<RankedPage> ranked_pages;
@@ -51,9 +48,9 @@ class QueryHandler {
                             
                             // ... Send RPC request to Machine 'i' for 'word' ...
                             if (i == my_machine_id()) {
-                                local_hits = this->isr->advance_to_doc(123); // TODO: need to determine how to use the ISR to get the relevant info for the word on this machine
+                                local_hits = index_server->local_retrieve(word.token);
                             } else {
-                                local_hits = send_recv_word_data(string(get_machine_addr(i)), INDEX_SERVER_PORT, word); // TODO: need to implement this function to send the RPC request to machine i and parse the response into a vector of RankedPages
+                                local_hits = send_recv_word_data(string(get_machine_addr(i)), INDEX_SERVER_PORT, word.token); // TODO: need to implement this function to send the RPC request to machine i and parse the response into a vector of RankedPages
                             }
                             
                             task_promise->set_value(std::move(local_hits));
@@ -78,6 +75,40 @@ class QueryHandler {
             }
 
             return ranked_pages;
+        }
+
+        Result compile_query(const string& raw_request) {
+
+        }
+
+
+        bool handle_client_req(int client_fd) {
+            char buffer[2048] = {0};
+            ssize_t bytes_read = read(client_fd, buffer, sizeof(buffer) - 1);
+            
+            if (bytes_read <= 0) {
+                close(client_fd);
+                return;
+            }
+
+            string raw_request(buffer);
+            vector<RankedPage> results = get_results(compile_query(raw_request));
+
+            // pass results off to ranker
+            r->rank(results);
+            send_client_response(client_fd, r->get_top_x(NUM_RESULTS_RETURN)); // TODO: determine how many results we want to return
+            r->reset(); // flush ranker for future queries
+        }
+
+    public:
+        QueryHandler(Ranker* r, IndexServer* index_server, uint16_t port = QUERY_HANDLER_PORT, size_t n_pool_threads = NUM_MACHINES, size_t n_query_threads = QUERY_NUM_LISTENING_THREADS) : pool(n_pool_threads), r(r), index_server(index_server), rpc_listener(port, n_query_threads) { 
+
+        };
+
+        void start() {
+            rpc_listener.listener_loop([this](int client_fd) {
+                this->handle_client_req(client_fd);
+            });
         }
 
 };

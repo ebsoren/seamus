@@ -5,6 +5,9 @@
 #include "string.h"
 
 
+
+
+
 // Logging (0=DEBUG, 1=INFO, 2=WARN, 3=ERROR, 4=INSTR, 5=NONE)
 constexpr uint8_t LOG_LEVEL = 3;
 constexpr const char* USER_AGENT = "Seamus the Search Engine (web crawler for university course)";
@@ -224,7 +227,9 @@ constexpr size_t INDEX_SERVER_NUM_THREADS = 16; // Should be then number of core
 constexpr uint32_t INDEX_SERVER_PORT = 9100;
 
 // Query Handler
-constexpr size_t QUERY_HANDLER_NUM_THREADS = 16; // Should be then number of cores    // todo(Charlie): change depending on number of cores we end up renting per machine
+constexpr uint32_t QUERY_HANDLER_PORT = 9200;
+constexpr size_t QUERY_NUM_LISTENING_THREADS = 16;
+constexpr uint16_t NUM_RESULTS_RETURN = 20;
 
 typedef uint32_t Unicode;
 typedef uint8_t  Utf8;

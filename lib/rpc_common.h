@@ -62,6 +62,11 @@ inline bool send_string(int fd, const string& s) {
     return send_exact(fd, s.data(), s.size()); // Send characters
 }
 
+inline bool send_stringview(int fd, const string_view& sv) {
+    if (!send_u32(fd, sv.size())) return false; // Send 4-byte header
+    return send_exact(fd, sv.data(), sv.size()); // Send characters
+}
+
 // Receive exactly `len` bytes from an ephemeral socket fd into buf
 // Useful for wire formats where a fixed size metadata region tells us the variable size of a subsequent data region
 inline bool recv_exact(int fd, void* buf, size_t len) {

@@ -43,3 +43,15 @@ public:
 
 };
 
+inline void recover_index_chunks(vector<LoadedIndex>& index_chunks) {
+    // read from index chunk numbers until files dont exist
+    int i = 0;
+    string fileName = string::join("", INDEX_OUTPUT_DIR, i);
+    while (file_exists(fileName)) {
+        LoadedIndex curr(fileName);
+        index_chunks.push_back(curr);
+        ++i;
+        fileName = string::join("", INDEX_OUTPUT_DIR, i);
+    }
+}
+

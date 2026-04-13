@@ -14,12 +14,12 @@ struct RankedPageResponse {
 };
 
 // returns the fd created to pass to recv word response
-vector<RankedPage> send_recv_word_data(const string& host, const uint16_t port, const string& word) {
+vector<RankedPage> send_recv_word_data(const string& host, const uint16_t port, const string_view& word) {
     int sock_fd = connect_to_host(host, port);
     if (sock_fd < 0) return vector<RankedPage>{}; // Connection failed
 
     // 2. Send the word request (using the new mirror helper)
-    if (!send_string(sock_fd, word)) {
+    if (!send_stringview(sock_fd, word)) {
         close(sock_fd);
         return vector<RankedPage>{}; // Send failed
     }
@@ -117,4 +117,9 @@ inline bool send_word_response(const uint16_t fd, const RankedPageResponse& resu
 
     bool result = send_exact(fd, buf.get(), total);  
     return result;
+}
+
+// serializes the lean page results and sends it back to client
+inline bool send_client_response(const uint16_t fd, vector<LeanPage> results) {
+
 }

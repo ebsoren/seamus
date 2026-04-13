@@ -19,21 +19,14 @@ Query Language Syntax:
     - if words in quotes, there must be an exact match
 */
 int main(int argc, char* argv[]) {
-
-    // TODO: recover index from disk and initialize ISR with it
-    IndexChunk index; // todo: how do we interact with this index? how do we recover from disk
-    IndexStreamReader isr;
+    vector<LoadedIndex> indexChunks;
+    recover_index_chunks(indexChunks);
     UrlStore url_store(nullptr, 0);
 
-
-    IndexServer index_server(&url_store);
-    QueryHandler qh(&isr);
-    vector<RankedPage> results = qh.get_results(...);
-
-    Ranker r();
-
-    // rank pages, and return top k results somewhere
-
+    Ranker r;
+    IndexServer index_server(&url_store, indexChunks);
+    QueryHandler qh(&r, &index_server);
+    qh.start();
 
     return 0;
 }

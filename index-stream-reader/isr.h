@@ -10,7 +10,7 @@ private:
 
 public:
     friend class IndexStreamReader;
-    LoadedIndex(string path);
+    LoadedIndex(const string& path);
     ~LoadedIndex();
 };
 
@@ -40,6 +40,8 @@ public:
     const inline string get_url(uint32_t doc) {
         return string(index->urls[doc].data());
     }
+
+    
 
 private:
     // Access & easily traverse the file

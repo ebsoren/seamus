@@ -6,7 +6,7 @@
 #include <sys/mman.h>
 #include <unistd.h>
 
-LoadedIndex::LoadedIndex(string path) {
+LoadedIndex::LoadedIndex(const string& path) {
     urls.resize(DOCS_PER_INDEX_CHUNK);
     dictionary.reserve(DOCS_PER_INDEX_CHUNK);
 
