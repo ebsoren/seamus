@@ -214,11 +214,12 @@ constexpr size_t HTMLSERVER_THREADS = 8;
 
 // Index
 constexpr size_t DOCS_PER_INDEX_CHUNK = 500000;
+constexpr size_t CHUNK_MEM_BUDGET = 1 << 30; 
 constexpr uint32_t INDEX_SKIP_SIZE = 500;
 static constexpr const char* INDEX_OUTPUT_DIR = "/var/seamus/index_output";
 constexpr size_t NUM_INDEXER_THREADS = 16; // Should be the number of cores     // todo(Aiden): change depending on number of cores we end up renting per machine
 constexpr size_t POSTING_LIST_BUFFER_SIZE = 1e9;
-constexpr size_t INDEX_DICTIONARY_TOC_SIZE = (1 + 8 + 2) * 26; // char, uint64_t, 2 delims
+constexpr size_t INDEX_DICTIONARY_TOC_SIZE = (1 + 8 + 2) * 36; // char, uint64_t, 2 delims — 26 letters + 10 digits
 
 typedef uint32_t Unicode;
 typedef uint8_t  Utf8;
