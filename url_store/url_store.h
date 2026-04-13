@@ -141,6 +141,12 @@ public:
         return us.findUrlData(url) != nullptr;
     }
 
+    UrlData* getUrl(const string& url) {
+        UrlShard& us = get_shard(url);
+        std::lock_guard<std::mutex> lock(us.mtx);
+        return us.findUrlData(url);
+    }
+
     bool hasCrawled(const string& url) {
         UrlShard& us = get_shard(url);
         std::lock_guard<std::mutex> lock(us.mtx);

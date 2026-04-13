@@ -3,6 +3,7 @@
 #include "../lib/unordered_map.h"
 #include "../lib/utils.h"
 #include "../lib/consts.h"
+#include "../url_store/url_store.h"
 
 #include "query_handler.h"
 #include "../ranker/Ranker.h"
@@ -19,14 +20,15 @@ Query Language Syntax:
 */
 int main(int argc, char* argv[]) {
 
-    
-    auto query_words = vector<string>{"example", "query", "words"};
-
-    // TODO(charlie): input constructor args for ISR
-    IndexServer index_server;
+    // TODO: recover index from disk and initialize ISR with it
+    IndexChunk index; // todo: how do we interact with this index? how do we recover from disk
     IndexStreamReader isr;
+    UrlStore url_store(nullptr, 0);
+
+
+    IndexServer index_server(&url_store);
     QueryHandler qh(&isr);
-    vector<RankedPage> results = qh.get_results(query_words);
+    vector<RankedPage> results = qh.get_results(...);
 
     Ranker r();
 

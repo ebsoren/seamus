@@ -23,8 +23,8 @@
 // };
 
 struct RankedPage {
-    string url;
-    string title;
+    string url = string("");
+    string title = string("");
     int seed_list_dist;
     int domains_from_seed; // unsure if we have infra in place for this 
     int num_unique_words_found_anchor;
@@ -38,8 +38,8 @@ struct RankedPage {
 };
 
 struct LeanPage {
-    string url;
-    string title;
+    string url = string("");
+    string title = string("");
     double score; 
 };
 
