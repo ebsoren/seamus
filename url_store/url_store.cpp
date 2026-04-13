@@ -5,6 +5,7 @@
 #include "../lib/algorithm.h"
 #include "../lib/Frontier.h"
 #include "../lib/logger.h"
+#include "../lib/url_filter.h"
 #include <optional>
 
 
@@ -48,9 +49,10 @@ void UrlStore::flush_rpc_urls() {
 }
 
 void UrlStore::manage_frontier_and_update_url(URLStoreUpdateRequest& req) {
-    bool is_new = updateUrl(req.url, req.anchor_text, req.seed_list_url_hops, req.seed_list_domain_hops, req.num_encountered);
+    size_t priority = get_priority_bucket(req.url, req.seed_list_url_hops);
+    bool is_new = updateUrl(req.url, req.anchor_text, req.seed_list_url_hops, req.seed_list_domain_hops, req.num_encountered, priority);
 
-    if (is_new && dc) {
+    if (is_new && dc && priority < PRIORITY_BUCKETS) {
         string domain = extract_domain(req.url);
         CrawlTarget target{
             std::move(domain),
@@ -59,8 +61,6 @@ void UrlStore::manage_frontier_and_update_url(URLStoreUpdateRequest& req) {
             req.seed_list_domain_hops,
         };
 
-        size_t priority = get_priority_bucket(req.url, req.seed_list_url_hops);
-        if (priority >= PRIORITY_BUCKETS) return; // Don't add to frontier if doesn't meet priority threshold
         std::lock_guard<std::mutex> lock(dc->buckets[priority].bucket_lock);
         dc->buckets[priority].urls.push_back(std::move(target));
     }
@@ -72,19 +72,17 @@ void UrlStore::batch_manage_frontier_and_update_url(BatchURLStoreUpdateRequest& 
 
     for (size_t i = 0; i < batch_req.reqs.size(); ++i) {
         URLStoreUpdateRequest& req = batch_req.reqs[i];
-        bool is_new = updateUrl(req.url, req.anchor_text, req.seed_list_url_hops, req.seed_list_domain_hops, req.num_encountered);
+        size_t priority = get_priority_bucket(req.url, req.seed_list_url_hops);
+        bool is_new = updateUrl(req.url, req.anchor_text, req.seed_list_url_hops, req.seed_list_domain_hops, req.num_encountered, priority);
 
-        if (is_new && dc) {
+        if (is_new && dc && priority < PRIORITY_BUCKETS) {
             string domain = extract_domain(req.url);
-            size_t priority = get_priority_bucket(req.url, req.seed_list_url_hops);
-            if (priority < PRIORITY_BUCKETS) {
-                bucket_targets[priority].push_back(CrawlTarget{
-                    std::move(domain),
-                    string(req.url.data(), req.url.size()),
-                    req.seed_list_url_hops,
-                    req.seed_list_domain_hops,
-                });
-            }
+            bucket_targets[priority].push_back(CrawlTarget{
+                std::move(domain),
+                string(req.url.data(), req.url.size()),
+                req.seed_list_url_hops,
+                req.seed_list_domain_hops,
+            });
         }
     }
 
@@ -101,6 +99,7 @@ void UrlStore::batch_manage_frontier_and_update_url(BatchURLStoreUpdateRequest& 
 // Handles a BatchURLStoreUpdateRequest given an ephemeral socket fd
 void UrlStore::client_handler(int fd) {
     std::optional<BatchURLStoreUpdateRequest> req = recv_batch_urlstore_update(fd);
+    close(fd);
     if (!req) return;
 
     record_rpc_urls(req->reqs.size());
@@ -145,12 +144,22 @@ bool UrlStore::addUrl_unlocked(string& url, vector<string>& anchor_texts, const 
 
 
 // returns whether or not the url was new to the url_store
-bool UrlStore::updateUrl(string& url, vector<string>& anchor_texts, const uint16_t seed_distance, const uint16_t domain_distance, const uint32_t num_encountered) {
+bool UrlStore::updateUrl(string& url, vector<string>& anchor_texts, const uint16_t seed_distance, const uint16_t domain_distance, const uint32_t num_encountered, size_t priority) {
     total_url_count.fetch_add(1, std::memory_order_relaxed);
     UrlShard& us = get_shard(url);
     std::lock_guard<std::mutex> lg(us.mtx);
     UrlData* url_data_ptr = us.findUrlData(url);
     if (url_data_ptr == nullptr) {
+        // If URL priority is low enough that link will never be crawled, don't
+        // add to URLStore
+        if (priority >= PRIORITY_BUCKETS) {
+            logger::debug("updateUrl: dropping url due to low priority (priority=%zu): %s", priority, url.data());
+            return false;
+        }
+        if (is_nsfw_url(url)) {
+            logger::debug("updateUrl: dropping nsfw url: %s", url.data());
+            return false;
+        }
         if (unique_url_count.load(std::memory_order_relaxed) >= MAX_STORE_URLS) {
             logger::warn("UrlStore has reached max capacity, not adding new URL: %s", url.data());
             return false;
@@ -264,6 +273,9 @@ void UrlStore::persist(bool final_persist) {
 
             fwrite(&data.eod, sizeof(uint16_t), 1, fd);
 
+            fwrite(&data.domain_dist, sizeof(uint16_t), 1, fd);
+            fwrite(&data.crawled, sizeof(bool), 1, fd);
+
             uint32_t num_freqs = static_cast<uint32_t>(data.anchor_freqs.size());
             fwrite(&num_freqs, sizeof(uint32_t), 1, fd);
 
@@ -336,6 +348,8 @@ void UrlStore::readFromFile(const int worker_number) {
         url_data[url].title = string(title_buf, title_len);
         
         fread(&url_data[url].eod, sizeof(uint16_t), 1, fd);
+        fread(&url_data[url].domain_dist, sizeof(uint16_t), 1, fd);
+        fread(&url_data[url].crawled, sizeof(bool), 1, fd);
 
         uint32_t num_anchor_freqs;
         fread(&num_anchor_freqs, sizeof(uint32_t), 1, fd);

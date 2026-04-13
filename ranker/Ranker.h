@@ -63,6 +63,16 @@ unordered_map<string,double> makeTldWeight() {
 
     return m;
 }
+
+vector<double> get_word_probabilities(vector<string> &s) {
+    // TODO: THIS SHOULD RETURN THE COMMONNESS OF THE WORDS GIVEN WHAT WE'VE SEEN IN SEARCHING
+    vector<double> probs(s.size());
+    for(size_t i = 0; i < s.size(); i++) {
+        // probs[i] = find_probability(s[i]);
+    }
+    return probs;
+}
+
 unordered_map<string, double> tldWeight = makeTldWeight(); // factory function to avoid having to implement initializer lists lol
 
 double max(double i, double j) {
@@ -158,6 +168,69 @@ double calc_static_score(const RankedPage &p) {
         (factor_9 * static_9_weight)) / static_weight_sum);
 }
 
+template <typename T>
+T min_element(vector<T> &v) {
+    T min_elt = v[0];
+    for(int i = 1; i < v.size(); i++) {
+        if(v[i] < min_elt) {
+            min_elt = v[i];
+        }
+    }
+    return min_elt;
+}
+template <typename T>
+T max_element(vector<T> &v) {
+    T max_elt = v[0];
+    for(int i = 1; i < v.size(); i++) {
+        if(v[i] > min_elt) {
+            max_elt = v[i];
+        }
+    }
+    return max_elt;
+}
+
+double word_rarity_freq_score(vector<double> probs, vector<int> counts) {
+
+    int n = probs.size();
+    vector<double> x(n);
+
+    // log rarity
+    for (int i = 0; i < n; i++) {
+        x[i] = -log(probs[i]);
+    }
+
+    double xmin = min_element(x);
+    double xmax = max_element(x);
+
+    // weights in [0.2, 1]
+    std::vector<double> w(n);
+    for (int i = 0; i < n; i++) {
+        if (xmax == xmin) {
+            w[i] = 1.0;
+        } else {
+            double z = (x[i] - xmin) / (xmax - xmin);
+            w[i] = 0.2 + 0.8 * z;
+        }
+    }
+
+    // combine for final score
+    double lambda = 0.5;
+    double raw = 0.0, max_possible = 0.0;
+
+    for (int i = 0; i < n; i++) {
+        double f = 1 - exp(-lambda * counts[i]);
+        raw += w[i] * f;
+        max_possible += w[i];
+    }
+
+    double S = (max_possible > 0) ? raw / max_possible : 0.0;
+
+    // scale to [0.2, 1]
+    double final_score = 0.2 + 0.8 * S;
+    
+    return final_score;
+}
+
 
 double word_pos_score(const vector<vector<size_t>> &positions, int unique_words_in_query, size_t doc_len) {
     if (unique_words_in_query == 0 || doc_len == 0) return 0.0;
@@ -203,26 +276,32 @@ double word_pos_score(const vector<vector<size_t>> &positions, int unique_words_
     return normalized;
 }
 
-double calc_dynamic_score(RankedPage &r, vector<Term> query_clause) {
-    size_t query_size = query_clause.size();
+double calc_dynamic_score(RankedPage &r, vector<string> &unique_query_words) {
     // This factor checks frequency of unique words and proximity scores of the unique words to other unique words in the query 
-    double factor_1 = word_pos_score(r.word_positions, r.doc_len, query_size); // this score should be given extra weight in calculations
+    double factor_1 = word_pos_score(r.word_positions, r.doc_len, unique_query_words.size()); // this score should be given extra weight in calculations
 
     // This factor scores based on number of times the link was seen during crawling
     double factor_2 = max(1.0 / (1.0 + double_pow(e, -k * (r.times_seen - n_0))), 0.2);
 
     // This factor scores based on how many unique words in the query were found in the title but penalized on length of the title
-    double factor_3 = (r.num_unique_words_found_title / query_size) * double_pow(e, (-Gamma_title * r.title.size()));
+    double factor_3 = (r.num_unique_words_found_title / unique_query_words.size()) * double_pow(e, (-Gamma_title * r.title.size()));
 
     // This factor scores based on how many unique words in the query were found in the description but penalized on length of the description
-    double factor_4 = (r.num_unique_words_found_descr / query_size) * double_pow(e, (-Gamma_desc * r.description_len));
+    double factor_4 = (r.num_unique_words_found_descr / unique_query_words.size()) * double_pow(e, (-Gamma_desc * r.description_len));
 
     // This factor checks unique words in the query found in the anchor texts pointing to the link
     // PROBABLY WANT TO ADD MORE TO THIS FACTOR ONCE I KNOW MORE ABOUT ANCHOR TEXT
-    double factor_5 = (r.num_unique_words_found_anchor / query_size); 
+    double factor_5 = (r.num_unique_words_found_anchor / unique_query_words.size()); 
 
     // This factor checks the URL for keywords in it
-    double factor_6 = (r.num_unique_words_found_url / query_size) * double_pow(e, (-Gamma_url * r.url.size()));
+    double factor_6 = (r.num_unique_words_found_url / unique_query_words.size()) * double_pow(e, (-Gamma_url * r.url.size()));
+
+    // This factor scores based on the rarity of each word combined with its frequency
+    vector<int> counts(r.word_positions.size());
+    for(size_t i = 0; i < r.word_positions.size(); i++) {
+        counts[i] = r.word_positions[i].size();
+    }
+    double factor_6 = word_rarity_freq_score(get_word_probabilities(unique_query_words), counts);
 
     // final score returned here with extra weightings 
     return(((factor_1 * factor_1_weight) + (factor_2 * factor_2_weight) + (factor_3 * factor_3_weight)
@@ -249,17 +328,17 @@ class Ranker {
 private:
     priority_queue<LeanPage, vector<LeanPage>, RankedCompare> pq;
     double dynamic_weight;
-    vector<Term> query_clause;
+    vector<string> unique_query_words; 
     size_t size_lim;
     bool verbose_mode;
 
 public:
-    Ranker(size_t unique_words_in_query_init, size_t size_lim_init, double dynamic_weight_init = DEFAULT_DYNAMIC_WEIGHT, bool verbose_init = false) : 
+    Ranker(size_t size_lim_init, double dynamic_weight_init = DEFAULT_DYNAMIC_WEIGHT, bool verbose_init = false) : 
         dynamic_weight(dynamic_weight_init), size_lim(size_lim_init), verbose_mode(verbose_init) { 
         
         if(verbose_mode) {
-            logger::debug("Ranker is initialized with size limit of %zu, dynamic weighting of %f, and unique words in query of %zu", 
-                size_lim_init, dynamic_weight_init, unique_words_in_query_init);
+            logger::debug("Ranker is initialized with size limit of %zu, and dynamic weighting of %f", 
+                size_lim_init, dynamic_weight_init);
         }
     }
 
@@ -270,10 +349,10 @@ public:
         pq.clear();
     }
 
-    void change_query_clause(vector<Term> clause) {
-        query_clause = clause;
+    void set_new_query(vector<string> s) {
+        unique_query_words = std::move(s);
         if(verbose_mode) {
-            logger::debug("Ranker has been changed to serving an amount of %zu unique words in the query", clause.size());
+            logger::debug("Ranker has been changed to serving an amount of %zu unique words in the query", s.size());
         }
         pq = priority_queue<LeanPage, vector<LeanPage>, RankedCompare>(
             RankedCompare(dynamic_weight, clause.size()),
@@ -306,9 +385,9 @@ public:
                 input.push_back(LeanPage{std::move(v[i].url), 
                     std::move(v[i].title), 
                     (calc_static_score(v[i]) * (1-dynamic_weight) + 
-                    calc_dynamic_score(v[i], query_clause) * dynamic_weight)});
+                    calc_dynamic_score(v[i], unique_query_words) * dynamic_weight)});
                 if(verbose_mode) {
-                    double r_score = calc_static_score(v[i]) * (1-dynamic_weight) + calc_dynamic_score(v[i], query_clause) * dynamic_weight;
+                    double r_score = calc_static_score(v[i]) * (1-dynamic_weight) + calc_dynamic_score(v[i], unique_query_words) * dynamic_weight;
                     logger::debug("The URL %s earned a score of: %.6f", v[i].url.data(), r_score);
                 }
             }
@@ -316,7 +395,7 @@ public:
         pq = priority_queue<LeanPage, vector<LeanPage>, RankedCompare>(
             v.begin(),
             end_it,
-            RankedCompare(dynamic_weight, query_clause.size()),
+            RankedCompare(dynamic_weight, unique_query_words.size()),
             vector<LeanPage>()
         );
         if(verbose_mode) {

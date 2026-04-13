@@ -10,7 +10,7 @@ MACHINE_ID=$(cat .machine_id)
 USER=$(whoami)
 
 echo "Building crawler..."
-bazel build //crawler
+bazel build -c opt //crawler
 
 BINARY_PATH=$(readlink -f bazel-bin/crawler/crawler)
 WORK_DIR=$(pwd)

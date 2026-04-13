@@ -32,7 +32,7 @@ grep -q "fs.file-max" /etc/sysctl.conf || echo "fs.file-max = 1048576" | sudo te
 grep -q "hard nofile" /etc/security/limits.conf || echo "* hard nofile 1048576" | sudo tee -a /etc/security/limits.conf > /dev/null
 grep -q "soft nofile" /etc/security/limits.conf || echo "* soft nofile 1048576" | sudo tee -a /etc/security/limits.conf > /dev/null
 
-read -p "Clear output directories? (y/N) " -n 1 -r
+read -p "Clear parser and urlstore output directories? (y/N) " -n 1 -r
 echo
 if [[ $REPLY =~ ^[Yy]$ ]]; then
     echo "Clearing output directories..."

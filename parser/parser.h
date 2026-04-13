@@ -179,7 +179,7 @@ private:
         mkdir(PARSER_OUTPUT_DIR, 0755);   // no-op if already exists
         char file_name[128];
         snprintf(file_name, sizeof(file_name), "%s/parser_%zu_out.txt", PARSER_OUTPUT_DIR, parser_id_);
-        out_fd_ = open(file_name, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+        out_fd_ = open(file_name, O_WRONLY | O_CREAT | O_APPEND, 0644);
         if (out_fd_ < 0) {
             logger::error("open_output_file: open failed for '%s' (errno=%d)", file_name, errno);
         } else {

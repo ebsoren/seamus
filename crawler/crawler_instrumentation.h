@@ -13,6 +13,7 @@
 
 #include "../url_store/url_store.h"
 #include "crawler_metrics.h"
+#include <dirent.h>
 
 
 class CrawlerInstrumentation {
@@ -151,9 +152,26 @@ private:
                 double new_per_sec = drain_interval_sec > 0 ? static_cast<double>(interval_distinct) / drain_interval_sec : 0;
                 prev_urls_seen = seen;
                 prev_urls_distinct = distinct;
-                logger::instr("total urls: %zu | total urls/sec: %.1f | distinct urls: %zu | new urls/sec: %.1f\n",
+                logger::instr("total urls: %zu | total urls/sec: %.1f | distinct urls: %zu | new urls/sec: %.1f",
                     seen, total_per_sec, distinct, new_per_sec);
+
+                auto ms = url_store->mem_stats();
+                double slots_mb = ms.shard_slots_bytes / 1e6;
+                double entry_mb = ms.shard_entry_heap / 1e6;
+                double anchor_mb = ms.anchor_dict_bytes / 1e6;
+                double total_mb = slots_mb + entry_mb + anchor_mb;
+                double load = ms.total_slots > 0 ? static_cast<double>(ms.total_entries) / ms.total_slots : 0;
+                logger::instr("mem | urlstore total: %.1f MB | shard slots: %.1f MB | entry heap: %.1f MB | anchor dict: %.1f MB | load: %.2f (%zu/%zu)\n",
+                    total_mb, slots_mb, entry_mb, anchor_mb, load, ms.total_entries, ms.total_slots);
             }
+
+            size_t fd_count = 0;
+            if (DIR* d = opendir("/proc/self/fd")) {
+                while (readdir(d)) fd_count++;
+                closedir(d);
+                fd_count -= 2; // . and ..
+            }
+            logger::instr("open fds: %zu\n", fd_count);
         }
     }
 };

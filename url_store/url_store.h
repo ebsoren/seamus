@@ -107,9 +107,7 @@ public:
     }
 
     void persist(bool final_persist = false);
-    
-    // bool addUrl(string& url, vector<string>& anchor_texts, const uint16_t seed_distance, const uint16_t domain_distance, const uint16_t eot, const uint16_t eod, const uint32_t num_encountered);
-    bool updateUrl(string& url, vector<string>& anchor_texts, const uint16_t seed_distance, const uint16_t domain_distance, const uint32_t num_encountered);
+    bool updateUrl(string& url, vector<string>& anchor_texts, const uint16_t seed_distance, const uint16_t domain_distance, const uint32_t num_encountered, size_t priority = 0);
     void manage_frontier_and_update_url(URLStoreUpdateRequest& req);
     void batch_manage_frontier_and_update_url(BatchURLStoreUpdateRequest& batch_req);
     bool updateTitleLen(const string& url, const uint16_t eot);
@@ -203,6 +201,49 @@ public:
 
     size_t distinct_urls() const { return unique_url_count.load(std::memory_order_relaxed); }
     size_t seen_urls() const { return total_url_count.load(std::memory_order_relaxed); }
+
+    // Memory instrumentation — rough estimate of bytes held by UrlStore structures.
+    // Uses capacity() (not size()) so it reflects actual allocated footprint.
+    struct MemStats {
+        size_t shard_slots_bytes;    // (1 + sizeof(string) + sizeof(UrlData)) × capacity summed across shards
+        size_t shard_entry_heap;     // per-entry heap: long-string url/title chars + anchor_freqs mini-map arrays
+        size_t anchor_dict_bytes;    // anchor_to_id + id_to_anchor
+        size_t total_slots;          // sum of map capacities
+        size_t total_entries;        // sum of map sizes
+    };
+
+    MemStats mem_stats() {
+        MemStats s{};
+        for (size_t i = 0; i < URL_NUM_SHARDS; ++i) {
+            std::lock_guard<std::mutex> lock(shards[i].mtx);
+            auto& m = shards[i].url_data;
+            size_t cap = m.capacity();
+            s.total_slots += cap;
+            s.total_entries += m.size();
+            s.shard_slots_bytes += cap * (1 + sizeof(string) + sizeof(UrlData));
+
+            // Per-entry heap charges. This iterates the shard (cost ≈ shard size),
+            // so it adds ~ms per shard at 20s drain cadence — acceptable.
+            for (auto it = m.begin(); it != m.end(); ++it) {
+                auto tup = *it;
+                if (tup.key.size() > string::MAX_SHORT_LENGTH) s.shard_entry_heap += tup.key.size() + 1;
+                if (tup.value.title.size() > string::MAX_SHORT_LENGTH) s.shard_entry_heap += tup.value.title.size() + 1;
+                // anchor_freqs mini-map: 3 arrays (states/keys/values) of capacity() elems
+                size_t afc = tup.value.anchor_freqs.capacity();
+                s.shard_entry_heap += afc * (1 + sizeof(uint32_t) + sizeof(uint32_t));
+            }
+        }
+        {
+            std::lock_guard<std::mutex> lock(global_mtx);
+            s.anchor_dict_bytes += anchor_to_id.capacity() * (1 + sizeof(string) + sizeof(size_t));
+            for (size_t i = 0; i < id_to_anchor.size(); ++i) {
+                s.anchor_dict_bytes += sizeof(string);
+                if (id_to_anchor[i].size() > string::MAX_SHORT_LENGTH)
+                    s.anchor_dict_bytes += id_to_anchor[i].size() + 1;
+            }
+        }
+        return s;
+    }
 };
 
 

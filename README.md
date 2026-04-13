@@ -43,13 +43,8 @@ Note that benchmarks look like tests to bazel, to see actual output of anything 
 bazel run //tests:thread_pool_benchmark
 ```
 
-### VM Deployment (Debian ARM)
-
-```bash
-curl -sL https://raw.githubusercontent.com/hershyz/seamus/main/scripts/vm_setup.sh | bash
-```
-
-This installs all dependencies, clones the repo, and builds the crawler and indexer.
+### Running on a VM
+See [VMs.md](VMs.md) for instructions on provisioning a linux VM and running the crawler as a `systemd` service.
 
 ### Clean
 Remove all bazel caches (build server cache, test results, executables, symlinks, etc...)

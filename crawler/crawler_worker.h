@@ -87,6 +87,12 @@ inline void crawler_worker(DomainCarousel& dc, size_t carousel_left, size_t caro
 
             auto body = std::make_unique<char[]>(MAX_HTML_SIZE); // TODO : Switched to heap allocation due to stack overflow, switch back maybe?
             ssize_t body_len = https_get(host.data(), path, body.get());
+
+            // -4 error code for 429
+            if (body_len == -4) {
+                logger::debug("Worker [%zu-%zu] retryable error for %s, skipping", carousel_left, carousel_right, target->url.data());
+                continue;
+            }
             url_store->markCrawled(target->url);
             if (body_len > 0) {
                 logger::debug("Worker [%zu-%zu] received %zd bytes from %s", carousel_left, carousel_right, body_len, target->url.data());

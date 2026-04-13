@@ -39,11 +39,14 @@ public:
             }
         }
 
-        // Load seed list into priority bucket 0 if flag is set (true in non-testing environments) 
+        // Load seed list into priority bucket 0 if flag is set (true in non-testing environments)
         if (load_seed_list) {
+            const size_t my_id = my_machine_id();
             std::lock_guard<std::mutex> lock(dc->buckets[0].bucket_lock);
             for (size_t i = 0; i < SEED_LIST_SIZE; ++i) {
-                dc->buckets[0].enqueue(CrawlTarget{extract_domain(string(SEED_LIST[i])), string(SEED_LIST[i]), 0, 0});
+                string url(SEED_LIST[i]);
+                if (get_destination_machine_from_url(url) != my_id) continue;
+                dc->buckets[0].enqueue(CrawlTarget{extract_domain(url), static_cast<string&&>(url), 0, 0});
             }
         }
     }
