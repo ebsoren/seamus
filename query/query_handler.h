@@ -23,7 +23,7 @@ class QueryHandler {
         IndexServer *index_server;
 
         vector<RankedPage> get_results(Result query_combinations) {
-            // TODO(charlie): after all results are created, determine if any RankedPage results should just be pruned altogether to save ranker work
+            // TODO(charlie): the only time a vector in the 2D vector positions in ranked_pages can be empty is when there is an OR clause with the term
             vector<RankedPage> ranked_pages;
             for (const Clause& clause : query_combinations) {
                 vector<std::future<vector<RankedPage>>> futures;
@@ -69,6 +69,9 @@ class QueryHandler {
 
                 // merge final_results into ranked_pages
                 for (auto results_it = final_results.begin(); results_it != final_results.end(); ++results_it) {
+                    // TODO(charlie): for each result, validate and make sure that all AND terms are included in the 2D positions vector
+
+                    // ignore results that have empty vectors for AND terms
                     ranked_pages.push_back(std::move((*results_it).value));
                 }
             }

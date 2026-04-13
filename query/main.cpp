@@ -22,7 +22,7 @@ Query Language Syntax:
 // 3 thread pools needed:
 // spawn ISRs per unique term in the query
 // use big thread pool to craw local index chunks
-    // use fix sized inner thread pool to query each index chunk for multiple words
+//     use fix sized inner thread pool to query each index chunk for multiple words
 // use another thread pool to fan out rpc query indices to other indexServers (17 other machines to fanout too)
 
 // retrieve top 10 best page results from other machines
