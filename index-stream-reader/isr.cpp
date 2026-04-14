@@ -83,11 +83,15 @@ IndexStreamReader::IndexStreamReader(string word, LoadedIndex* index) : word(mov
     // Jump to the word's posting list using that offset (which is from )
     curr_loc_ = postings_start_= index->posting_list_ + offset;
 
-    // TODO: Check these casts...
-    n_posts = static_cast<uint64_t>(*curr_loc_);
+    // Header layout written by IndexChunk::persist:
+    //   <8B n_posts><space><4B n_docs><\n>
+    memcpy(&n_posts, curr_loc_, sizeof(uint64_t));
     curr_loc_ += sizeof(uint64_t) + 1; // skip over the number and the space
-    n_docs = static_cast<uint64_t>(*curr_loc_);
-    curr_loc_ += sizeof(uint64_t) + 1; // skip over the number and the newline
+
+    uint32_t n_docs_raw;
+    memcpy(&n_docs_raw, curr_loc_, sizeof(uint32_t));
+    n_docs = n_docs_raw;
+    curr_loc_ += sizeof(uint32_t) + 1; // skip over the number and the newline
     
     // Starting of posting list, num_docs, num_posts all set
 }
