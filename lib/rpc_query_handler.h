@@ -14,7 +14,7 @@ struct RankedPageResponse {
 };
 
 // returns the fd created to pass to recv word response
-vector<RankedPage> send_recv_word_data(const string& host, const uint16_t port, const string_view& word) {
+vector<RankedPage> send_recv_word_data(const string& host, const uint16_t port, const string_view& word, bool is_phrase) {
     int sock_fd = connect_to_host(host, port);
     if (sock_fd < 0) return vector<RankedPage>{}; // Connection failed
 

@@ -30,6 +30,7 @@ Query Language Syntax:
 // total of 180 pages to rank, then return top 10 amongst those to the client
 
 int main(int argc, char* argv[]) {
+    
     vector<LoadedIndex> indexChunks;
     recover_index_chunks(indexChunks);
     UrlStore url_store(nullptr, 0);
