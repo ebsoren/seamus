@@ -7,12 +7,12 @@
 #include <unistd.h>
 
 LoadedIndex::LoadedIndex(string path) {
-    urls.resize(DOCS_PER_INDEX_CHUNK);
+    urls.reserve(DOCS_PER_INDEX_CHUNK);
     dictionary.reserve(DOCS_PER_INDEX_CHUNK);
 
     FILE* fd;
     if ((fd = fopen(path.data(), "rb")) == nullptr) {
-        logger::warn("Failed to open %s", path);
+        logger::warn("Failed to open %s", path.data());
         return;
     }
     
@@ -23,26 +23,25 @@ LoadedIndex::LoadedIndex(string path) {
     char buff[4096];
     uint64_t bytes_read = 0;
 
-    uint32_t id;
     while (bytes_read < urls_size) {
         fgets(buff, sizeof(buff), fd);
         bytes_read += strlen(buff);
 
-        // Parse <32b ID> <varlen URL>\n and add to urls vector
-        // The URL starts after 4B Id and 1B char, and the total length is 4B + 1B + strlen + 1B
-        memcpy(&id, buff, sizeof(uint32_t));
-        urls[id] = string(buff + sizeof(uint32_t) + 1, strlen(buff) - sizeof(uint32_t) - 2);
+        // Parse <32b ID> <varlen URL>\n and add to urls vector.
+        // Ids are written sequentially (1-indexed), so push_back preserves id order;
+        // the URL starts after 4B id and 1B space, and ends before the trailing '\n'.
+        urls.push_back(string(buff + sizeof(uint32_t) + 1, strlen(buff) - sizeof(uint32_t) - 2));
     }
     
     // Should now be at the top of the dict table of contents
     // Validate this by checking that we see the char 'a'
     char ch;
     fread(&ch, sizeof(char), 1, fd);
-    if (ch != 'a') logger::warn("Error when initializing %s: Not at expected start of dict contents.", path);
+    if (ch != 'a') logger::warn("Error when initializing %s: Not at expected start of dict contents.", path.data());
 
     // Populate the dictionary
     // Seek precisely to start of dictionary
-    if (fseek(fd, INDEX_DICTIONARY_TOC_SIZE + urls_size, SEEK_SET) != 0) logger::warn("Error when initializing %s: Seek to dictionary failed.", path);
+    if (fseek(fd, INDEX_DICTIONARY_TOC_SIZE + urls_size, SEEK_SET) != 0) logger::warn("Error when initializing %s: Seek to dictionary failed.", path.data());
 
     uint64_t posting_list_offset;
 
@@ -67,7 +66,7 @@ LoadedIndex::LoadedIndex(string path) {
     // Read until the end of file, and assert that end of file was reached
     fread(posting_list_, sizeof(uint8_t), UINT64_MAX, fd);
 
-    if (feof(fd) == 0) logger::warn("Failed to reach end of file when loading %s posting list.", path);
+    if (feof(fd) == 0) logger::warn("Failed to reach end of file when loading %s posting list.", path.data());
 
     fclose(fd);
 }
@@ -101,15 +100,15 @@ post IndexStreamReader::advance() {
     if (posts_consumed_ == n_posts) return post{0, 0};
 
     posts_consumed_++;
-    uint32_t loc_or_flag = ReadUtf8(&curr_loc_, nullptr);
+    uint32_t loc_or_flag = ReadUtf8(const_cast<const Utf8**>(&curr_loc_), nullptr);
     if (loc_or_flag > 0) {
         loc_offset_ += loc_or_flag;
         return post{doc_offset_, loc_offset_};
     }
 
     // If we read 0, that was the flag for a new doc
-    doc_offset_ += ReadUtf8(&curr_loc_, nullptr); // Add to doc offset
-    loc_offset_= ReadUtf8(&curr_loc_, nullptr); // Reset loc offset
+    doc_offset_ += ReadUtf8(const_cast<const Utf8**>(&curr_loc_), nullptr); // Add to doc offset
+    loc_offset_= ReadUtf8(const_cast<const Utf8**>(&curr_loc_), nullptr); // Reset loc offset
     return post{doc_offset_, loc_offset_};
 }
 

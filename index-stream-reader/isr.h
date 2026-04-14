@@ -38,7 +38,7 @@ public:
     post advance_to(uint32_t doc);
 
     const inline string get_url(uint32_t doc) {
-        return string(index->urls[doc].data());
+        return string(index->urls[doc - 1].data());
     }
 
     const inline void reset() {
