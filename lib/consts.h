@@ -218,6 +218,7 @@ constexpr size_t HTMLSERVER_THREADS = 8;
 // Index
 constexpr size_t DOCS_PER_INDEX_CHUNK = 500000;
 constexpr size_t CHUNK_MEM_BUDGET = 1 << 30; 
+constexpr size_t CHUNK_MEM_BUDGET = 1 << 30; 
 constexpr uint32_t INDEX_SKIP_SIZE = 500;
 static constexpr const char* INDEX_OUTPUT_DIR = "/var/seamus/index_output";
 constexpr size_t NUM_INDEXER_THREADS = 16; // Should be the number of cores     // todo(Aiden): change depending on number of cores we end up renting per machine

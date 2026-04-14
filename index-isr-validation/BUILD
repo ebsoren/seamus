@@ -5,6 +5,7 @@ cc_binary(
     srcs = ["main.cpp"],
     deps = [
         "//index:index_lib",
+        "//index-stream-reader:isr",
         "//lib:consts",
         "//lib:logger",
         "//lib:string",
