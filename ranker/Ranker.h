@@ -55,7 +55,7 @@ bool is_digit(char c) {
 }
 
 
-// TODO MAKE SURE TO EDIT THIS AT SOME POINT!!
+// These are all the allowed endings that we can rank
 unordered_map<string,double> makeTldWeight() {
     unordered_map<string, double> m(32);
 
@@ -63,10 +63,51 @@ unordered_map<string,double> makeTldWeight() {
     m.insert(string("edu"),1.2);
     m.insert(string("mil"),1.2);
     m.insert(string("org"),1.1);
+    m.insert(string("wiki"),1.1);
+    m.insert(string("news"),1.1);
+    m.insert(string("pro"),1.1);
+    m.insert(string("museum"),1.1);
+    m.insert(string("jobs"),1.1);
+    m.insert(string("page"),1.1);
+    m.insert(string("blog"),1.1);
+    m.insert(string("info"),1.1);
+    m.insert(string("science"),1.1);
+    m.insert(string("health"),1.1);
+    m.insert(string("media"),1.1);
     m.insert(string("com"),1.0);
+    m.insert(string("int"),1.0);
     m.insert(string("net"),1.0);
-    m.insert(string("info"),0.8);
-    m.insert(string("biz"),0.8);
+    m.insert(string("io"),1.0);
+    m.insert(string("dev"),1.0);
+    m.insert(string("app"),1.0);
+    m.insert(string("ai"),1.0);
+    m.insert(string("co"),1.0);
+    m.insert(string("cc"),1.0);
+    m.insert(string("tv"),1.0);
+    m.insert(string("me"),1.0);
+    m.insert(string("fm"),1.0);
+    m.insert(string("ly"),1.0);
+    m.insert(string("gg"),1.0);
+    m.insert(string("sh"),1.0);
+    m.insert(string("to"),1.0);
+    m.insert(string("xyz"),1.0);
+    m.insert(string("tech"),1.0);
+    m.insert(string("cloud"),1.0);
+    m.insert(string("so"),1.0);
+    m.insert(string("gl"),1.0);
+    m.insert(string("is"),1.0);
+    m.insert(string("ws"),1.0);
+    m.insert(string("ac"),1.0);
+    m.insert(string("uk"),1.0);
+    m.insert(string("us"),1.0);
+    m.insert(string("au"),1.0);
+    m.insert(string("ca"),1.0);
+    m.insert(string("nz"),1.0);
+    m.insert(string("ie"),1.0);
+    m.insert(string("za"),1.0);
+    m.insert(string("sg"),1.0);
+    m.insert(string("hk"),1.0);
+    m.insert(string("in"),1.0);
 
     return m;
 }
