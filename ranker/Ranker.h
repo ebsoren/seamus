@@ -17,10 +17,17 @@
 #include "ranker_consts.h"
 #include <optional>
 
-// struct WordPos {
-//     size_t word_num; // 0-indexed for ordering of words in the query
-//     size_t word_pos; // 1-indexed from start of page
-// };
+
+template <typename T>
+void reverse(vector<T>& vec) {
+    size_t n = vec.size();
+    for (size_t i = 0; i < n / 2; ++i) {
+        // Swap element i with its mirror at the end
+        T temp = std::move(vec[i]);
+        vec[i] = std::move(vec[n - 1 - i]);
+        vec[n - 1 - i] = std::move(temp);
+    }
+}
 
 struct RankedPage {
     string url = string("");
@@ -320,7 +327,7 @@ struct RankedCompare {
     RankedCompare(double f, size_t s) : dynamic_weight(f), unique_words_in_query(s) {}
 
     bool operator()(LeanPage a, LeanPage b) const {
-        return a.score < b.score; 
+        return a.score > b.score; 
     }
 };
 
@@ -329,22 +336,22 @@ private:
     priority_queue<LeanPage, vector<LeanPage>, RankedCompare> pq;
     double dynamic_weight;
     vector<string> unique_query_words; 
-    size_t size_lim;
+    int num_pages_returned;
     bool verbose_mode;
 
 public:
-    Ranker(size_t size_lim_init, double dynamic_weight_init = DEFAULT_DYNAMIC_WEIGHT, bool verbose_init = false) : 
-        dynamic_weight(dynamic_weight_init), size_lim(size_lim_init), verbose_mode(verbose_init) { 
+    Ranker(int num_pages_returned_init = RANKED_ON_EACH, double dynamic_weight_init = DEFAULT_DYNAMIC_WEIGHT, bool verbose_init = false) : 
+        num_pages_returned(num_pages_returned_init), dynamic_weight(dynamic_weight_init), verbose_mode(verbose_init) { 
         
         if(verbose_mode) {
-            logger::debug("Ranker is initialized with size limit of %zu, and dynamic weighting of %f", 
-                size_lim_init, dynamic_weight_init);
+            logger::debug("Ranker is initialized with num pages returned of %d, and dynamic weighting of %f", 
+                num_pages_returned_init, dynamic_weight_init);
         }
     }
 
     void reset() {
         if(verbose_mode) {
-            logger::debug("Ranker has cleared the pq and reset for next query");
+            logger::debug("Ranker has cleared the vector and reset for next query");
         }
         pq.clear();
     }
@@ -360,47 +367,54 @@ public:
         );
     }
 
-    vector<LeanPage> get_top_x(int x) {
-        vector<LeanPage> v;
-        for(int i = 0; i < x; i++) {
-            v.push_back(pq.pop_move());
-        }
-        if(verbose_mode) {
-            logger::debug("Ranker is returning vector of %zu elements", v.size());
-        }
-        return v;
-    }
-
     // FOR HIGHEST EFFECTIVENESS, LIST SHOULD COME ORDERED BY SEED LIST TO ENSURE MOST PROMISING LINKS ARE SEEN IF THERE ARE SIZE CONSTRAINTS
-    void rank(vector<RankedPage> v) {
-        auto end_it = v.end();
-        // limit the amount of pages being ranked 
-        vector<LeanPage> input;
-        for(size_t i = 0; i < v.size(); i++) {
-            if(i >= size_lim) {
-                end_it = v.begin() + i;
-                break;
-            } else {
-                
-                input.push_back(LeanPage{std::move(v[i].url), 
-                    std::move(v[i].title), 
-                    (calc_static_score(v[i]) * (1-dynamic_weight) + 
-                    calc_dynamic_score(v[i], unique_query_words) * dynamic_weight)});
-                if(verbose_mode) {
-                    double r_score = calc_static_score(v[i]) * (1-dynamic_weight) + calc_dynamic_score(v[i], unique_query_words) * dynamic_weight;
-                    logger::debug("The URL %s earned a score of: %.6f", v[i].url.data(), r_score);
-                }
-            }
-        }
+    vector<LeanPage> rank(vector<RankedPage> v) {
+        //initialize the pq
         pq = priority_queue<LeanPage, vector<LeanPage>, RankedCompare>(
-            v.begin(),
-            end_it,
             RankedCompare(dynamic_weight, unique_query_words.size()),
             vector<LeanPage>()
         );
+
+        // limit the amount of pages being ranked 
+        vector<LeanPage> input;
+        for(size_t i = 0; i < v.size(); i++) {
+            // calculate the score of the page
+            double r_score = calc_static_score(v[i]) * (1-dynamic_weight) + calc_dynamic_score(v[i], unique_query_words) * dynamic_weight;
+
+            if(pq.size() < num_pages_returned) {
+                pq.push(LeanPage{std::move(v[i].url), 
+                    std::move(v[i].title), 
+                    r_score});
+            } else {
+                
+                if(verbose_mode) {
+                    logger::debug("The URL %s earned a score of: %.6f", v[i].url.data(), r_score);
+                }
+                if(r_score > pq.front().score) {
+                    pq.push(LeanPage{std::move(v[i].url), 
+                        std::move(v[i].title), 
+                        r_score});
+                    pq.pop();
+                }
+            }
+        }
+        
         if(verbose_mode) {
             logger::debug("Ranker has finished ranking %zu elements", pq.size());
         }
+
+        vector<LeanPage> results;
+        for(int i = 0; i < num_pages_returned; i++) {
+            results.push_back(pq.pop_move());
+        }
+        if(verbose_mode) {
+            logger::debug("Ranker is returning vector of %zu elements", results.size());
+        }
+
+        // reverse results so that the highest ranked is first in the ordering
+        reverse(results);
+
+        return(results);
     }
 };
 

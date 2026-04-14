@@ -37,3 +37,6 @@ constexpr double static_weight_sum = static_1_weight + static_2_weight + static_
 
 // PARAM FOR DYNAMIC VS STATIC WEIGHTING
 constexpr double DEFAULT_DYNAMIC_WEIGHT = 0.67;
+
+// PARAM FOR AMOUNT OF RESULTS WE WANT TO RETURN ON EACH MACHINE
+constexpr int RANKED_ON_EACH = 10;
