@@ -1,3 +1,5 @@
+#pragma once
+
 #include "lib/string.h"
 #include "index/Index.h"
 

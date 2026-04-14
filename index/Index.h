@@ -5,6 +5,7 @@
 #include "lib/string.h"
 #include "lib/unordered_map.h"
 #include "lib/vector.h"
+#include "../index-stream-reader/isr.h"
 
 // Note that both documents and locations are 1-indexed (so that 0 can be used as a flag)
 
@@ -45,15 +46,7 @@ public:
 
 };
 
-inline void recover_index_chunks(vector<LoadedIndex>& index_chunks) {
-    // read from index chunk numbers until files dont exist
-    int i = 0;
-    string fileName = string::join("", INDEX_OUTPUT_DIR, i);
-    while (file_exists(fileName)) {
-        LoadedIndex curr(fileName);
-        index_chunks.push_back(curr);
-        ++i;
-        fileName = string::join("", INDEX_OUTPUT_DIR, i);
-    }
-}
+class LoadedIndex;
+
+void recover_index_chunks(vector<LoadedIndex>& index_chunks);
 
