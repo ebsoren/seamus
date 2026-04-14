@@ -15,6 +15,8 @@ static const char HOMEPAGE_HTML[] =
     "<head>\n"
     "<meta charset=\"utf-8\">\n"
     "<title>Seamus the Search Engine</title>\n"
+    "\n"
+    "<link rel=\"icon\" type=\"image/png\" href=\"/htmlserver/images/tank-favicon.png\">\n"
     "<style>\n"
     "  body {\n"
     "    margin: 0;\n"
@@ -23,8 +25,19 @@ static const char HOMEPAGE_HTML[] =
     "    display: flex;\n"
     "    flex-direction: column;\n"
     "    align-items: center;\n"
-    "    background: linear-gradient(to top, #004d00 0%, #f4fdf4 100%);\n"
+    "    background: linear-gradient(to top, #004d00 0%, #ffffff 85%, #ffffff 100%);\n"
     "    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;\n"
+    "  }\n"
+    "  .top-right-logo {\n"
+    "    position: absolute;\n"
+    "    top: 25px;\n"
+    "    right: 30px;\n"
+    "    width: 80px;\n"
+    "    height: auto;\n"
+    "    transition: opacity 0.2s;\n"
+    "  }\n"
+    "  .top-right-logo:hover {\n"
+    "    opacity: 0.8;\n"
     "  }\n"
     "  .header {\n"
     "    margin-top: 15vh;\n"
@@ -51,6 +64,7 @@ static const char HOMEPAGE_HTML[] =
     "    border-radius: 40px;\n"
     "    background: white;\n"
     "    overflow: hidden;\n"
+    "    border: 1px solid #e0e0e0;\n"
     "  }\n"
     "  #q {\n"
     "    flex: 1;\n"
@@ -87,28 +101,37 @@ static const char HOMEPAGE_HTML[] =
     "    color: rgba(255, 255, 255, 0.9);\n"
     "    box-sizing: border-box;\n"
     "  }\n"
-    "  .footer span {\n"
+    "  .footer a {\n"
     "    white-space: nowrap;\n"
+    "    text-decoration: none;\n"
+    "    color: inherit;\n"
+    "    transition: opacity 0.2s;\n"
+    "  }\n"
+    "  .footer a:hover {\n"
+    "    opacity: 0.7;\n"
     "  }\n"
     "</style>\n"
     "</head>\n"
     "<body>\n"
+    "  <a href=\"https://tradersatmichigan.com\" target=\"_blank\">\n"
+    "    <img src=\"/htmlserver/images/tam-logo.png\" class=\"top-right-logo\" alt=\"TAM Logo\">\n"
+    "  </a>\n"
     "  <div class=\"header\">\n"
     "    <h1>Seamus the Search Engine</h1>\n"
     "  </div>\n"
     "  <div class=\"search-container\">\n"
     "    <div class=\"search-box\">\n"
     "      <input id=\"q\" type=\"text\" autofocus>\n"
-    "      <button id=\"go\"><img src=\"htmlserver/images/magnifying-glass.png\" alt=\"Search\"></button>\n"
+    "      <button id=\"go\"><img src=\"/htmlserver/images/magnifying-glass.png\" alt=\"Search\"></button>\n"
     "    </div>\n"
     "  </div>\n"
     "  <div class=\"footer\">\n"
-    "    <span>Erik Nielsen</span>\n"
-    "    <span>Aiden Mizhen</span>\n"
-    "    <span>David McDermott</span>\n"
-    "    <span>Charles Huang</span>\n"
-    "    <span>Hrishkesh Bagalkote</span>\n"
-    "    <span>Esben Sorensen</span>\n"
+    "    <a href=\"https://www.linkedin.com/in/erikvnielsen/\" target=\"_blank\">Erik Nielsen</a>\n"
+    "    <a href=\"https://www.linkedin.com/in/amizhen/\" target=\"_blank\">Aiden Mizhen</a>\n"
+    "    <a href=\"https://www.linkedin.com/in/dmcde/\" target=\"_blank\">David McDermott</a>\n"
+    "    <a href=\"https://www.linkedin.com/in/charles-huang-02a123205/\" target=\"_blank\">Charles Huang</a>\n"
+    "    <a href=\"https://www.linkedin.com/in/hbagalkote/\" target=\"_blank\">Hrishkesh Bagalkote</a>\n"
+    "    <a href=\"https://www.linkedin.com/in/esben-sorensen/\" target=\"_blank\">Esben Sorensen</a>\n"
     "  </div>\n"
     "  <script>\n"
     "    function submit(){\n"
@@ -286,8 +309,12 @@ static void send_response(int fd, const char* status, string_view body) {
 static void send_image(int fd, const char* filepath) {
     FILE* f = fopen(filepath, "rb");
     if (!f) {
-        // This will tell us exactly why it's failing!
-        printf("[htmlserver] ERROR: Could not open file on hard drive at '%s'\n", filepath);
+        // Find out EXACTLY where the program is running from
+        char cwd[1024];
+        if (getcwd(cwd, sizeof(cwd)) != nullptr) {
+            printf("[htmlserver] ERROR: I am currently in folder: %s\n", cwd);
+        }
+        printf("[htmlserver] ERROR: Could not find file '%s' relative to that folder.\n", filepath);
         fflush(stdout);
         
         send_response(fd, "404 Not Found", string_view("Image not found", 15));
@@ -338,7 +365,7 @@ static void handle_client(int fd) {
         
     } else if (path == "/favicon.ico") {
         // Ignore background icon requests
-        send_response(fd, "404 Not Found", string_view("no favicon", 10));
+        send_image(fd, "htmlserver/images/tank-favicon.png");
         
     } else if (path.size() > 0 && path[0] == '/') {
         // 1. Clean the path FIRST (strips '?' query strings and percent-decodes)
@@ -347,7 +374,11 @@ static void handle_client(int fd) {
         // 2. NOW check if the cleaned term is asking for the image
         if (raw_term == "htmlserver/images/magnifying-glass.png") {
             send_image(fd, "htmlserver/images/magnifying-glass.png");
-        } else {
+        } else if (raw_term == "htmlserver/images/tam-logo.png") {
+            send_image(fd, "htmlserver/images/tam-logo.png");
+        } else if (raw_term == "htmlserver/images/tank-favicon.png") {
+            send_image(fd, "htmlserver/images/tank-favicon.png");
+        }else {
             // 3. Otherwise, treat it as a search query!
             string term = remove_special_chars(raw_term);
 
