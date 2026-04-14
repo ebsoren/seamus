@@ -92,6 +92,9 @@ vector<string_view> tokenize_and_sort_by_rarity(const string_view& text) {
 // function that given the vector of words that we've found, decides whether there is a match in the tree
 // doc_terms_found is a boolean array where index == word_id. The index should match the original vector of unique words 
 // passed from the expression parser. It is set to true if the document contains that specific query term.
+
+// checks to see if one path in the query node is satisfied - per article
+// check RankedPage struct ofr each article to populate doc_terms found (vector of t/f if each word included in a given article)
 bool evaluate_query(QueryNode* node, const vector<bool>& doc_terms_found) {
     if (!node) return false;
 

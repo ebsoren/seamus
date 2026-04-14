@@ -29,19 +29,19 @@ void reverse(vector<T>& vec) {
     }
 }
 
+// "two words"
+// for phrase words in word_positions, simply store the location of the start of the phrase
 struct RankedPage {
     string url = string("");
     string title = string("");
     int seed_list_dist;
     int domains_from_seed; // unsure if we have infra in place for this 
-    int num_unique_words_found_anchor;
+    int num_unique_words_found_anchor; // number of unique words in the query found
     int num_unique_words_found_title;
-    int num_unique_words_found_descr; // cut
     int num_unique_words_found_url;
     int times_seen;
-    vector<vector<size_t>> word_positions;
-    size_t doc_len; // ask bout ts
-    size_t description_len; // cut
+    vector<vector<size_t>> word_positions; // this is just anywhere on the doc page
+    size_t doc_len;
 };
 
 struct LeanPage {
