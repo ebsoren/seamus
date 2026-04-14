@@ -9,7 +9,7 @@
 #include "../lib/rpc_query_handler.h"
 #include "../lib/thread_pool.h"
 
-#include "../index-stream-reader/isr.h"
+#include "../index-chunk/chunk-manager.h"
 #include "index_server.h"
 
 #include <thread>

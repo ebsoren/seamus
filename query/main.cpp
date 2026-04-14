@@ -8,7 +8,7 @@
 #include "query_handler.h"
 #include "../ranker/Ranker.h"
 #include "../index/Index.h"
-#include "../index-stream-reader/isr.h"
+#include "../index-chunk/chunk-manager.h"
 
 /*
 Query Language Syntax:
