@@ -356,6 +356,8 @@ static void assign_word_ids(QueryNode* node, vector<UniqueTerm>& dict) {
     }
 }
 
+
+// PUBLIC INTERFACE CHARLIE!!
 ParseResult parse_query_tree(const string_view& query_str) {
     g_term_id = 0;
     ParseResult res;
