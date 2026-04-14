@@ -1,28 +1,21 @@
 load("@rules_cc//cc:defs.bzl", "cc_library")
 
 cc_library(
-    name = "isr",
+    name = "chunk-manager",
     srcs = ["isr.cpp"],
-    hdrs = ["isr.h"],
+    hdrs = [
+        "chunk-manager.h",
+        "isr.h",
+    ],
     visibility = ["//visibility:public"],
     deps = [
         "//index:index_lib",
+        "//lib:algorithm",
         "//lib:consts",
         "//lib:logger",
         "//lib:string",
         "//lib:utf8",
-    ],
-)
-
-cc_library(
-    name = "chunk-manager",
-    hdrs = ["chunk-manager.h"],
-    visibility = ["//visibility:public"],
-    deps = [
-        ":isr",
-        "//index:index_lib",
-        "//lib:algorithm",
-        "//lib:string",
+        "//lib:utils",
         "//lib:vector",
     ],
 )
