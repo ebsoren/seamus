@@ -13,3 +13,16 @@ cc_library(
         "//lib:utf8",
     ],
 )
+
+cc_library(
+    name = "chunk-manager",
+    hdrs = ["chunk-manager.h"],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":isr",
+        "//index:index_lib",
+        "//lib:algorithm",
+        "//lib:string",
+        "//lib:vector",
+    ],
+)
