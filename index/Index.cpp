@@ -103,21 +103,21 @@ void IndexChunk::persist() {
 
         postings& entry = index[alphabetized_entries[i].str_view(0, alphabetized_entries[i].size())];
 
+        // Mirrors the second-pass writer below: on a new doc, reset last_loc
+        // to 0 BEFORE sizing the loc delta, and always advance last_loc to
+        // p.loc after. Accounting must match byte-for-byte so posting_list_locations
+        // points at the header of each word's posting list.
         for (post p : entry.posts) {
-            // Utf8 encoding size of loc offset (no delimiters)
-            uint64_t post_size = SizeOfUtf8(p.loc - last_loc);
-
-            // Update offsets
+            uint64_t post_size = 0;
             if (p.doc > last_doc) {
-                // Only write a doc offset if it's a new document, in which case add 1 byte for leading flag
+                // 1 byte flag + varlen doc delta
                 post_size += 1 + SizeOfUtf8(p.doc - last_doc);
                 last_doc = p.doc;
                 last_loc = 0;
-            } else {
-                last_loc = p.loc;
             }
+            post_size += SizeOfUtf8(p.loc - last_loc);
+            last_loc = p.loc;
 
-            // Add to sizes
             posting_list_size += post_size;
         }
 

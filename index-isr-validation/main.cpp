@@ -501,8 +501,11 @@ static void dump_index_chunk(const string& path) {
     // A UTF-8 encoding of a positive loc_delta never begins with 0x00,
     // so the flag byte is unambiguous.
     const size_t SKIP_LIST_ENTRY_SIZE = 4 + 1 + 8 + 1;
-    const size_t SKIP_LIST_SIZE =
-        (DOCS_PER_INDEX_CHUNK / INDEX_SKIP_SIZE) * SKIP_LIST_ENTRY_SIZE;
+    // Skip list is currently disabled on the writer side (WRITE_SKIP_LIST=false
+    // in Index.cpp), so the on-disk region is 0 bytes. Keep this in sync with
+    // the writer — if the skip list is re-enabled, set this to the full size.
+    const size_t SKIP_LIST_SIZE = 0;
+    (void)SKIP_LIST_ENTRY_SIZE;
 
     logger::instr("=== Posting lists (showing first %zu) ===", bench::DUMP_POSTING_LISTS);
     for (size_t i = 0; i < dict.size(); ++i) {
