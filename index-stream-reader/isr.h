@@ -3,10 +3,29 @@
 
 class LoadedIndex {
 private:
-    vector<string> urls;
-    unordered_map<string, uint64_t> dictionary;
-    uint8_t* posting_list_;
-    uint64_t dictionary_size = 0;
+    // One contiguous allocation holding the entire chunk file. All other
+    // pointers/views below are slices into this buffer — nothing is copied.
+    uint8_t* file_buffer_ = nullptr;
+    size_t file_size_ = 0;
+
+    struct DictEntry {
+        const char* word;         // pointer into file_buffer_
+        uint32_t word_len;
+        uint64_t posting_offset;  // byte offset from start of posting list region
+    };
+
+    // URLs indexed by (doc_id - 1) — doc ids are 1-indexed on disk.
+    vector<string_view> urls;
+
+    // Sorted on load (already alphabetized on disk). Binary-searched by lookup().
+    vector<DictEntry> dict_entries_;
+
+    // Pointer into file_buffer_, start of the posting list region.
+    const uint8_t* posting_list_region_ = nullptr;
+
+    // Binary search dict_entries_ for word. Returns posting-region offset,
+    // or UINT64_MAX if not found.
+    uint64_t lookup(const string& word) const;
 
 public:
     friend class IndexStreamReader;
@@ -38,7 +57,8 @@ public:
     post advance_to(uint32_t doc);
 
     const inline string get_url(uint32_t doc) {
-        return string(index->urls[doc - 1].data());
+        const string_view& sv = index->urls[doc - 1];
+        return string(sv.data(), sv.size());
     }
 
     const inline void reset() {
@@ -55,7 +75,7 @@ private:
 
     // Track number of posts we've seen to know whether we're at the end
     uint64_t posts_consumed_ = 0;
-    
+
     // Track the current deltas
     uint32_t doc_offset_ = 0;
     uint32_t loc_offset_ = 0;
