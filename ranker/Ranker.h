@@ -36,12 +36,12 @@ struct RankedPage {
     int domains_from_seed; // unsure if we have infra in place for this 
     int num_unique_words_found_anchor;
     int num_unique_words_found_title;
-    int num_unique_words_found_descr;
+    int num_unique_words_found_descr; // cut
     int num_unique_words_found_url;
     int times_seen;
     vector<vector<size_t>> word_positions;
-    size_t doc_len;
-    size_t description_len;
+    size_t doc_len; // ask bout ts
+    size_t description_len; // cut
 };
 
 struct LeanPage {
