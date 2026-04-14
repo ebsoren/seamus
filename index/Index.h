@@ -1,3 +1,5 @@
+#pragma once
+
 #include <mutex>
 #include "lib/deque.h"
 #include "lib/string.h"

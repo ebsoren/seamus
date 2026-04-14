@@ -6,7 +6,7 @@
 #include <cstdio>
 #include <cstring>
 
-LoadedIndex::LoadedIndex(string path) {
+LoadedIndex::LoadedIndex(const string& path) {
     FILE* fd = fopen(path.data(), "rb");
     if (fd == nullptr) {
         logger::warn("Failed to open %s", path.data());
@@ -148,16 +148,14 @@ IndexStreamReader::IndexStreamReader(string word, LoadedIndex* index) : word(mov
 
     // Offsets are measured from the start of the posting list region (as written
     // by IndexChunk::persist), so no rebasing needed.
-    curr_loc_ = postings_start_ = const_cast<uint8_t*>(index->posting_list_region_ + offset);
+    curr_loc_ = postings_start_ = index->posting_list_region_ + offset;
 
     // Header layout written by IndexChunk::persist:
     //   <8B n_posts><space><4B n_docs><\n>
     memcpy(&n_posts, curr_loc_, sizeof(uint64_t));
     curr_loc_ += sizeof(uint64_t) + 1; // skip over the number and the space
 
-    uint32_t n_docs_raw;
-    memcpy(&n_docs_raw, curr_loc_, sizeof(uint32_t));
-    n_docs = n_docs_raw;
+    memcpy(&n_docs, curr_loc_, sizeof(uint32_t));
     curr_loc_ += sizeof(uint32_t) + 1; // skip over the number and the newline
 }
 
@@ -169,15 +167,15 @@ post IndexStreamReader::advance() {
     if (posts_consumed_ == n_posts) return post{0, 0};
 
     posts_consumed_++;
-    uint32_t loc_or_flag = ReadUtf8(const_cast<const Utf8**>(&curr_loc_), nullptr);
+    uint32_t loc_or_flag = ReadUtf8(&curr_loc_, nullptr);
     if (loc_or_flag > 0) {
         loc_offset_ += loc_or_flag;
         return post{doc_offset_, loc_offset_};
     }
 
     // If we read 0, that was the flag for a new doc
-    doc_offset_ += ReadUtf8(const_cast<const Utf8**>(&curr_loc_), nullptr); // Add to doc offset
-    loc_offset_= ReadUtf8(const_cast<const Utf8**>(&curr_loc_), nullptr); // Reset loc offset
+    doc_offset_ += ReadUtf8(&curr_loc_, nullptr); // Add to doc offset
+    loc_offset_  = ReadUtf8(&curr_loc_, nullptr); // Reset loc offset
     return post{doc_offset_, loc_offset_};
 }
 

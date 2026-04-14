@@ -1,4 +1,5 @@
 #include "index/Index.h"
+#include "index-stream-reader/isr.h"
 #include "lib/consts.h"
 #include "lib/logger.h"
 #include "lib/string.h"
@@ -716,6 +717,65 @@ static vector<vector<uint32_t>> rebuild_docs_from_index(
 }
 
 
+// Same reconstruction as rebuild_docs_from_index, but goes through the public
+// LoadedIndex/IndexStreamReader interface rather than parsing the chunk file
+// directly. This exercises the ISR end-to-end: it must walk every post for
+// every word in the dictionary and place it at the exact (doc, loc) that the
+// corpus wrote.
+static vector<vector<uint32_t>> rebuild_docs_from_isr(
+        const string& path, const WordPool& pool,
+        size_t total_docs, size_t words_per_doc) {
+
+    vector<vector<uint32_t>> rebuilt;
+    rebuilt.reserve(total_docs);
+    for (size_t d = 0; d < total_docs; ++d) {
+        vector<uint32_t> row;
+        row.reserve(words_per_doc);
+        for (size_t l = 0; l < words_per_doc; ++l) row.push_back(UINT32_MAX);
+        rebuilt.push_back(static_cast<vector<uint32_t>&&>(row));
+    }
+
+    LoadedIndex loaded(path);
+    const size_t n_words = loaded.num_words();
+    logger::instr("ISR rebuild: %zu dictionary words loaded", n_words);
+
+    size_t total_posts = 0;
+    for (size_t i = 0; i < n_words; ++i) {
+        string word = loaded.word_at(i);
+
+        uint32_t pool_idx = find_pool_index(pool, word.data(), word.size());
+        if (pool_idx == UINT32_MAX) {
+            logger::error("ISR rebuild: dict word '%.*s' not found in pool",
+                          (int)word.size(), word.data());
+            continue;
+        }
+
+        // IndexStreamReader takes `string word` by value (move-only type), so
+        // construct a fresh copy from the dict word for the ISR to own.
+        IndexStreamReader isr(string(word.data(), word.size()), &loaded);
+
+        post p = isr.advance();
+        while (p.doc != 0) {
+            total_posts++;
+            size_t d_idx = static_cast<size_t>(p.doc) - 1;
+            size_t l_idx = static_cast<size_t>(p.loc) - 1;
+            if (d_idx < rebuilt.size() && l_idx < rebuilt[d_idx].size()) {
+                rebuilt[d_idx][l_idx] = pool_idx;
+            } else {
+                logger::error("ISR rebuild: out-of-range post doc=%u loc=%u for '%.*s'",
+                              p.doc, p.loc,
+                              (int)word.size(), word.data());
+            }
+            p = isr.advance();
+        }
+    }
+
+    logger::instr("ISR rebuild: walked %zu posts across %zu words",
+                  total_posts, n_words);
+    return rebuilt;
+}
+
+
 static void verify_rebuild(const Corpus& corpus, const WordPool& pool,
                            const vector<vector<uint32_t>>& rebuilt) {
     const size_t MAX_REPORT = 10;
@@ -806,10 +866,15 @@ int main(int /*argc*/, char* /*argv*/[]) {
     string chunk_path = index_chunk_path(0, 0);
     dump_index_chunk(chunk_path);
 
-    logger::instr("=== Rebuilding documents from index ===");
+    logger::instr("=== Rebuilding documents from index (file-walk) ===");
     vector<vector<uint32_t>> rebuilt = rebuild_docs_from_index(
         chunk_path, pool, total_docs, bench::WORDS_PER_DOC);
     verify_rebuild(corpus, pool, rebuilt);
+
+    logger::instr("=== Rebuilding documents via ISR ===");
+    vector<vector<uint32_t>> rebuilt_isr = rebuild_docs_from_isr(
+        chunk_path, pool, total_docs, bench::WORDS_PER_DOC);
+    verify_rebuild(corpus, pool, rebuilt_isr);
 
     cleanup_dir(bench::BENCH_DOC_DIR);
     cleanup_worker0_chunks();

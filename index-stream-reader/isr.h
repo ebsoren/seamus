@@ -1,3 +1,5 @@
+#pragma once
+
 #include "lib/string.h"
 #include "index/Index.h"
 
@@ -29,8 +31,20 @@ private:
 
 public:
     friend class IndexStreamReader;
-    LoadedIndex(string path);
+    LoadedIndex(const string& path);
     ~LoadedIndex();
+
+    LoadedIndex(const LoadedIndex&)            = delete;
+    LoadedIndex& operator=(const LoadedIndex&) = delete;
+
+    // Number of words in the chunk's dictionary, in alphabetized order.
+    size_t num_words() const { return dict_entries_.size(); }
+
+    // Construct a string for the word at dict position `i` (alphabetized order).
+    string word_at(size_t i) const {
+        const DictEntry& e = dict_entries_[i];
+        return string(e.word, e.word_len);
+    }
 };
 
 class IndexStreamReader {
@@ -39,8 +53,8 @@ public:
 
     // Useful for heuristics on how common the word is
     // Prefer to satisfy constraints on less common words first
-    uint64_t n_posts;
-    uint64_t n_docs;
+    uint64_t n_posts = 0;
+    uint32_t n_docs  = 0;
 
     IndexStreamReader(string word, LoadedIndex* index);
 
@@ -62,16 +76,20 @@ public:
     }
 
     const inline void reset() {
-        curr_loc_ = postings_start_;
+        curr_loc_       = postings_start_;
+        posts_consumed_ = 0;
+        doc_offset_     = 0;
+        loc_offset_     = 0;
     }
 
 private:
     // Access & easily traverse the file
     LoadedIndex* index;
 
-    // Pointer to track locations in index postings buffer
-    uint8_t* postings_start_;
-    uint8_t* curr_loc_;
+    // Pointer to track locations in index postings buffer. The buffer is owned
+    // by the LoadedIndex and the ISR only reads from it, so these are const.
+    const uint8_t* postings_start_ = nullptr;
+    const uint8_t* curr_loc_       = nullptr;
 
     // Track number of posts we've seen to know whether we're at the end
     uint64_t posts_consumed_ = 0;
