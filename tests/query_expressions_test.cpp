@@ -1,223 +1,272 @@
 #include <iostream>
 #include <stdexcept>
 #include <cassert>
+#include <functional>
 
 #include "../query/expressions.h"
+#include "../query/query_helpers.h"
+ 
+// Test Harness
 
-// UTILS
+#include <iostream>
 
-void assert_true(bool condition, const char* msg) {
-    if (!condition) {
-        std::cerr << "FAILED: " << msg << std::endl;
-        std::exit(1);
+static int g_passed = 0, g_failed = 0;
+
+#define ASSERT(cond, msg)                                                        \
+    do {                                                                         \
+        if (cond) { ++g_passed; } else {                                         \
+            ++g_failed;                                                          \
+            std::cerr << "[FAIL] " << __FILE__ << ":" << __LINE__                \
+                      << "  " << (msg) << "\n";                                  \
+        }                                                                        \
+    } while (0)
+
+#define ASSERT_THROWS(expr, msg)                                                 \
+    do {                                                                         \
+        bool caught_ = false;                                                    \
+        try { expr; } catch (const ParseError&) { caught_ = true; }              \
+        ASSERT(caught_, msg);                                                    \
+    } while (0)
+
+static void print_node(QueryNode* node, const std::string& prefix, bool is_last) {
+    const std::string branch  = is_last ? "└── " : "├── ";
+    const std::string indent  = is_last ? "    " : "│   ";
+    std::cout << prefix << branch;
+
+    if (node->is_negated) std::cout << "[NOT] ";
+
+    // Visualize the phrase flag
+    if (node->is_phrase) {
+        std::cout << "<phrase: " << std::string(node->val.data(), node->val.size()) << ">\n";
+    } else {
+        std::cout << '"' << std::string(node->val.data(), node->val.size()) << "\"\n";
+    }
+
+    for (size_t i = 0; i < node->children.size(); ++i) {
+        bool last = (i == node->children.size() - 1);
+        print_node(node->children[i], prefix + indent, last);
     }
 }
 
-void expect_throw(const string& query, const char* msg) {
-    bool thrown = false;
+static void print_tree(const char* query_str, QueryNode* root) {
+    std::cout << "\n  Query : \"" << query_str << "\"\n";
+    std::cout << "  Tree  :\n\n    <root>\n";
+    for (size_t i = 0; i < root->children.size(); ++i) {
+        bool last = (i == root->children.size() - 1);
+        print_node(root->children[i], "    ", last);
+    }
+    std::cout << '\n';
+}
 
-    try {
-        parse_query(query);
-    } catch (...) {
-        thrown = true;
+// Helper to simulate an engine matching document words against the unique_terms dictionary
+static bool simulate_match(const ParseResult& res, const vector<string_view>& doc_words) {
+    vector<bool> doc_terms_found;
+    
+    // Initialize the boolean mask to false for all unique dictionary terms
+    for (size_t i = 0; i < res.unique_terms.size(); ++i) {
+        doc_terms_found.push_back(false);
     }
 
-    assert_true(thrown, msg);
-}
-
-
-// TESTS
-
-void test_single_term() {
-    string word = string("apple");
-    auto res = parse_query(word);
-
-    assert_true(res.size() == 1, "single term should produce 1 clause");
-    assert_true(res[0].size() == 1, "clause should contain 1 term");
-    assert_true(res[0][0].token == "apple", "token mismatch");
-    assert_true(res[0][0].included == INCLUDED, "term should be included");
-}
-
-void test_only_not_rejected() {
-    expect_throw(string("-apple"), "ONLY NOT query should throw");
-    expect_throw(string("-apple | -banana"), "only NOT OR NOT should throw");
-}
-
-void test_and_logic() {
-    string word = string("apple banana");
-    auto res = parse_query(word);
-
-    assert_true(res.size() == 1, "AND should produce 1 clause");
-    assert_true(res[0].size() == 2, "AND merges into clause");
-}
-
-void test_or_logic() {
-    string word = string("apple | banana");
-    auto res = parse_query(word);
-
-    assert_true(res.size() == 2, "OR should produce 2 clauses");
-}
-
-void test_parentheses() {
-    string word = string("(apple | banana) cherry");
-    auto res = parse_query(word);
-
-    assert_true(res.size() == 2, "parentheses should expand OR");
-
-    for (auto& clause : res) {
-        assert_true(clause.size() == 2, "AND should combine terms");
-    }
-}
-
-void test_phrase_tokenization() {
-    string word = string("\"new york\"");
-    auto res = parse_query(word);
-
-    assert_true(res.size() == 1, "phrase should be single clause");
-    assert_true(res[0][0].flag == PHRASE, "should be marked as PHRASE");
-    assert_true(res[0][0].token.contains(' '), "phrase preserved spacing");
-}
-
-void test_not_inside_expression() {
-    string word = string("apple | -banana");
-    auto res = parse_query(word);
-
-    // "-banana" clause removed → only apple remains
-    assert_true(res.size() == 1, "NOT-only clause removed");
-
-    for (auto& t : res[0]) {
-        assert_true(t.included == INCLUDED, "no NOT terms should remain");
-    }
-}
-
-void test_filtering_behavior() {
-    string word = string("-a | (-b -c)");
-    expect_throw(word, "all NOT clauses removed → exception expected");
-}
-
-void test_complex_expression() {
-    string word = string("(apple | banana) (cherry | \"new york\")");
-    auto res = parse_query(word);
-
-    assert_true(res.size() == 4, "cross product expected (2x2)");
-
-    for (auto& clause : res) {
-        assert_true(clause.size() == 2, "AND expansion works");
-    }
-}
-
-void test_sorting_by_rarity() {
-    string word = string("apple banana cherry");
-    auto res = parse_query(word);
-
-    for (auto& clause : res) {
-        for (size_t i = 1; i < clause.size(); i++) {
-            assert_true(
-                clause[i - 1].rarity <= clause[i].rarity,
-                "terms sorted by rarity ascending"
-            );
-        }
-    }
-}
-
-void test_deduplication() {
-    string word = string("apple apple banana apple");
-    auto res = parse_query(word);
-
-    assert_true(res.size() == 1, "still one clause");
-
-    // apple should appear only once
-    int apple_count = 0;
-    for (auto& t : res[0]) {
-        if (t.token == "apple") apple_count++;
-    }
-
-    assert_true(apple_count == 1, "duplicates should be removed");
-}
-
-void test_contradiction_removal() {
-    string word = string("apple -apple");
-    expect_throw(word, "contradiction should remove clause entirely");
-}
-
-void test_massive_complex_query() {
-    string query = string(
-        "(apple | \"new york\" | -banana) "
-        "(cherry | -grape | (orange -kiwi)) "
-        "-watermelon"
-    );
-
-    bool thrown = false;
-    Result res;
-
-    try {
-        res = parse_query(query);
-    } catch (...) {
-        thrown = true;
-    }
-
-    if (thrown) {
-        assert_true(true, "complex query may collapse entirely");
-        return;
-    }
-
-    assert_true(res.size() > 0, "result should contain clauses");
-
-    for (const auto& clause : res) {
-        bool has_positive = false;
-
-        for (const auto& term : clause) {
-            if (term.included == INCLUDED) {
-                has_positive = true;
-            }
-        }
-
-        assert_true(has_positive, "no clause should be NOT-only");
-    }
-
-    for (const auto& clause : res) {
-        assert_true(!clause.empty(), "clause should not be empty");
-    }
-
-    for (const auto& clause : res) {
-        for (size_t i = 1; i < clause.size(); i++) {
-            assert_true(
-                clause[i - 1].rarity <= clause[i].rarity,
-                "rarity ordering must be preserved"
-            );
-        }
-    }
-
-    bool found_phrase = false;
-    for (const auto& clause : res) {
-        for (const auto& term : clause) {
-            if (term.flag == PHRASE) {
-                found_phrase = true;
+    // Populate the mask: if the document has the word, set its ID to true
+    for (size_t i = 0; i < res.unique_terms.size(); ++i) {
+        for (size_t j = 0; j < doc_words.size(); ++j) {
+            // For testing, we are ignoring the is_phrase flag distinction, 
+            // but in a real engine you would verify positional phrase matches here too.
+            if (string_view_equals(res.unique_terms[i].val, doc_words[j])) {
+                doc_terms_found[i] = true;
+                break;
             }
         }
     }
 
-    assert_true(found_phrase, "phrase token should survive parsing");
-
-    std::cout << "COMPLEX TEST PASSED" << std::endl;
+    return evaluate_query(res.root, doc_terms_found);
 }
 
+static string_view make_sv(const char* str) {
+    size_t len = 0;
+    while (str[len] != '\0') len++;
+    return string_view(str, len);
+}
 
-// Main
+// Quick string_view vector builder for tests
+static vector<string_view> make_doc(const char* w1, const char* w2 = nullptr, const char* w3 = nullptr, const char* w4 = nullptr) {
+    vector<string_view> doc;
+    if (w1) doc.push_back(make_sv(w1));
+    if (w2) doc.push_back(make_sv(w2));
+    if (w3) doc.push_back(make_sv(w3));
+    if (w4) doc.push_back(make_sv(w4));
+    return doc;
+}
+
+// Tests
+
+void run_all_tests() {
+
+    // Basic AND Logic
+    {
+        ParseResult r = parse_query_tree(make_sv("apple banana cherry"));
+        ASSERT(r.root != nullptr, "Basic: Root is valid");
+        ASSERT(r.root->children.size() == 1, "Basic: One continuous path for ANDs");
+    }
+
+    // Exact Phrases
+    {
+        ParseResult r = parse_query_tree(make_sv("\"new york\" pizza"));
+        ASSERT(r.root->children.size() == 1, "Phrase: Single path");
+        
+        // Traverse to check phrase flag
+        QueryNode* first_term = r.root->children[0]; 
+        bool has_phrase = false;
+        if (first_term->is_phrase || (!first_term->children.empty() && first_term->children[0]->is_phrase)) {
+            has_phrase = true;
+        }
+        ASSERT(has_phrase, "Phrase: Flag is successfully preserved in AST");
+    }
+
+    // Hyphens vs Minus
+    {
+        ParseResult r = parse_query_tree(make_sv("spider-man -venom"));
+        ASSERT(r.root->children.size() == 1, "Hyphen: Single path");
+        
+        QueryNode* curr = r.root->children[0];
+        bool found_spider_man = false;
+        bool found_neg_venom = false;
+        
+        while (curr) {
+            if (string_view_equals(curr->val, make_sv("spider-man")) && !curr->is_negated) found_spider_man = true;
+            if (string_view_equals(curr->val, make_sv("venom")) && curr->is_negated) found_neg_venom = true;
+            curr = curr->children.empty() ? nullptr : curr->children[0];
+        }
+        ASSERT(found_spider_man, "Hyphen: Intra-word dash kept intact");
+        ASSERT(found_neg_venom, "Hyphen: Leading dash treated as NOT");
+    }
+
+    // OR Logic & Branching
+    {
+        ParseResult r = parse_query_tree(make_sv("red | blue | green"));
+        ASSERT(r.root->children.size() == 3, "OR: 3 distinct branches at root");
+    }
+
+    // Cartesian Product
+    {
+        ParseResult r = parse_query_tree(make_sv("(cat | dog) (food | toys)"));
+        // Due to tree deduplication, the root should have 2 children (cat, dog)
+        // and each of those should have 2 children (food, toys)
+        ASSERT(r.root->children.size() == 2, "DNF: 2 main prefixes at root");
+        ASSERT(r.root->children[0]->children.size() == 2, "DNF: Branch 1 splits into 2");
+        ASSERT(r.root->children[1]->children.size() == 2, "DNF: Branch 2 splits into 2");
+    }
+
+    // Tree Prefix Merging
+    {
+        ParseResult r = parse_query_tree(make_sv("database (sql | nosql)"));
+        // "database sql" OR "database nosql" -> Should merge 'database' at root
+        ASSERT(r.root->children.size() == 1, "Merge: Root collapses to 1 child ('database')");
+        ASSERT(r.root->children[0]->children.size() == 2, "Merge: Splits after the shared prefix");
+    }
+
+    // Negation & De Morgan's Law
+    {
+        ParseResult r = parse_query_tree(make_sv("cars -(ford | chevy)"));
+        // Translates to: cars AND -ford AND -chevy
+        ASSERT(r.root->children.size() == 1, "De Morgan: Becomes a single sequential AND path");
+        
+        int neg_count = 0;
+        QueryNode* curr = r.root->children[0];
+        while (curr) {
+            if (curr->is_negated) neg_count++;
+            curr = curr->children.empty() ? nullptr : curr->children[0];
+        }
+        ASSERT(neg_count == 2, "De Morgan: Negation distributed to 2 terms");
+    }
+
+    // Error Handling & Throws
+    {
+        // Unclosed parentheses
+        ASSERT_THROWS(parse_query_tree(make_sv("(apple banana")), "Error: Unclosed parenthesis");
+        ASSERT_THROWS(parse_query_tree(make_sv("apple banana)")), "Error: Unmatched closing parenthesis");
+
+        // Trailing/Hanging operators
+        ASSERT_THROWS(parse_query_tree(make_sv("apple |")), "Error: Trailing pipe");
+        ASSERT_THROWS(parse_query_tree(make_sv("apple -")), "Error: Trailing minus");
+        ASSERT_THROWS(parse_query_tree(make_sv("apple -| banana")), "Error: Minus before pipe");
+
+        // Empty sequences
+        ASSERT_THROWS(parse_query_tree(make_sv("apple () banana")), "Error: Empty parentheses");
+        ASSERT_THROWS(parse_query_tree(make_sv("apple || banana")), "Error: Empty OR sequence");
+
+        // Only Negative branches
+        ASSERT_THROWS(parse_query_tree(make_sv("-apple")), "Error: Root cannot be only negative");
+        ASSERT_THROWS(parse_query_tree(make_sv("-(apple | banana)")), "Error: Group cannot be only negative");
+        ASSERT_THROWS(parse_query_tree(make_sv("-apple -banana")), "Error: Sequence cannot be only negative");
+        ASSERT_THROWS(parse_query_tree(make_sv("good | -bad")), "Error: OR branch cannot be only negative");
+    }
+
+    // Document Evaluation & Boolean Matching
+    std::cout << "\n--- Testing Document Evaluation ---\n";
+    {
+        // Test A: Basic AND Sequence
+        ParseResult r_and = parse_query_tree(make_sv("apple banana"));
+        ASSERT(simulate_match(r_and, make_doc("apple", "banana")) == true,  "Eval: AND - Full match");
+        ASSERT(simulate_match(r_and, make_doc("apple", "orange")) == false, "Eval: AND - Missing term");
+        ASSERT(simulate_match(r_and, make_doc("orange", "grape")) == false, "Eval: AND - Complete miss");
+
+        // Test B: Basic OR Sequence
+        ParseResult r_or = parse_query_tree(make_sv("cat | dog"));
+        ASSERT(simulate_match(r_or, make_doc("cat", "bird")) == true,       "Eval: OR - Left match");
+        ASSERT(simulate_match(r_or, make_doc("fish", "dog")) == true,       "Eval: OR - Right match");
+        ASSERT(simulate_match(r_or, make_doc("cat", "dog")) == true,        "Eval: OR - Both match");
+        ASSERT(simulate_match(r_or, make_doc("fish", "bird")) == false,     "Eval: OR - No match");
+
+        // Test C: Negation & Exclusion
+        ParseResult r_not = parse_query_tree(make_sv("movie -scary"));
+        ASSERT(simulate_match(r_not, make_doc("movie", "funny")) == true,   "Eval: NOT - Found pos, missed neg");
+        ASSERT(simulate_match(r_not, make_doc("movie", "scary")) == false,  "Eval: NOT - Found pos, found neg (Fail)");
+        ASSERT(simulate_match(r_not, make_doc("book", "funny")) == false,   "Eval: NOT - Missed pos");
+
+        // Test D: Complex DNF Expansion
+        ParseResult r_dnf = parse_query_tree(make_sv("(car | truck) (red | blue) -broken"));
+        
+        // Valid paths: 
+        // 1. car red -broken
+        // 2. car blue -broken
+        // 3. truck red -broken
+        // 4. truck blue -broken
+        ASSERT(simulate_match(r_dnf, make_doc("car", "red", "fast")) == true,        "Eval: DNF - Valid Path 1");
+        ASSERT(simulate_match(r_dnf, make_doc("truck", "blue", "slow")) == true,     "Eval: DNF - Valid Path 4");
+        
+        // Failing paths
+        ASSERT(simulate_match(r_dnf, make_doc("car", "green")) == false,             "Eval: DNF - Missing second OR group");
+        ASSERT(simulate_match(r_dnf, make_doc("car", "red", "broken")) == false,     "Eval: DNF - Hits negative term");
+        ASSERT(simulate_match(r_dnf, make_doc("van", "red")) == false,               "Eval: DNF - Missing first OR group");
+
+        // Test E: De Morgan's Negation Distribution
+        ParseResult r_demorgan = parse_query_tree(make_sv("recipe -(nuts | dairy)"));
+        // Matches ONLY IF "recipe" is found AND "nuts" is NOT found AND "dairy" is NOT found
+        ASSERT(simulate_match(r_demorgan, make_doc("recipe", "chicken")) == true,         "Eval: DeMorgan - Valid");
+        ASSERT(simulate_match(r_demorgan, make_doc("recipe", "nuts", "chicken")) == false,"Eval: DeMorgan - Hits first negated OR");
+        ASSERT(simulate_match(r_demorgan, make_doc("recipe", "dairy")) == false,          "Eval: DeMorgan - Hits second negated OR");
+    }
+    
+    ParseResult c = parse_query_tree(make_sv("(\"star wars\" | \"star trek\") -(sequels | \"phantom menace\") sci-fi"));
+    print_tree("(\"star wars\" | \"star trek\") -(sequels | \"phantom menace\") sci-fi", c.root);
+
+    ParseResult c3 = parse_query_tree(make_sv("database (sql server | sql lite)"));
+    print_tree("database (sql server | sql lite)", c3.root);
+
+    ParseResult c2 = parse_query_tree(make_sv("\"machine learning\" (python | c++) -(beginner | \"crash course\")"));
+    print_tree("\"machine learning\" (python | c++) -(beginner | \"crash course\")", c2.root);
+
+    ParseResult c1 = parse_query_tree(make_sv("(cat | dog) (food | toys) cheap"));
+    print_tree("(cat | dog) (food | toys) cheap", c1.root);
+
+    std::cout << "\n════════════════════════════\n";
+    std::cout << "  Passed : " << g_passed << "\n";
+    std::cout << "  Failed : " << g_failed << "\n";
+    std::cout << "════════════════════════════\n\n";
+}
+
 int main() {
-    test_single_term();
-    test_only_not_rejected();
-    test_and_logic();
-    test_or_logic();
-    test_parentheses();
-    test_phrase_tokenization();
-    test_not_inside_expression();
-    test_filtering_behavior();
-    test_complex_expression();
-    test_sorting_by_rarity();
-    test_deduplication();
-    test_contradiction_removal();
-    test_massive_complex_query();
-
-    std::cout << "ALL TESTS PASSED" << std::endl;
+    run_all_tests();
+    return g_failed == 0 ? 0 : 1;
 }

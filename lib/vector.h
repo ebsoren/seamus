@@ -18,6 +18,12 @@ public:
         vec_size = 0;
     }
 
+    vector(std::initializer_list<T> init) {
+        for (const T& val : init) {
+            push_back(val);
+        }
+    }
+
 
     // Destructor
     // REQUIRES: Nothing

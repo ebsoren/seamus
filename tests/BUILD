@@ -164,6 +164,7 @@ cc_test(
     srcs = ["query_expressions_test.cpp"],
     deps = [
         "//query:expressions",
+        "//query:query_helpers",
         "//lib:algorithm",
         "//lib:string",
         "//lib:vector",

@@ -19,6 +19,8 @@ private:
 public:
     string_view(const char* source, size_t len) : data_{source}, len{len} {}
 
+    string_view() : data_(nullptr), len(0) {}
+
     [[nodiscard]] const char* data() const noexcept {
         return data_;
     }
@@ -58,6 +60,10 @@ public:
         return memcmp(data_, other.data_, len) == 0;
     }
 
+    bool operator!=(const string_view &other) const {
+        return !(operator==(other));
+    }
+
     bool operator==(const char* rhs) const {
         if (rhs == nullptr) return false;
 
@@ -68,6 +74,10 @@ public:
         if (data() == rhs) return true;
 
         return memcmp(data(), rhs, rhs_len) == 0;
+    }
+
+    bool operator!=(const char* rhs) const {
+        return !(operator==(rhs));
     }
 
     [[nodiscard]] bool ends_with(const auto& other) const {
@@ -350,7 +360,7 @@ public:
     }
 
     bool operator!=(const string_view& rhs) const {
-        return !(operator!=(rhs));
+        return !(operator==(rhs));
     }
 };
 
