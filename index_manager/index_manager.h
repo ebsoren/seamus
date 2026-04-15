@@ -18,6 +18,7 @@
 #include "lib/string.h"
 #include "lib/utils.h"
 #include "lib/vector.h"
+#include "lib/deque.h"
 
 
 class index_manager {
@@ -42,7 +43,7 @@ public:
                 continue;
             }
 
-            chunk_managers.emplace_back(chunk_manager(filepath));
+            chunk_managers.emplace_back(chunk_manager(filepath, &docid_collector));
         }
         closedir(d);
     }
@@ -52,11 +53,13 @@ public:
         for (const auto &worker : chunk_managers) {
             threads.emplace_back(worker.default_query(), words);
         }
-        for (auto &t : threads) {
+        for (const auto &t : threads) {
             if (t.joinable()) t.join();
         }
+        
     }
 
 private:
     vector<chunk_manager> chunk_managers;
+    atomic_queue<vector<uint32_t>> docid_collector;
 }
