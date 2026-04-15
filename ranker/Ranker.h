@@ -14,6 +14,7 @@
 #include "../lib/consts.h"
 #include "../lib/logger.h"
 #include "../query/expressions.h"
+#include "../index_chunk/chunk_manager.h"
 #include "ranker_consts.h"
 #include <optional>
 
@@ -111,6 +112,7 @@ unordered_map<string,double> makeTldWeight() {
 
     return m;
 }
+unordered_map<string, double> tldWeight = makeTldWeight(); // factory function to avoid having to implement initializer lists lol
 
 vector<double> get_word_probabilities(vector<string> &s) {
     // TODO: THIS SHOULD RETURN THE COMMONNESS OF THE WORDS GIVEN WHAT WE'VE SEEN IN SEARCHING
@@ -120,8 +122,6 @@ vector<double> get_word_probabilities(vector<string> &s) {
     }
     return probs;
 }
-
-unordered_map<string, double> tldWeight = makeTldWeight(); // factory function to avoid having to implement initializer lists lol
 
 double max(double i, double j) {
     if(i < j) {
@@ -160,7 +160,6 @@ double calc_static_score(const RankedPage &p) {
     size_t len_ext = 0;
     for(int i = start_pos; i < url.size(); i++) {
         if(url[i] == '/' || url[i] == '?' || url[i] == '#' || url[i] == ':') {
-            len_ext += 1;
             while(i < url.size()) {
                 if(url[i] == '/') { 
                     path_depth++;

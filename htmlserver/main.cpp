@@ -26,7 +26,7 @@ static const char HOMEPAGE_HTML[] =
     "    display: flex;\n"
     "    flex-direction: column;\n"
     "    align-items: center;\n"
-    "    background: linear-gradient(to top, #004d00 0%, #ffffff 85%, #ffffff 100%);\n"
+    "    background: linear-gradient(to top, #5375c9 0%, #ffffff 85%, #ffffff 100%);\n"
     "    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;\n"
     "  }\n"
     "  .top-right-logo {\n"

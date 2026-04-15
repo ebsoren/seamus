@@ -5,7 +5,7 @@ cc_binary(
     srcs = ["main.cpp"],
     deps = ["//lib:rpc_listener", "//lib:consts", "//ranker:ranker", 
         "//lib:unordered_map", "//lib:priority_queue", "//lib:logger",
-        "//query:expressions", "//lib:algorithm"],
+        "//query:expressions", "//lib:algorithm", "//index_chunk:chunk_manager"],
     data = [
         "images/magnifying-glass.png",
         "images/tam-logo.png",
