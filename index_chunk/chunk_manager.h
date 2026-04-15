@@ -221,6 +221,7 @@ inline void recover_index_chunks(vector<LoadedIndex> &index_chunks) {
 }
 
 
+// Chunk-level abstraction over raw term ISRs
 class chunk_manager {
 public:
     // Per-call wall-clock budget for get_docIDs, in ms. Defaults to the
@@ -316,6 +317,14 @@ public:
             }
             target = p.doc;
         }
+    }
+
+    // Returns all doc ids in this chunk where every word in `words` appears
+    // 1) sequentially AND
+    // 2) directly adjacent
+    // Uses the same timer approach as default_query() by populating results depth first and stopping if TLE
+    vector<uint32_t> phrase_query(const vector<string>& words) {
+
     }
 
 private:
