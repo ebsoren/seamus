@@ -18,10 +18,9 @@ class IndexServer {
         UrlStore* url_store;            // For looking up url info to include in the response
         std::thread listener_thread;    // Thread running the listener loop
         ThreadPool word_pool;           // thread pool to concurrently handle multiple word queries at once
-        ThreadPool index_chunk_pool;    // thread pool to query multiple index chunks for a given word query at once
 
         RankedPageResponse handle_request(const string& word, bool is_phrase) {
-            // TODO(charlie): handle is_Phrase logic and break down word into multi-words and enforce ordering
+            // TODO(hershey): handle is_Phrase logic and break down word into multi-words and enforce ordering
 
             RankedPageResponse results;
             // TODO(charlie): query index for matching docs/urls and the pos of the word given the word
@@ -46,7 +45,7 @@ class IndexServer {
                     // int num_unique_words_found_url;
                     page.doc_len = data->eod;
                     page.times_seen = data->num_encountered;
-                    results.pages.push_back(std::move(page));
+                    results.pages.push_back({string(word.data(), word.size()), std::move(page)});
                 }
                 
                 // populate word_positions
@@ -56,14 +55,16 @@ class IndexServer {
         }
 
         void client_handler(int fd) {
+            // also needs to receive is_phrase bool on top of word string value
             std::optional<string> word_opt = recv_string(fd);
-            if (!word_opt) {
+            std::optional<bool> is_phrase = recv_bool(fd);
+            if (!word_opt || !is_phrase) {
                 close(fd);
                 return;
             }
 
-            word_pool.enqueue_task([this, fd, word = std::move(word_opt.value())]() {
-                RankedPageResponse results = handle_request(word);
+            word_pool.enqueue_task([this, fd, word = std::move(word_opt.value()), phrase_flag = std::move(is_phrase.value())]() {
+                RankedPageResponse results = handle_request(word, phrase_flag);
                 send_word_response(fd, results);
                 close(fd);
             });
@@ -85,9 +86,9 @@ class IndexServer {
         }
 
         // some internal method that this machine's query handler can traverse this index without needing to make a network call
-        std::future<vector<RankedPage>> local_retrieve(const string_view& wordview, bool is_phrase) {
-            auto promise = std::make_shared<std::promise<vector<RankedPage>>>();
-            std::future<vector<RankedPage>> future = promise->get_future();
+        std::future<vector<QueryIndexResult>> local_retrieve(const string_view& wordview, bool is_phrase) {
+            auto promise = std::make_shared<std::promise<vector<QueryIndexResult>>>();
+            std::future<vector<QueryIndexResult>> future = promise->get_future();
             
             word_pool.enqueue_task([this, wordview, is_phrase, promise]() {
                 try {

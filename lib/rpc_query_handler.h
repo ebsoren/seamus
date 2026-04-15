@@ -10,28 +10,28 @@
 #include <optional>
 
 struct RankedPageResponse {
-    vector<RankedPage> pages;
+    vector<QueryIndexResult> pages;
 };
 
 // returns the fd created to pass to recv word response
-vector<RankedPage> send_recv_word_data(const string& host, const uint16_t port, const string_view& word, bool is_phrase) {
+vector<QueryIndexResult> send_recv_word_data(const string& host, const uint16_t port, const string_view& word, bool is_phrase) {
     int sock_fd = connect_to_host(host, port);
-    if (sock_fd < 0) return vector<RankedPage>{}; // Connection failed
+    if (sock_fd < 0) return vector<QueryIndexResult>{}; // Connection failed
 
     // 2. Send the word request (using the new mirror helper)
-    if (!send_stringview(sock_fd, word)) {
+    if (!send_stringview(sock_fd, word) || !send_bool(sock_fd, is_phrase)) {
         close(sock_fd);
-        return vector<RankedPage>{}; // Send failed
+        return vector<QueryIndexResult>{}; // Send failed
     }
 
     uint32_t num_pages;
     if (!recv_u32(sock_fd, num_pages)) {
         close(sock_fd);
-        return vector<RankedPage>{}; // Server dropped connection
+        return vector<QueryIndexResult>{}; // Server dropped connection
     }
 
-    vector<RankedPage> remote_hits;
-    // read full response payload and deserialize into vector<RankedPage>
+    vector<QueryIndexResult> remote_hits;
+    // read full response payload and deserialize into vector<QueryIndexResult>
 
     close(sock_fd);
     return remote_hits;
@@ -39,7 +39,11 @@ vector<RankedPage> send_recv_word_data(const string& host, const uint16_t port, 
 
 inline bool send_word_response(const uint16_t fd, const RankedPageResponse& results) {
     size_t total = sizeof(uint32_t);
-    for (const RankedPage& page : results.pages) {
+    for (const QueryIndexResult& qir : results.pages) {
+        const RankedPage& page = qir.rp;
+        const string& word = qir.word;
+        
+        total += sizeof(uint32_t) + word.size();
         total += sizeof(uint32_t) + page.url.size();
         total += sizeof(uint32_t) + page.title.size();
         total += sizeof(int) * 6; // for the 6 int fields in RankedPage
@@ -59,8 +63,14 @@ inline bool send_word_response(const uint16_t fd, const RankedPageResponse& resu
     off += sizeof(uint32_t);
 
     for (size_t i = 0; i < results.pages.size(); ++i) {
-        const RankedPage& page = results.pages[i];
+        const QueryIndexResult& qir = results.pages[i];
+        const RankedPage& page = qir.rp;
         // Serialize each field of the RankedPage object
+        uint32_t word_len = htonl(static_cast<uint32_t>(qir.word.size()));
+        std::memcpy(buf.get() + off, &word_len, sizeof(uint32_t));
+        off += sizeof(uint32_t);
+        std::memcpy(buf.get() + off, &qir.word, qir.word.size());
+
         uint32_t url_len = htonl(static_cast<uint32_t>(page.url.size()));
         std::memcpy(buf.get() + off, &url_len, sizeof(uint32_t));
         off += sizeof(uint32_t);
@@ -85,9 +95,6 @@ inline bool send_word_response(const uint16_t fd, const RankedPageResponse& resu
         std::memcpy(buf.get() + off, &page.num_unique_words_found_title, sizeof(int));
         off += sizeof(int);
 
-        std::memcpy(buf.get() + off, &page.num_unique_words_found_descr, sizeof(int));
-        off += sizeof(int);
-
         std::memcpy(buf.get() + off, &page.num_unique_words_found_url, sizeof(int));
         off += sizeof(int);
 
@@ -110,12 +117,9 @@ inline bool send_word_response(const uint16_t fd, const RankedPageResponse& resu
 
         std::memcpy(buf.get() + off, &page.doc_len, sizeof(size_t));
         off += sizeof(size_t);
-
-        std::memcpy(buf.get() + off, &page.description_len, sizeof(size_t));
-        off += sizeof(size_t);
     }
 
-    bool result = send_exact(fd, buf.get(), total);  
+    bool result = send_exact(fd, buf.get(), total); 
     return result;
 }
 

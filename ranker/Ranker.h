@@ -29,6 +29,11 @@ void reverse(vector<T>& vec) {
     }
 }
 
+struct QueryIndexResult {
+    string word = string("");
+    RankedPage rp;
+};
+
 // "two words"
 // for phrase words in word_positions, simply store the location of the start of the phrase
 struct RankedPage {
