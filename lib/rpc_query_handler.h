@@ -23,38 +23,38 @@ struct QueryResponse {
     vector<DocInfo> pages;
 };
 
-struct RankedPageResponse {
+struct LeanPageResponse {
     // clarifier: multiple RankedPage structs can be returned a a result to the client query handler
     // this represents all the pages a WHOLE query is valid on
-    vector<RankedPage> pages;
+    vector<LeanPage> pages;
 };
 
 // returns a RankedPageResponse
-inline RankedPageResponse send_recv_query_data(const string& host, const uint16_t port, const string& query) {
+inline LeanPageResponse send_recv_query_data(const string& host, const uint16_t port, const string& query) {
     int sock_fd = connect_to_host(host, port);
-    if (sock_fd < 0) return RankedPageResponse(); // Connection failed
+    if (sock_fd < 0) return LeanPageResponse(); // Connection failed
 
     // 2. Send the word request (using the new mirror helper)
     if (!send_string(sock_fd, query)) {
         close(sock_fd);
-        return RankedPageResponse(); // Send failed
+        return LeanPageResponse(); // Send failed
     }
 
     uint32_t num_pages;
     if (!recv_u32(sock_fd, num_pages)) {
         close(sock_fd);
-        return RankedPageResponse(); // Server dropped connection
+        return LeanPageResponse(); // Server dropped connection
     }
 
-    RankedPageResponse remote_hits;
-    // read full response payload and deserialize into RankedPageREsponse
+    LeanPageResponse remote_hits;
+    // TODO(charlie): read full response payload and deserialize into LeanPageResponse
 
     close(sock_fd);
     return remote_hits;
 }
 
 // vector<RankedPage> pages
-inline bool send_word_response(const uint16_t fd, const RankedPageResponse& results) {
+inline bool send_word_response(const uint16_t fd, const LeanPageResponse& results) {
     size_t total = sizeof(uint32_t);
     for (const RankedPage& page : results.pages) { 
         total += sizeof(uint32_t) + page.url.size();

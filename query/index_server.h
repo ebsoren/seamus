@@ -5,6 +5,7 @@
 #include "../lib/consts.h"
 #include "../url_store/url_store.h"
 #include "../lib/thread_pool.h"
+#include "../ranker/Ranker.h"
 
 #include <thread>
 
@@ -16,10 +17,12 @@ class IndexServer {
         UrlStore* url_store;            // For looking up url info to include in the response
         std::thread listener_thread;    // Thread running the listener loop
         ThreadPool query_pool;           // thread pool to concurrently handle multiple word queries at once
+        Ranker* ranker;
 
-        RankedPageResponse handle_request(const string& query) {
+        LeanPageResponse handle_request(const string& query) {
 
-            RankedPageResponse results;
+            LeanPageResponse results;
+            vector<RankedPage> candidates;
             // TODO(charlie): call index_manager to query index chunks and get QueryResponse
             QueryResponse qr;
             // iterate through query response entries urls and retrieve appropriate info from urlStore
@@ -43,11 +46,11 @@ class IndexServer {
                     page.times_seen = data->num_encountered; 
 
                     // populate word_positions
-                    results.pages.push_back(std::move(page));;
+                    candidates.pages.push_back(std::move(page));;
                 }
             }
 
-            return results;
+            return { r->rank(candidates) };
         }
 
         void client_handler(int fd) {
@@ -66,7 +69,7 @@ class IndexServer {
         }
 
     public:
-        IndexServer(UrlStore* url_store, IndexManager* index_manager) : url_store(url_store), query_pool(INDEX_SERVER_NUM_THREADS), index_manager(index_manager) {
+        IndexServer(UrlStore* url_store, IndexManager* index_manager, Ranker* ranker) : url_store(url_store), query_pool(INDEX_SERVER_NUM_THREADS), index_manager(index_manager), ranker(ranker) {
             rpc_listener = new RPCListener(INDEX_SERVER_PORT, INDEX_SERVER_NUM_THREADS);
             listener_thread = std::thread([this]() {
                 rpc_listener->listener_loop([this](int fd) { client_handler(fd); });
@@ -74,15 +77,14 @@ class IndexServer {
         }
 
         // some internal method that this machine's query handler can traverse this index without needing to make a network call
-        std::future<RankedPageResponse> local_retrieve(const string& query) {
-            auto promise = std::make_shared<std::promise<RankedPageResponse>>();
-            std::future<RankedPageResponse> future = promise->get_future();
+        std::future<LeanPageResponse> local_retrieve(const string& query) {
+            auto promise = std::make_shared<std::promise<LeanPageResponse>>();
+            std::future<LeanPageResponse> future = promise->get_future();
             
             query_pool.enqueue_task([this, new_query = string(query.data(), query.size()), promise]() {
                 try {
-                    RankedPageResponse response = this->handle_request(new_query);
+                    LeanPageResponse response = this->handle_request(new_query);
                     promise->set_value(std::move(response));
-
                 } catch (...) {
                     promise->set_exception(std::current_exception());
                 }

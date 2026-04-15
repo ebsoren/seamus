@@ -11,7 +11,6 @@
 
 #include "../index_chunk/chunk_manager.h"
 #include "index_server.h"
-#include "../ranker/Ranker.h"
 #include "query_helpers.h"
 
 #include <thread>
@@ -30,9 +29,9 @@ class QueryHandler {
         RPCListener rpc_listener;
         IndexServer *index_server;
 
-        vector<RankedPage> get_results(string& input) {
+        vector<LeanPage> get_results(string& input) {
             ParseResult result = parse_query_tree(input.str_view(0, input.size()));
-            vector<std::future<vector<RankedPage>>> futures;
+            vector<std::future<vector<LeanPage>>> futures;
 
                         
             // TODO:
@@ -41,11 +40,11 @@ class QueryHandler {
             // if is_phrase == true, then string_view val is multiwords space delimited
             // if "the quick brown" then itll be one term w/o quotes, there will still be a tag and it can be phrase
             for (size_t i = 0; i < NUM_MACHINES; ++i) {
-                auto task_promise = std::make_shared<std::promise<vector<RankedPage>>>();
+                auto task_promise = std::make_shared<std::promise<vector<LeanPage>>>();
                 futures.push_back(task_promise->get_future());
                 
                 pool.enqueue_task([this, query = std::move(input), i, task_promise]() {
-                    vector<RankedPage> local_hits;
+                    vector<LeanPage> local_hits;
                     
                     if (i == my_machine_id()) {
                         local_hits = index_server->local_retrieve(query).get().pages;
@@ -59,12 +58,15 @@ class QueryHandler {
             }
 
             // map from url to rankedPage data
-            vector<RankedPage> final_results;
+            vector<LeanPage> final_results;
             for (auto& fut : futures) {
                 // .get() will BLOCK the main thread here until this specific background task 
-                vector<RankedPage> machine_hits = fut.get(); 
-                for (const RankedPage& rp : machine_hits) final_results.push_back(std::move(rp));
+                vector<LeanPage> machine_hits = fut.get(); 
+                for (const LeanPage& lp : machine_hits) final_results.push_back(std::move(lp));
             }
+
+            // merge sort these final_results and return final 10
+
 
             return final_results;
         }
@@ -79,10 +81,9 @@ class QueryHandler {
             }
 
             string raw_request(buffer);
-            vector<RankedPage> results = get_results(raw_request);
-            r->rank(results);
-            send_client_response(client_fd, r->get_top_x(NUM_RESULTS_RETURN)); // TODO: determine how many results we want to return
-            r->reset(); // flush ranker for future queries
+            vector<LeanPage> results = get_results(raw_request);
+            send_client_response(client_fd, results);
+            r->reset();
         }
 
     public:
