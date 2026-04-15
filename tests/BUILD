@@ -170,3 +170,12 @@ cc_test(
         "//lib:vector",
     ],
 )
+
+cc_test (
+    name = "index_util_test",
+    srcs = ["index_util_test.cpp"],
+    tags = ["no-sandbox", "local"],
+    deps = [
+        "//index_chunk:chunk_manager",
+    ],
+)

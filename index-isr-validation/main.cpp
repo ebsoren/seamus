@@ -1,5 +1,5 @@
 #include "index/Index.h"
-#include "index-stream-reader/isr.h"
+#include "index_chunk/chunk_manager.h" // pulls in LoadedIndex + isr.h
 #include "lib/consts.h"
 #include "lib/logger.h"
 #include "lib/string.h"
@@ -22,7 +22,7 @@ namespace bench {
 
 constexpr size_t NUM_FILES       = 10;
 constexpr size_t DOCS_PER_FILE   = 10;
-constexpr size_t WORDS_PER_DOC   = 1000;
+constexpr size_t WORDS_PER_DOC   = 50000;
 
 // Size of the per-letter word pool we draw document words from.
 constexpr size_t WORDS_PER_LETTER = 100;
@@ -720,6 +720,15 @@ static vector<vector<uint32_t>> rebuild_docs_from_index(
 }
 
 
+// One per-word sample: how many posts were walked and how long it took.
+// Holding posting-list length alongside time lets the stats function study
+// throughput (ns/post) and scaling, not just raw wall time.
+struct WalkSample {
+    uint64_t n_posts;
+    double   time_ms;
+};
+
+
 // Same reconstruction as rebuild_docs_from_index, but goes through the public
 // LoadedIndex/IndexStreamReader interface rather than parsing the chunk file
 // directly. This exercises the ISR end-to-end: it must walk every post for
@@ -727,7 +736,9 @@ static vector<vector<uint32_t>> rebuild_docs_from_index(
 // corpus wrote.
 static vector<vector<uint32_t>> rebuild_docs_from_isr(
         const string& path, const WordPool& pool,
-        size_t total_docs, size_t words_per_doc) {
+        size_t total_docs, size_t words_per_doc,
+        vector<WalkSample>& walk_samples) {
+    using clock = std::chrono::steady_clock;
 
     vector<vector<uint32_t>> rebuilt;
     rebuilt.reserve(total_docs);
@@ -757,9 +768,13 @@ static vector<vector<uint32_t>> rebuild_docs_from_isr(
         // construct a fresh copy from the dict word for the ISR to own.
         IndexStreamReader isr(string(word.data(), word.size()), &loaded);
 
+        // Time just the posting-list walk for this word. Construction and
+        // pool lookup are excluded — we want to measure ISR traversal cost.
+        uint64_t posts_this_word = 0;
+        auto t0 = clock::now();
         post p = isr.advance();
         while (p.doc != 0) {
-            total_posts++;
+            posts_this_word++;
             size_t d_idx = static_cast<size_t>(p.doc) - 1;
             size_t l_idx = static_cast<size_t>(p.loc) - 1;
             if (d_idx < rebuilt.size() && l_idx < rebuilt[d_idx].size()) {
@@ -771,11 +786,89 @@ static vector<vector<uint32_t>> rebuild_docs_from_isr(
             }
             p = isr.advance();
         }
+        auto t1 = clock::now();
+        total_posts += posts_this_word;
+        walk_samples.push_back(WalkSample{
+            posts_this_word,
+            std::chrono::duration<double, std::milli>(t1 - t0).count(),
+        });
     }
 
     logger::instr("ISR rebuild: walked %zu posts across %zu words",
                   total_posts, n_words);
     return rebuilt;
+}
+
+
+// Bucket samples by posting-list length (= number of advances) and report:
+//   count, avg wall time per walk, avg ns/post.
+// Log-spaced buckets because posting list lengths are heavily skewed —
+// common words are orders of magnitude longer than rare ones.
+static void print_walk_time_stats(const vector<WalkSample>& walk_samples) {
+    const size_t n = walk_samples.size();
+    if (n == 0) {
+        logger::instr("ISR walk timings: <empty>");
+        return;
+    }
+
+    // Decade-spaced boundaries on post count.
+    static const uint64_t BOUNDS[] = {
+        10, 100, 1000, 10000, 100000, 1000000,
+    };
+    static const size_t N_BOUNDS = sizeof(BOUNDS) / sizeof(BOUNDS[0]);
+
+    size_t   counts[N_BOUNDS + 1]    = {};
+    double   totals_ms[N_BOUNDS + 1] = {};
+    uint64_t posts_sum[N_BOUNDS + 1] = {};
+
+    double   grand_total_ms = 0.0;
+    uint64_t grand_posts    = 0;
+    double   max_ms         = 0.0;
+    for (size_t i = 0; i < n; ++i) {
+        const WalkSample& s = walk_samples[i];
+
+        size_t b = N_BOUNDS; // overflow bucket
+        for (size_t j = 0; j < N_BOUNDS; ++j) {
+            if (s.n_posts < BOUNDS[j]) { b = j; break; }
+        }
+        counts[b]++;
+        totals_ms[b] += s.time_ms;
+        posts_sum[b] += s.n_posts;
+
+        grand_total_ms += s.time_ms;
+        grand_posts    += s.n_posts;
+        if (s.time_ms > max_ms) max_ms = s.time_ms;
+    }
+
+    logger::instr("=== ISR walk stats (n=%zu words, posts=%llu, total=%.3f ms, max=%.5f ms, mean=%.5f ms/word) ===",
+                  n, (unsigned long long)grand_posts, grand_total_ms, max_ms,
+                  grand_total_ms / static_cast<double>(n));
+    logger::instr("  post-length range           count    avg ms      ns/post");
+
+    auto emit = [&](uint64_t lo, uint64_t hi, size_t idx, bool is_overflow) {
+        double avg_ms = counts[idx]
+            ? totals_ms[idx] / static_cast<double>(counts[idx])
+            : 0.0;
+        double ns_per_post = posts_sum[idx]
+            ? (totals_ms[idx] * 1e6) / static_cast<double>(posts_sum[idx])
+            : 0.0;
+        if (is_overflow) {
+            logger::instr("  [%7llu,     inf) posts -> %5zu  %9.5f  %10.2f",
+                          (unsigned long long)lo,
+                          counts[idx], avg_ms, ns_per_post);
+        } else {
+            logger::instr("  [%7llu, %7llu) posts -> %5zu  %9.5f  %10.2f",
+                          (unsigned long long)lo, (unsigned long long)hi,
+                          counts[idx], avg_ms, ns_per_post);
+        }
+    };
+
+    uint64_t lo = 0;
+    for (size_t j = 0; j < N_BOUNDS; ++j) {
+        emit(lo, BOUNDS[j], j, false);
+        lo = BOUNDS[j];
+    }
+    emit(lo, 0, N_BOUNDS, true);
 }
 
 
@@ -875,9 +968,11 @@ int main(int /*argc*/, char* /*argv*/[]) {
     verify_rebuild(corpus, pool, rebuilt);
 
     logger::instr("=== Rebuilding documents via ISR ===");
+    vector<WalkSample> isr_walk_samples;
     vector<vector<uint32_t>> rebuilt_isr = rebuild_docs_from_isr(
-        chunk_path, pool, total_docs, bench::WORDS_PER_DOC);
+        chunk_path, pool, total_docs, bench::WORDS_PER_DOC, isr_walk_samples);
     verify_rebuild(corpus, pool, rebuilt_isr);
+    print_walk_time_stats(isr_walk_samples);
 
     cleanup_dir(bench::BENCH_DOC_DIR);
     cleanup_worker0_chunks();

@@ -5,7 +5,7 @@ cc_binary(
     srcs = ["main.cpp"],
     deps = [
         "//index:index_lib",
-        "//index-stream-reader:isr",
+        "//index_chunk:chunk_manager",
         "//lib:consts",
         "//lib:logger",
         "//lib:string",

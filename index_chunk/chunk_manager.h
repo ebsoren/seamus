@@ -1,5 +1,6 @@
 #pragma once
 
+#include <chrono>
 #include <cstdint>
 #include <cstddef>
 #include <cstdio>
@@ -223,14 +224,24 @@ inline void recover_index_chunks(vector<LoadedIndex>& index_chunks) {
 
 class chunk_manager {
 public:
+    // Per-call wall-clock budget for get_docIDs, in ms. Defaults to the
+    // consts.h value; tests can reassign it to relax or tighten the bound.
+    static inline uint32_t deadline_ms = CHUNK_MANAGER_DEADLINE_MS;
+
     explicit chunk_manager(const string& path) : li(path) {}
 
     chunk_manager(const chunk_manager&)            = delete;
     chunk_manager& operator=(const chunk_manager&) = delete;
 
     // Return all doc ids in this chunk where every query word appears.
-    // Uses a leapfrog join driven by the rarest word.
-    vector<uint32_t> get_docIDs(const vector<string>& words) {
+    // Uses a leapfrog join driven by the rarest word. If the loop runs past
+    // `deadline_ms`, returns the matches found so far (a partial result) so
+    // the caller isn't starved by a single slow chunk.
+    // INVARIANT: WORDS VECTOR MUST CONTAIN UNIQUE ELEMENTS
+    vector<uint32_t> default_query(const vector<string>& words) {
+        using clock = std::chrono::steady_clock;
+        const auto start_time = clock::now();
+
         vector<uint32_t> doc_ids;
         if (words.size() == 0) return doc_ids;
 
@@ -253,6 +264,15 @@ public:
         uint32_t target = p.doc;
 
         while (true) {
+            // Timer check
+            auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+                clock::now() - start_time).count();
+            if (static_cast<uint32_t>(elapsed) >= deadline_ms) {
+                logger::warn("chunk_manager::get_docIDs hit %ums deadline after %zu matches",
+                             deadline_ms, doc_ids.size());
+                return doc_ids;
+            }
+
             bool all_match = true;
             for (size_t i = 1; i < isrs.size(); ++i) {
                 post q = isrs[i].advance_to(target);
