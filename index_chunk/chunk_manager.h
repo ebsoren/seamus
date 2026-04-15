@@ -204,9 +204,21 @@ public:
         return string(e.word, e.word_len);
     }
 
-    // Doc ids are 1-indexed on disk, so subtract 1 to index into urls.
+    // Doc ids are 1-indexed on disk, so subtract 1 to index into urls. If the
+    // decoded doc id walks past the url table (e.g. delta-decoder ran off the
+    // rails or the on-disk url count is inconsistent with the posting list),
+    // return a sentinel URL so callers don't construct a `string` from a
+    // garbage pointer and crash in string's nullptr assert.
     string get_url(uint32_t doc) const {
+        if (doc == 0 || doc - 1 >= urls.size()) {
+            logger::warn("get_url: doc id %u out of bounds (urls.size()=%zu)", doc, urls.size());
+            return string("<invalid-doc>");
+        }
         const string_view &sv = urls[doc - 1];
+        if (sv.data() == nullptr) {
+            logger::warn("get_url: null string_view at doc id %u", doc);
+            return string("<null-url>");
+        }
         return string(sv.data(), sv.size());
     }
 };
