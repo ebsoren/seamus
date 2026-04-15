@@ -87,8 +87,9 @@ void IndexChunk::persist() {
             dict_offsets[slot] = curr_offset;
         }
 
-        // One byte per char, 6 bytes for posting list offset, 1 byte each for space and new line
-        curr_offset += alphabetized_entries[i].size() + 6 + 2;
+        // Dict entry on disk: <word><space><8B offset><\n>. Must match the
+        // actual write loop below (fwrite: word + space + uint64_t + '\n').
+        curr_offset += alphabetized_entries[i].size() + 1 + sizeof(uint64_t) + 1;
 
         // Mark where the byte offset where current word's posting list begins
         posting_list_locations[i] = posting_list_size;
@@ -168,8 +169,31 @@ void IndexChunk::persist() {
      * Write the posting lists themselves
      */
 
+    // Drift detection: first-pass sizing must match second-pass byte counts
+    // exactly, otherwise posting_list_locations[i] points at mid-post-list
+    // garbage. Capture the post-region base and compare ftell() against
+    // post_region_start + posting_list_locations[i] at every word header.
+    // Log the first divergence only (one line per chunk is enough to isolate).
+    long post_region_start = ftell(fd);
+    bool drift_logged = false;
+
     // Loop through all words
     for (uint32_t i = 0; i < N; i++) {
+        {
+            long expected_offset = post_region_start + static_cast<long>(posting_list_locations[i]);
+            long actual_offset = ftell(fd);
+            if (!drift_logged && actual_offset != expected_offset) {
+                drift_logged = true;
+                logger::error(
+                    "Worker %u: persist drift at word %u '%.*s': expected %ld, actual %ld, delta %ld (post_region_start=%ld, locations[i]=%llu)",
+                    WORKER_NUMBER, i,
+                    static_cast<int>(alphabetized_entries[i].size()),
+                    alphabetized_entries[i].data(),
+                    expected_offset, actual_offset, actual_offset - expected_offset,
+                    post_region_start,
+                    static_cast<unsigned long long>(posting_list_locations[i]));
+            }
+        }
         postings& entry = index[alphabetized_entries[i].str_view(0, alphabetized_entries[i].size())];
         uint64_t size = entry.posts.size(); // Needs to be an lvalue for fwrite
         uint32_t next_checkpoint = INDEX_SKIP_SIZE;
