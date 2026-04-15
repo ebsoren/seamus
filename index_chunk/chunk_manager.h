@@ -53,6 +53,10 @@ private:
     // chunk is enough to debug from.
     mutable uint32_t get_url_error_count_ = 0;
 
+    // Rate limit for lookup miss errors. Independent counter so walk-off
+    // diagnostics don't drown out dict-miss diagnostics or vice versa.
+    mutable uint32_t lookup_miss_error_count_ = 0;
+
     // Binary search dict_entries_ for word. Returns posting-region offset,
     // or UINT64_MAX if not found.
     uint64_t lookup(const string &word) const {
@@ -74,6 +78,33 @@ private:
                 lo = mid + 1;
             else
                 hi = mid;
+        }
+
+        // Miss-path diagnostic (rate-limited): dump the bytes we searched for
+        // plus the dict neighbors binary search landed between. If the bytes
+        // don't look like the expected word, something corrupted the query
+        // string. If the bytes are right but the dict has a matching entry
+        // nearby, binary search / dict parsing is wrong.
+        if (lookup_miss_error_count_ < 5) {
+            ++lookup_miss_error_count_;
+            logger::error("lookup miss: target_len=%zu target='%.*s' target_hex=[%02x %02x %02x %02x] in %.*s (dict size=%zu)",
+                          target_len,
+                          static_cast<int>(target_len), target,
+                          target_len > 0 ? (unsigned)(unsigned char)target[0] : 0,
+                          target_len > 1 ? (unsigned)(unsigned char)target[1] : 0,
+                          target_len > 2 ? (unsigned)(unsigned char)target[2] : 0,
+                          target_len > 3 ? (unsigned)(unsigned char)target[3] : 0,
+                          static_cast<int>(path_.size()), path_.data(),
+                          dict_entries_.size());
+            if (dict_entries_.size() > 0) {
+                size_t lo_idx = lo > 0 ? lo - 1 : 0;
+                size_t hi_idx = lo < dict_entries_.size() ? lo : dict_entries_.size() - 1;
+                const DictEntry &el = dict_entries_[lo_idx];
+                const DictEntry &eh = dict_entries_[hi_idx];
+                logger::error("  neighbors: [%zu] '%.*s' (len=%u), [%zu] '%.*s' (len=%u)",
+                              lo_idx, static_cast<int>(el.word_len), el.word, el.word_len,
+                              hi_idx, static_cast<int>(eh.word_len), eh.word, eh.word_len);
+            }
         }
         return UINT64_MAX;
     }

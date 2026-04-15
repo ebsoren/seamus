@@ -46,12 +46,19 @@ IndexStreamReader::IndexStreamReader(const string& word, LoadedIndex* index) : w
     // absurd values — detect and disable this ISR rather than walk off.
     uint64_t max_plausible_posts = static_cast<uint64_t>(region_end - curr_loc_);
     if (n_posts > max_plausible_posts) {
-        logger::error("ISR '%s': n_posts=%llu exceeds max plausible %llu (offset=%llu, region_tail=%llu)",
+        // Dump the 16 bytes at the dict-returned offset (i.e. the header the
+        // reader expects) so we can see what's actually there on disk.
+        const uint8_t* dump = postings_start_;
+        logger::error("ISR '%s': n_posts=%llu n_docs=%u exceeds max plausible %llu (offset=%llu, region_tail=%llu)",
                       this->word.data(),
                       static_cast<unsigned long long>(n_posts),
+                      static_cast<unsigned>(n_docs),
                       static_cast<unsigned long long>(max_plausible_posts),
                       static_cast<unsigned long long>(offset),
                       static_cast<unsigned long long>(region_end - region_start));
+        logger::error("  header bytes: %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x",
+                      dump[0], dump[1], dump[2], dump[3], dump[4], dump[5], dump[6], dump[7],
+                      dump[8], dump[9], dump[10], dump[11], dump[12], dump[13], dump[14], dump[15]);
         n_posts = 0;
         n_docs = 0;
         curr_loc_ = postings_start_ = nullptr;
