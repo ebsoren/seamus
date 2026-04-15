@@ -40,6 +40,19 @@ private:
     // Pointer into file_buffer_, start of the posting list region.
     const uint8_t *posting_list_region_ = nullptr;
 
+    // End of the posting list region == end of the file buffer. ISRs use this
+    // to terminate a walk-off (e.g. if n_posts was read as garbage and the
+    // decoder would otherwise run past EOF).
+    const uint8_t *posting_list_region_end_ = nullptr;
+
+    // Chunk file path, kept for diagnostics (so error logs can pinpoint which
+    // chunk is producing bogus doc ids).
+    string path_;
+
+    // Rate limit for get_url errors: some bugs cause massive floods, one per
+    // chunk is enough to debug from.
+    mutable uint32_t get_url_error_count_ = 0;
+
     // Binary search dict_entries_ for word. Returns posting-region offset,
     // or UINT64_MAX if not found.
     uint64_t lookup(const string &word) const {
@@ -68,7 +81,7 @@ private:
 public:
     friend class IndexStreamReader;
 
-    explicit LoadedIndex(const string &path) {
+    explicit LoadedIndex(const string &path) : path_(path.data(), path.size()) {
         FILE *fd = fopen(path.data(), "rb");
         if (fd == nullptr) {
             logger::warn("Failed to open %s", path.data());
@@ -172,8 +185,10 @@ public:
             p = space + 1 + sizeof(uint64_t) + 1;
         }
 
-        // 5. Posting list region starts here
+        // 5. Posting list region starts here. End is EOF — the posting list
+        //    is the last section in the file.
         posting_list_region_ = p;
+        posting_list_region_end_ = end;
     }
 
     ~LoadedIndex() { delete[] file_buffer_; }
@@ -189,10 +204,14 @@ public:
         , file_size_(other.file_size_)
         , urls(move(other.urls))
         , dict_entries_(move(other.dict_entries_))
-        , posting_list_region_(other.posting_list_region_) {
+        , posting_list_region_(other.posting_list_region_)
+        , posting_list_region_end_(other.posting_list_region_end_)
+        , path_(move(other.path_))
+        , get_url_error_count_(other.get_url_error_count_) {
         other.file_buffer_ = nullptr;
         other.file_size_ = 0;
         other.posting_list_region_ = nullptr;
+        other.posting_list_region_end_ = nullptr;
     }
 
     // Number of words in the chunk's dictionary, in alphabetized order.
@@ -209,14 +228,27 @@ public:
     // rails or the on-disk url count is inconsistent with the posting list),
     // return a sentinel URL so callers don't construct a `string` from a
     // garbage pointer and crash in string's nullptr assert.
+    //
+    // Errors are rate-limited per chunk: walk-offs can produce millions of
+    // bogus calls; ~5 lines per chunk is plenty to debug with.
     string get_url(uint32_t doc) const {
         if (doc == 0 || doc - 1 >= urls.size()) {
-            logger::warn("get_url: doc id %u out of bounds (urls.size()=%zu)", doc, urls.size());
+            if (get_url_error_count_ < 5) {
+                ++get_url_error_count_;
+                logger::error("get_url: doc id %u out of bounds (urls.size()=%zu) in %.*s",
+                              doc, urls.size(),
+                              static_cast<int>(path_.size()), path_.data());
+            }
             return string("<invalid-doc>");
         }
         const string_view &sv = urls[doc - 1];
         if (sv.data() == nullptr) {
-            logger::warn("get_url: null string_view at doc id %u", doc);
+            if (get_url_error_count_ < 5) {
+                ++get_url_error_count_;
+                logger::error("get_url: null string_view at doc id %u in %.*s",
+                              doc,
+                              static_cast<int>(path_.size()), path_.data());
+            }
             return string("<null-url>");
         }
         return string(sv.data(), sv.size());
