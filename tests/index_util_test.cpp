@@ -310,6 +310,11 @@ void test_chunk_manager_queries() {
 
     chunk_manager cm(chunk_path);
 
+    // Bump the per-call deadline so small-corpus leapfrog never hits the
+    // production 250ms cap and returns a partial result that wouldn't match
+    // our ground truth.
+    chunk_manager::deadline_ms = 1000;
+
     std::uniform_int_distribution<uint32_t> pdist(0, pool.size() - 1);
     std::uniform_int_distribution<size_t>   qlen(1, 4);
 
