@@ -22,7 +22,7 @@ namespace bench {
 
 constexpr size_t NUM_FILES       = 10;
 constexpr size_t DOCS_PER_FILE   = 10;
-constexpr size_t WORDS_PER_DOC   = 5000;
+constexpr size_t WORDS_PER_DOC   = 50000;
 
 // Size of the per-letter word pool we draw document words from.
 constexpr size_t WORDS_PER_LETTER = 100;
@@ -811,11 +811,9 @@ static void print_walk_time_stats(const vector<WalkSample>& walk_samples) {
         return;
     }
 
-    // 1-2-5 log-spaced boundaries on post count.
+    // Decade-spaced boundaries on post count.
     static const uint64_t BOUNDS[] = {
-        2, 5, 10, 20, 50, 100, 200, 500,
-        1000, 2000, 5000, 10000, 20000, 50000,
-        100000, 200000, 500000, 1000000,
+        10, 100, 1000, 10000, 100000, 1000000,
     };
     static const size_t N_BOUNDS = sizeof(BOUNDS) / sizeof(BOUNDS[0]);
 
