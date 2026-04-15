@@ -6,8 +6,8 @@
 #include <cstring>
 
 IndexStreamReader::IndexStreamReader(const string& word, LoadedIndex* index) : word(word.data(), word.size()), index(index) {
-    uint64_t offset = index->lookup(this->word);
-    if (offset == UINT64_MAX) {
+    const auto *entry = index->lookup(this->word);
+    if (!entry) {
         logger::warn("Word '%s' not found in index", this->word.data());
         n_posts = 0;
         n_docs = 0;
@@ -19,6 +19,7 @@ IndexStreamReader::IndexStreamReader(const string& word, LoadedIndex* index) : w
     // by IndexChunk::persist), so no rebasing needed.
     const uint8_t* region_start = index->posting_list_region_;
     const uint8_t* region_end = index->posting_list_region_end_;
+    uint64_t offset = entry->posting_offset;
     curr_loc_ = postings_start_ = region_start + offset;
 
     // Header layout written by IndexChunk::persist:

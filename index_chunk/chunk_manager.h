@@ -29,6 +29,7 @@ private:
         const char *word;   // pointer into file_buffer_
         uint32_t word_len;
         uint64_t posting_offset;   // byte offset from start of posting list region
+        uint64_t n_posts;          // total occurrences of this word across all docs
     };
 
     // URLs indexed by (doc_id - 1) — doc ids are 1-indexed on disk.
@@ -53,13 +54,17 @@ private:
     // chunk is enough to debug from.
     mutable uint32_t get_url_error_count_ = 0;
 
+    // Total word occurrences across all dictionary entries. Cached at load
+    // time so word_frequency() is a single division.
+    uint64_t total_words_ = 0;
+
     // Rate limit for lookup miss errors. Independent counter so walk-off
     // diagnostics don't drown out dict-miss diagnostics or vice versa.
     mutable uint32_t lookup_miss_error_count_ = 0;
 
-    // Binary search dict_entries_ for word. Returns posting-region offset,
-    // or UINT64_MAX if not found.
-    uint64_t lookup(const string &word) const {
+    // Binary search dict_entries_ for word. Returns pointer to matching
+    // DictEntry, or nullptr if not found.
+    const DictEntry *lookup(const string &word) const {
         const char *target = word.data();
         size_t target_len = word.size();
 
@@ -71,7 +76,7 @@ private:
             size_t min_len = target_len < e.word_len ? target_len : e.word_len;
             int cmp = memcmp(e.word, target, min_len);
             if (cmp == 0) {
-                if (e.word_len == target_len) return e.posting_offset;
+                if (e.word_len == target_len) return &e;
                 cmp = (e.word_len < target_len) ? -1 : 1;
             }
             if (cmp < 0)
@@ -106,7 +111,7 @@ private:
                               hi_idx, static_cast<int>(eh.word_len), eh.word, eh.word_len);
             }
         }
-        return UINT64_MAX;
+        return nullptr;
     }
 
 public:
@@ -220,6 +225,18 @@ public:
         //    is the last section in the file.
         posting_list_region_ = p;
         posting_list_region_end_ = end;
+
+        // 6. Read n_posts from each posting list header and compute total_words_.
+        for (size_t i = 0; i < dict_entries_.size(); ++i) {
+            DictEntry &e = dict_entries_[i];
+            const uint8_t *header = posting_list_region_ + e.posting_offset;
+            if (header + sizeof(uint64_t) > posting_list_region_end_) {
+                e.n_posts = 0;
+                continue;
+            }
+            memcpy(&e.n_posts, header, sizeof(uint64_t));
+            total_words_ += e.n_posts;
+        }
     }
 
     ~LoadedIndex() { delete[] file_buffer_; }
@@ -238,11 +255,13 @@ public:
         , posting_list_region_(other.posting_list_region_)
         , posting_list_region_end_(other.posting_list_region_end_)
         , path_(move(other.path_))
-        , get_url_error_count_(other.get_url_error_count_) {
+        , get_url_error_count_(other.get_url_error_count_)
+        , total_words_(other.total_words_) {
         other.file_buffer_ = nullptr;
         other.file_size_ = 0;
         other.posting_list_region_ = nullptr;
         other.posting_list_region_end_ = nullptr;
+        other.total_words_ = 0;
     }
 
     // Number of words in the chunk's dictionary, in alphabetized order.
@@ -252,6 +271,15 @@ public:
     string word_at(size_t i) const {
         const DictEntry &e = dict_entries_[i];
         return string(e.word, e.word_len);
+    }
+
+    // Fractional frequency of a word: n_posts / total_words. Returns 0.0 if
+    // the word is not found or the index is empty.
+    double word_frequency(const string &word) const {
+        if (total_words_ == 0) return 0.0;
+        const DictEntry *e = lookup(word);
+        if (!e) return 0.0;
+        return static_cast<double>(e->n_posts) / static_cast<double>(total_words_);
     }
 
     // Doc ids are 1-indexed on disk, so subtract 1 to index into urls. If the
