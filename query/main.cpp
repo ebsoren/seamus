@@ -1,14 +1,14 @@
 #include "../lib/vector.h"
 #include "../lib/string.h"
+
 #include "../lib/unordered_map.h"
 #include "../lib/utils.h"
 #include "../lib/consts.h"
 #include "../url_store/url_store.h"
 
 #include "query_handler.h"
-#include "../ranker/Ranker.h"
 #include "../index/Index.h"
-#include "../index-chunk/chunk-manager.h"
+#include "../query/index_server.h"
 
 /*
 Query Language Syntax:
@@ -30,7 +30,6 @@ Query Language Syntax:
 // total of 180 pages to rank, then return top 10 amongst those to the client
 
 int main(int argc, char* argv[]) {
-    
     vector<LoadedIndex> indexChunks;
     recover_index_chunks(indexChunks);
     UrlStore url_store(nullptr, 0);
