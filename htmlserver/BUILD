@@ -9,7 +9,9 @@ cc_binary(
     data = [
         "images/magnifying-glass.png",
         "images/tam-logo.png",
-        "images/tank-favicon.png"
+        "images/tank-favicon.png",
+        "images/seamusfinalphoto.png",
+        "images/sirtophamhatt.png"
     ],
     visibility = ["//visibility:public"],
 )

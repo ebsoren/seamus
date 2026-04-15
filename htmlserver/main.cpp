@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <ctype.h>
+#include <chrono> 
 
 #include "../lib/rpc_listener.h"
 #include "../lib/consts.h"
@@ -40,16 +41,16 @@ static const char HOMEPAGE_HTML[] =
     "    opacity: 0.8;\n"
     "  }\n"
     "  .header {\n"
-    "    margin-top: 15vh;\n"
+    "    margin-top: 15vh; /* PULLS THE LOGO AND SEARCH BAR FURTHER UP */\n" 
     "    text-align: center;\n"
     "  }\n"
-    "  h1 {\n"
-    "    font-size: 4rem;\n"
-    "    color: #1a1a1a;\n"
-    "    margin: 0;\n"
+    "  .main-seamus-logo {\n"
+    "    width: 750px;\n"
+    "    max-width: 90vw;\n"
+    "    height: auto;\n"
+    "    margin-bottom: 50px;\n"
     "  }\n"
     "  .search-container {\n"
-    "    flex: 1;\n"
     "    display: flex;\n"
     "    align-items: center;\n"
     "    justify-content: center;\n"
@@ -93,6 +94,7 @@ static const char HOMEPAGE_HTML[] =
     "    opacity: 1;\n"
     "  }\n"
     "  .footer {\n"
+    "    margin-top: auto;\n"
     "    width: 100%;\n"
     "    display: flex;\n"
     "    justify-content: space-evenly;\n"
@@ -117,7 +119,7 @@ static const char HOMEPAGE_HTML[] =
     "    <img src=\"/htmlserver/images/tam-logo.png\" class=\"top-right-logo\" alt=\"TAM Logo\">\n"
     "  </a>\n"
     "  <div class=\"header\">\n"
-    "    <h1>Seamus the Search Engine</h1>\n"
+    "    <img src=\"/htmlserver/images/seamusfinalphoto.png\" class=\"main-seamus-logo\" alt=\"Seamus the Search Engine\">\n"
     "  </div>\n"
     "  <div class=\"search-container\">\n"
     "    <div class=\"search-box\">\n"
@@ -419,31 +421,42 @@ static void handle_client(int fd) {
         
     } else if (path.size() > 0 && path[0] == '/') {
         string raw_term = parse_query_term(path);
-
+        
         if (raw_term == "htmlserver/images/magnifying-glass.png") {
             send_image(fd, "htmlserver/images/magnifying-glass.png");
         } else if (raw_term == "htmlserver/images/tam-logo.png") {
             send_image(fd, "htmlserver/images/tam-logo.png");
         } else if (raw_term == "htmlserver/images/tank-favicon.png") {
             send_image(fd, "htmlserver/images/tank-favicon.png");
+        } else if (raw_term == "htmlserver/images/seamusfinalphoto.png") {
+            send_image(fd, "htmlserver/images/seamusfinalphoto.png");
+        } else if (raw_term == "htmlserver/images/sirtophamhatt.png") {
+            send_image(fd, "htmlserver/images/sirtophamhatt.png");
         } else {
-            // Text coming in is cleaned!
+
             string term = remove_special_chars(raw_term);
 
             printf("[htmlserver] query term: [%.*s]\n", static_cast<int>(term.size()), term.data());
             fflush(stdout);
-            
-            // --- NEW PAGINATION SETUP ---
-            // Find the base URL without the ?p= parameter so we can attach it to the buttons cleanly
+
             size_t q_pos = 0;
             while (q_pos < path.size() && path[q_pos] != '?') q_pos++;
             string_view base_url = path.substr(0, q_pos);
             
             int current_page = get_page_number(path);
-            // -----------------------------
             
             vector<LeanPage> results; 
+            
+            // START TIMER
+            auto start_time = std::chrono::high_resolution_clock::now();
+            
+            // Ranking logic and query handling happens here!
             results = resultsTest();
+            
+            // STOP TIMER
+            auto end_time = std::chrono::high_resolution_clock::now();
+            auto duration_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
+            
             
             HtmlBuilder html;
             
@@ -486,8 +499,8 @@ static void handle_client(int fd) {
                 "    font-size: 1.8rem;\n"
                 "    color: #1a1a1a;\n"
                 "    margin: 0;\n"
-                "    margin-left: auto; /* Pushes the text all the way to the right */\n"
-                "    margin-right: 90px; /* Leaves perfect room for the absolute logo */\n"
+                "    margin-left: auto;\n"
+                "    margin-right: 90px;\n"
                 "    white-space: nowrap;\n"
                 "  }\n"
                 "  .search-box {\n"
@@ -518,7 +531,7 @@ static void handle_client(int fd) {
                 "  .results-container {\n"
                 "    display: flex;\n"
                 "    flex-direction: column;\n"
-                "    gap: 24px; /* Increased gap for ever so slightly more padding */\n"
+                "    gap: 24px;\n"
                 "    width: 90%;\n"
                 "    max-width: 1200px;\n"
                 "  }\n"
@@ -562,6 +575,41 @@ static void handle_client(int fd) {
                 "    background-color: #f8f9fa;\n"
                 "    box-shadow: 0 1px 3px rgba(0,0,0,0.1);\n"
                 "  }\n"
+                "  /* --- NEW FLEX CONTAINER FOR HATT AND THE TIMER BOX --- */\n"
+                "  .bottom-right-container {\n"
+                "    position: fixed;\n"
+                "    bottom: 0;\n"
+                "    right: 0;\n"
+                "    display: flex;\n"
+                "    flex-direction: column;\n"
+                "    align-items: flex-end;\n"
+                "    z-index: 10;\n"
+                "    pointer-events: none; /* Allows clicks to pass through to links */\n"
+                "  }\n"
+                "  .response-time-box {\n"
+                "    background-color: rgba(255, 255, 255, 0.95);\n"
+                "    border: 1px solid #dfe1e5;\n"
+                "    border-radius: 8px;\n"
+                "    padding: 10px 15px;\n"
+                "    box-shadow: 0 4px 10px rgba(0,0,0,0.15);\n"
+                "    margin-right: 30px; /* Aligns slightly inside the right edge */\n"
+                "    margin-bottom: 10px; /* Space between box and Hatt */\n"
+                "    font-size: 0.9rem;\n"
+                "    color: #333;\n"
+                "    text-align: center;\n"
+                "  }\n"
+                "  .response-time-title {\n"
+                "    font-weight: bold;\n"
+                "    margin-bottom: 4px;\n"
+                "    color: #1a0dab;\n"
+                "    font-size: 0.8rem;\n"
+                "    text-transform: uppercase;\n"
+                "  }\n"
+                "  .bottom-right-hatt {\n"
+                "    height: 35vh;\n"
+                "    max-height: 400px;\n"
+                "    width: auto;\n"
+                "  }\n"
                 "</style>\n"
                 "</head>\n"
                 "<body>\n"
@@ -577,20 +625,17 @@ static void handle_client(int fd) {
             html.append(
                 "\" readonly>\n"
                 "    <a href=\"/\" class=\"back-btn\">BACK</a>\n"
-                "    <h1 class=\"header-title\">Seamus the Search Engine</h1>\n"
+                "    <h1 class=\"header-title\">Seamus the Search Engine</h1>\n" 
                 "  </div>\n"
                 "  <div class=\"results-container\">\n"
             );
             
-            // --- NEW VECTOR MATH ---
-            // Safely calculate start and end indices based on the page number
             size_t start_idx = (current_page - 1) * 10;
             if (start_idx > results.size()) start_idx = results.size();
             
             size_t end_idx = start_idx + 10;
             if (end_idx > results.size()) end_idx = results.size();
             
-            // Use standard index loop instead of range-based for so we only process 10 items
             for (size_t i = start_idx; i < end_idx; ++i) {
                 const auto& res = results[i];
                 
@@ -611,9 +656,8 @@ static void handle_client(int fd) {
                 html.append("    </div>\n");
             }
             
-            html.append("  </div>\n"); // Close results-container
+            html.append("  </div>\n"); 
             
-            // --- HTML FOR PAGINATION BUTTONS ---
             html.append("  <div class=\"pagination\">\n");
             
             if (current_page > 1) {
@@ -632,6 +676,19 @@ static void handle_client(int fd) {
                 html.append("\">Next &raquo;</a>\n");
             }
             
+            html.append("  </div>\n");
+            
+            // --- INJECT THE BOX AND SIR TOPHAM HATT ---
+            html.append("  <div class=\"bottom-right-container\">\n");
+            html.append("    <div class=\"response-time-box\">\n");
+            html.append("      <div class=\"response-time-title\">Query Response Time</div>\n");
+            
+            // Append the integer time we calculated using Chrono
+            html.append(static_cast<int>(duration_ms)); 
+            
+            html.append(" ms\n");
+            html.append("    </div>\n");
+            html.append("    <img src=\"/htmlserver/images/sirtophamhatt.png\" class=\"bottom-right-hatt\" alt=\"Sir Topham Hatt\">\n");
             html.append("  </div>\n");
             
             html.append(

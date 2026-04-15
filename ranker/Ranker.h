@@ -131,6 +131,14 @@ double max(double i, double j) {
     }
 }
 
+double min(double i, double j) {
+    if(i < j) {
+        return i;
+    } else {
+        return j;
+    }
+}
+
 // basically the same function from the frontier. I have modified and added certain things to increase acuracy I think . . .
 double calc_static_score(const RankedPage &p) {
     
@@ -179,7 +187,7 @@ double calc_static_score(const RankedPage &p) {
     double factor_2 = (slot == tldWeight.end()) ? 0.2 : (*slot).value; 
 
     // points for closer to seed list
-    double factor_3 = max(double_pow(e, -0.04 * p.seed_list_dist), 0.2);  // NOTE: may need to tune the constant here
+    double factor_3 = max(double_pow(e, factor_3_const * p.seed_list_dist), 0.1);  // NOTE: may need to tune the constant here
 
     // points for shortness of domain title
 
@@ -213,7 +221,8 @@ double calc_static_score(const RankedPage &p) {
         (factor_6 * static_6_weight) + 
         (factor_7 * static_7_weight) + 
         (factor_8 * static_8_weight) + 
-        (factor_9 * static_9_weight)) / static_weight_sum);
+        (factor_9 * static_9_weight)) 
+        / static_weight_sum);
 }
 
 template <typename T>
@@ -280,66 +289,77 @@ double word_rarity_freq_score(vector<double> probs, vector<int> counts) {
 }
 
 
-double word_pos_score(const vector<vector<size_t>> &positions, int unique_words_in_query, size_t doc_len) {
+double word_pos_score(const vector<vector<size_t>> &positions, size_t doc_len, int unique_words_in_query) {
     if (unique_words_in_query == 0 || doc_len == 0) return 0.0;
 
     double score = 0.0;
 
-    // frequency of given unique words in the query
     for (int i = 0; i < unique_words_in_query; i++) {
-        score += positions[i].size();
+        // Using log() heavily rewards the first few mentions of a word, 
+        score += log(1.0 + positions[i].size()); 
     }
 
-    // Proximity score calculated 
+    // O(N + M) TWO-POINTER PROXIMITY SCORE
     double proximity_score = 0.0;
-    const double lambda = 1.0; // modify this factor during tuning
 
     for (int i = 0; i < unique_words_in_query; i++) {
         for (int j = i + 1; j < unique_words_in_query; j++) {
 
-            for (size_t p : positions[i]) {
-                size_t best_dist = SIZE_MAX;
-
-                for (size_t q : positions[j]) {
-                    size_t dist = (p > q) ? (p - q) : (q - p);
-                    if (dist < best_dist) best_dist = dist;
+            const auto& posA = positions[i];
+            const auto& posB = positions[j];
+            
+            if (posA.size() == 0 || posB.size() == 0) continue;
+            
+            size_t b = 0; // ptr
+            
+            for (size_t a = 0; a < posA.size(); ++a) {
+                size_t p = posA[a];
+                
+                while (b + 1 < posB.size()) {
+                    size_t current_dist = (p > posB[b]) ? (p - posB[b]) : (posB[b] - p);
+                    size_t next_dist = (p > posB[b+1]) ? (p - posB[b+1]) : (posB[b+1] - p);
+                    
+                    if (next_dist <= current_dist) {
+                        b++; 
+                    } else {
+                        break; 
+                    }
                 }
-
-                if (best_dist != SIZE_MAX) {
+                
+                size_t best_dist = (p > posB[b]) ? (p - posB[b]) : (posB[b] - p);
                     proximity_score += 1.0 / (1.0 + best_dist);
-                }
             }
         }
     }
 
     score += lambda * proximity_score;
 
-    // Normalizing our length here using log
+    // normalizing using log and doc length
     double normalized = score / (1.0 + log(1.0 + doc_len));
 
-    // Ensuring final factor is between 0.4-1.0
+    // Ensuring final factor is between 0.1-1.0
     if (normalized > 1.0) normalized = 1.0;
-    if (normalized < 0.4) normalized = 0.4;
+    if (normalized < 0.1) normalized = 0.1;
 
     return normalized;
 }
 
 double calc_dynamic_score(RankedPage &r, vector<string> &unique_query_words) {
     // This factor checks frequency of unique words and proximity scores of the unique words to other unique words in the query 
-    double factor_1 = word_pos_score(r.word_positions, r.doc_len, unique_query_words.size()); // this score should be given extra weight in calculations
+    double factor_1 = word_pos_score(r.word_positions, unique_query_words.size(), r.doc_len); // this score should be given extra weight in calculations
 
     // This factor scores based on number of times the link was seen during crawling
     double factor_2 = max(1.0 / (1.0 + double_pow(e, -k * (r.times_seen - n_0))), 0.2);
 
     // This factor scores based on how many unique words in the query were found in the title but penalized on length of the title
-    double factor_3 = (r.num_unique_words_found_title / unique_query_words.size()) * double_pow(e, (-Gamma_title * r.title.size()));
+    double factor_3 = ((double)r.num_unique_words_found_title / unique_query_words.size()) * double_pow(e, (-Gamma_title * r.title.size()));
 
     // This factor checks unique words in the query found in the anchor texts pointing to the link
     // PROBABLY WANT TO ADD MORE TO THIS FACTOR ONCE I KNOW MORE ABOUT ANCHOR TEXT
-    double factor_4 = (r.num_unique_words_found_anchor / unique_query_words.size()); 
+    double factor_4 = ((double)r.num_unique_words_found_anchor / unique_query_words.size()); 
 
     // This factor checks the URL for keywords in it
-    double factor_5 = (r.num_unique_words_found_url / unique_query_words.size()) * double_pow(e, (-Gamma_url * r.url.size()));
+    double factor_5 = ((double)r.num_unique_words_found_url / unique_query_words.size()) * double_pow(e, (-Gamma_url * r.url.size()));
 
     // This factor scores based on the rarity of each word combined with its frequency
     vector<int> counts(r.word_positions.size());
@@ -349,8 +369,13 @@ double calc_dynamic_score(RankedPage &r, vector<string> &unique_query_words) {
     double factor_6 = word_rarity_freq_score(get_word_probabilities(unique_query_words), counts);
 
     // final score returned here with extra weightings 
-    return(((factor_1 * factor_1_weight) + (factor_2 * factor_2_weight) + (factor_3 * factor_3_weight)
-            + (factor_5 * factor_5_weight) + (factor_6 * factor_6_weight)) / dynamic_weight_sum);
+    return(((factor_1 * factor_1_weight) + 
+        (factor_2 * factor_2_weight) + 
+        (factor_3 * factor_3_weight) + 
+        (factor_4 * factor_4_weight) + 
+        (factor_5 * factor_5_weight) + 
+        (factor_6 * factor_6_weight)) 
+        / dynamic_weight_sum);
 }
 
 // LeanPage input_total_score(RankedPage r, double dynamic_weight, size_t unique_words_in_query) {
@@ -413,7 +438,6 @@ public:
             vector<LeanPage>()
         );
 
-        // limit the amount of pages being ranked 
         vector<LeanPage> input;
         for(size_t i = 0; i < v.size(); i++) {
             // calculate the score of the page
@@ -442,7 +466,7 @@ public:
         }
 
         vector<LeanPage> results;
-        for(int i = 0; i < num_pages_returned; i++) {
+        for(int i = 0; i < min(num_pages_returned, pq.size()); i++) {
             results.push_back(pq.pop_move());
         }
         if(verbose_mode) {
