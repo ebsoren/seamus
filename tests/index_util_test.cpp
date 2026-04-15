@@ -4,6 +4,7 @@
 #include <cstdio>
 #include <cstring>
 #include <dirent.h>
+#include <initializer_list>
 #include <random>
 #include <set>
 #include <sys/stat.h>
@@ -294,6 +295,33 @@ static std::set<uint32_t> expected_docs(const Corpus& corpus,
 }
 
 
+// Map a corpus URL back to its 1-indexed doc id by linear scan. Used to
+// translate DocInfo.url into a doc id so we can compare results against the
+// existing expected_docs() ground truth.
+static uint32_t doc_id_for_url(const Corpus& corpus, const string& url) {
+    for (size_t d = 0; d < corpus.urls.size(); ++d) {
+        if (corpus.urls[d].size() == url.size() &&
+            memcmp(corpus.urls[d].data(), url.data(), url.size()) == 0) {
+            return static_cast<uint32_t>(d + 1);
+        }
+    }
+    return 0;
+}
+
+
+// Find a word string's pool index by linear scan, so we can look up its
+// corpus-side expected positions.
+static uint32_t pool_idx_for_word(const vector<string>& pool, const string& w) {
+    for (size_t k = 0; k < pool.size(); ++k) {
+        if (pool[k].size() == w.size() &&
+            memcmp(pool[k].data(), w.data(), w.size()) == 0) {
+            return static_cast<uint32_t>(k);
+        }
+    }
+    return UINT32_MAX;
+}
+
+
 void test_chunk_manager_queries() {
     constexpr size_t NUM_QUERIES = 200;
 
@@ -308,6 +336,9 @@ void test_chunk_manager_queries() {
     write_parser_files(pool, corpus);
     string chunk_path = build_index_chunk();
 
+    // chunk_manager now pushes matches into a caller-owned atomic_vector passed
+    // per-call. Drain the channel after each query via take().
+    atomic_vector<DocInfo> collector;
     chunk_manager cm(chunk_path);
 
     // Bump the per-call deadline so small-corpus leapfrog never hits the
@@ -339,18 +370,55 @@ void test_chunk_manager_queries() {
         }
 
         std::set<uint32_t> want = expected_docs(corpus, pool_idxs);
-        vector<uint32_t>   got  = cm.get_docIDs(words);
-
-        // Leapfrog emits strictly ascending, no duplicates.
-        for (size_t i = 1; i < got.size(); ++i) {
-            assert(got[i] > got[i - 1]);
-        }
+        cm.default_query(words, &collector);
+        vector<DocInfo> got = collector.take();
 
         assert(got.size() == want.size());
+
+        // Translate each DocInfo back to a doc id via its URL, and check that
+        // the set matches expected_docs and the ordering is strictly ascending
+        // (leapfrog emits in doc-id order even though DocInfo carries urls).
+        vector<uint32_t> got_ids;
+        got_ids.reserve(got.size());
+        for (const DocInfo& di : got) {
+            uint32_t doc_id = doc_id_for_url(corpus, di.url);
+            assert(doc_id != 0);
+            got_ids.push_back(doc_id);
+        }
+        for (size_t i = 1; i < got_ids.size(); ++i) {
+            assert(got_ids[i] > got_ids[i - 1]);
+        }
         size_t j = 0;
         for (uint32_t d : want) {
-            assert(got[j] == d);
+            assert(got_ids[j] == d);
             ++j;
+        }
+
+        // For each returned DocInfo, verify that collect_positions_in_current_doc
+        // yielded exactly the positions the corpus recorded for that word in
+        // that doc. Positions on disk are 1-indexed (l_idx + 1 in the indexer),
+        // so we compare against the same shift here.
+        for (size_t di_i = 0; di_i < got.size(); ++di_i) {
+            const DocInfo& di = got[di_i];
+            const uint32_t doc_id = got_ids[di_i];
+            const size_t g = static_cast<size_t>(doc_id) - 1;
+
+            assert(di.wordInfo.size() == words.size());
+            for (const WordInfo& wi : di.wordInfo) {
+                uint32_t pidx = pool_idx_for_word(pool, wi.word);
+                assert(pidx != UINT32_MAX);
+
+                std::set<size_t> expected_positions;
+                const vector<uint32_t>& row = corpus.doc_words[g];
+                for (size_t l = 0; l < row.size(); ++l) {
+                    if (row[l] == pidx) expected_positions.insert(l + 1);
+                }
+
+                assert(wi.pos.size() == expected_positions.size());
+                std::set<size_t> got_positions;
+                for (size_t p : wi.pos) got_positions.insert(p);
+                assert(got_positions == expected_positions);
+            }
         }
 
         if (want.empty()) empty++;
@@ -365,18 +433,251 @@ void test_chunk_manager_queries() {
     // Words not in the dictionary must short-circuit to an empty result.
     vector<string> only_missing;
     only_missing.push_back(string("nothing"));
-    assert(cm.get_docIDs(only_missing).size() == 0);
+    cm.default_query(only_missing, &collector);
+    assert(collector.take().size() == 0);
 
     vector<string> mixed;
     mixed.push_back(string(pool[0].data(), pool[0].size()));
     mixed.push_back(string("nothing"));
-    assert(cm.get_docIDs(mixed).size() == 0);
+    cm.default_query(mixed, &collector);
+    assert(collector.take().size() == 0);
 
     printf("  queries: %zu non-empty, %zu empty\n", nonempty, empty);
 
     clean_dir(PARSER_DIR, nullptr);
     clean_dir(INDEX_OUTPUT_DIR, "index_chunk_0_");
 }
+
+// ---------------------------------------------------------------------------
+// Phrase query tests
+// ---------------------------------------------------------------------------
+
+// Each case pairs a phrase query with docs that should and shouldn't match.
+// Positive docs embed the phrase adjacently and in order; negative docs either
+// reorder the words, space them out, or drop one entirely.
+struct PhraseCase {
+    vector<string> query;
+    vector<vector<string>> positive_docs;
+    vector<vector<string>> negative_docs;
+};
+
+
+static vector<string> sv(std::initializer_list<const char*> ws) {
+    vector<string> v;
+    v.reserve(ws.size());
+    for (const char* w : ws) v.push_back(string(w));
+    return v;
+}
+
+
+static vector<PhraseCase> make_phrase_cases() {
+    vector<PhraseCase> cases;
+
+    // Case 0: three-word phrase
+    {
+        PhraseCase pc;
+        pc.query = sv({"apple", "banana", "cherry"});
+        pc.positive_docs.push_back(sv({"apple", "banana", "cherry", "date", "elder"}));          // at start
+        pc.positive_docs.push_back(sv({"elder", "fig", "apple", "banana", "cherry", "grape"}));  // in middle
+        pc.positive_docs.push_back(sv({"zebra", "yam", "umber", "apple", "banana", "cherry"}));  // at end
+        pc.positive_docs.push_back(sv({"apple", "banana", "cherry", "fig", "apple", "banana", "cherry"})); // twice
+
+        pc.negative_docs.push_back(sv({"apple", "banana", "date", "cherry"}));   // cherry too far
+        pc.negative_docs.push_back(sv({"banana", "apple", "cherry"}));           // wrong order
+        pc.negative_docs.push_back(sv({"apple", "cherry", "banana"}));           // wrong order
+        pc.negative_docs.push_back(sv({"apple", "date", "banana", "cherry"}));   // spaced
+        pc.negative_docs.push_back(sv({"apple", "banana", "fig"}));              // missing cherry
+        cases.push_back(static_cast<PhraseCase&&>(pc));
+    }
+
+    // Case 1: two-word phrase
+    {
+        PhraseCase pc;
+        pc.query = sv({"fig", "grape"});
+        pc.positive_docs.push_back(sv({"fig", "grape"}));
+        pc.positive_docs.push_back(sv({"apple", "fig", "grape", "banana"}));
+        pc.positive_docs.push_back(sv({"fig", "grape", "elder", "fig", "grape"}));  // twice
+
+        pc.negative_docs.push_back(sv({"grape", "fig"}));            // reversed
+        pc.negative_docs.push_back(sv({"fig", "apple", "grape"}));   // spaced by 1
+        pc.negative_docs.push_back(sv({"fig", "banana", "cherry", "grape"}));  // spaced by 2
+        pc.negative_docs.push_back(sv({"fig", "fig", "fig"}));       // missing grape
+        pc.negative_docs.push_back(sv({"grape", "grape", "grape"})); // missing fig
+        cases.push_back(static_cast<PhraseCase&&>(pc));
+    }
+
+    // Case 2: four-word phrase
+    {
+        PhraseCase pc;
+        pc.query = sv({"honey", "iris", "jade", "kiwi"});
+        pc.positive_docs.push_back(sv({"honey", "iris", "jade", "kiwi"}));
+        pc.positive_docs.push_back(sv({"apple", "honey", "iris", "jade", "kiwi", "banana"}));
+
+        pc.negative_docs.push_back(sv({"honey", "iris", "jade"}));                    // missing last
+        pc.negative_docs.push_back(sv({"honey", "iris", "kiwi", "jade"}));            // last two swapped
+        pc.negative_docs.push_back(sv({"honey", "apple", "iris", "jade", "kiwi"}));   // spaced early
+        pc.negative_docs.push_back(sv({"kiwi", "jade", "iris", "honey"}));            // fully reversed
+        pc.negative_docs.push_back(sv({"honey", "iris", "jade", "apple", "kiwi"}));   // spaced late
+        cases.push_back(static_cast<PhraseCase&&>(pc));
+    }
+
+    return cases;
+}
+
+
+static bool contains_url(const vector<string>& list, const string& url) {
+    for (size_t i = 0; i < list.size(); ++i) {
+        if (list[i].size() == url.size() &&
+            memcmp(list[i].data(), url.data(), url.size()) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+
+void test_phrase_query() {
+    clean_dir(PARSER_DIR, nullptr);
+    mkdir_p(INDEX_OUTPUT_DIR);
+    clean_dir(INDEX_OUTPUT_DIR, "index_chunk_0_");
+    mkdir_p(PARSER_DIR);
+
+    vector<PhraseCase> cases = make_phrase_cases();
+
+    // Flatten every case's docs into one parser file. URLs encode (case_idx,
+    // pos/neg, slot) so expected_urls below can reconstruct the match set
+    // without tracking doc ids explicitly.
+    string path = parser_file_path(0);
+    FILE* fd = fopen(path.data(), "w");
+    assert(fd != nullptr);
+
+    char url_buf[96];
+    auto write_doc = [&](const char* url, size_t url_len, const vector<string>& words) {
+        fputs("<doc>\n", fd);
+        fwrite(url, 1, url_len, fd);
+        fputc('\n', fd);
+        for (size_t i = 0; i < words.size(); ++i) {
+            fwrite(words[i].data(), 1, words[i].size(), fd);
+            fputc('\n', fd);
+        }
+        fputs("</doc>\n", fd);
+    };
+
+    for (size_t q = 0; q < cases.size(); ++q) {
+        for (size_t i = 0; i < cases[q].positive_docs.size(); ++i) {
+            int n = snprintf(url_buf, sizeof(url_buf), "http://phrase.test/q%zu/pos%zu", q, i);
+            write_doc(url_buf, static_cast<size_t>(n), cases[q].positive_docs[i]);
+        }
+        for (size_t i = 0; i < cases[q].negative_docs.size(); ++i) {
+            int n = snprintf(url_buf, sizeof(url_buf), "http://phrase.test/q%zu/neg%zu", q, i);
+            write_doc(url_buf, static_cast<size_t>(n), cases[q].negative_docs[i]);
+        }
+    }
+    fclose(fd);
+
+    // Single-threaded build, mirroring build_index_chunk().
+    IndexChunk idx(0);
+    assert(idx.index_file(parser_file_path(0)));
+    idx.flush();
+    string chunk_path = string::join("", string(INDEX_OUTPUT_DIR),
+                                     "/index_chunk_0_0.txt");
+
+    chunk_manager cm(chunk_path);
+    chunk_manager::deadline_ms = 1000;  // never TLE on a tiny corpus
+    atomic_vector<DocInfo> collector;
+
+    for (size_t q = 0; q < cases.size(); ++q) {
+        const PhraseCase& pc = cases[q];
+
+        vector<string> expected_urls;
+        expected_urls.reserve(pc.positive_docs.size());
+        for (size_t i = 0; i < pc.positive_docs.size(); ++i) {
+            int n = snprintf(url_buf, sizeof(url_buf), "http://phrase.test/q%zu/pos%zu", q, i);
+            expected_urls.push_back(string(url_buf, static_cast<size_t>(n)));
+        }
+
+        cm.phrase_query(pc.query, &collector);
+        vector<DocInfo> got = collector.take();
+
+        // Every returned URL must be expected (no false positives).
+        assert(got.size() == expected_urls.size());
+        for (const DocInfo& di : got) {
+            if (!contains_url(expected_urls, di.url)) {
+                printf("query %zu false positive: %.*s\n",
+                       q, static_cast<int>(di.url.size()), di.url.data());
+            }
+            assert(contains_url(expected_urls, di.url));
+        }
+
+        // Every expected URL must appear in the results (no false negatives).
+        vector<string> got_urls;
+        got_urls.reserve(got.size());
+        for (const DocInfo& di : got) got_urls.push_back(string(di.url.data(), di.url.size()));
+        for (size_t i = 0; i < expected_urls.size(); ++i) {
+            if (!contains_url(got_urls, expected_urls[i])) {
+                printf("query %zu false negative: %.*s\n",
+                       q, static_cast<int>(expected_urls[i].size()), expected_urls[i].data());
+            }
+            assert(contains_url(got_urls, expected_urls[i]));
+        }
+
+        // WordInfo sanity: each DocInfo should carry one position per query
+        // word, and those positions must be consecutive (anchor, anchor+1, ...).
+        for (const DocInfo& di : got) {
+            assert(di.wordInfo.size() == pc.query.size());
+            assert(di.wordInfo[0].pos.size() == 1);
+            size_t anchor = di.wordInfo[0].pos[0];
+            for (size_t i = 0; i < di.wordInfo.size(); ++i) {
+                const WordInfo& wi = di.wordInfo[i];
+                assert(wi.word.size() == pc.query[i].size());
+                assert(memcmp(wi.word.data(), pc.query[i].data(), wi.word.size()) == 0);
+                assert(wi.pos.size() == 1);
+                assert(wi.pos[0] == anchor + i);
+            }
+        }
+
+        // Cross-check against default_query (AND semantics): every doc that
+        // matched the phrase must also match the AND, and the AND must pick
+        // up strictly more — each case has negative docs that contain every
+        // word but not adjacently/in-order.
+        vector<string> phrase_urls;
+        phrase_urls.reserve(got.size());
+        for (const DocInfo& di : got) phrase_urls.push_back(string(di.url.data(), di.url.size()));
+
+        // Build a fresh query vector for default_query — it also consumes
+        // vector<string> by const-ref, but we've already handed pc.query to
+        // phrase_query, so just pass pc.query again (the call is read-only).
+        vector<string> and_query;
+        and_query.reserve(pc.query.size());
+        for (size_t i = 0; i < pc.query.size(); ++i) {
+            and_query.push_back(string(pc.query[i].data(), pc.query[i].size()));
+        }
+        cm.default_query(and_query, &collector);
+        vector<DocInfo> and_got = collector.take();
+
+        vector<string> and_urls;
+        and_urls.reserve(and_got.size());
+        for (const DocInfo& di : and_got) and_urls.push_back(string(di.url.data(), di.url.size()));
+
+        // 1) Phrase matches ⊆ AND matches.
+        for (size_t i = 0; i < phrase_urls.size(); ++i) {
+            if (!contains_url(and_urls, phrase_urls[i])) {
+                printf("query %zu phrase hit missing from AND: %.*s\n",
+                       q, static_cast<int>(phrase_urls[i].size()), phrase_urls[i].data());
+            }
+            assert(contains_url(and_urls, phrase_urls[i]));
+        }
+        // 2) AND strictly larger (each case has a negative doc that contains
+        //    every query word but fails the adjacency constraint).
+        assert(and_urls.size() > phrase_urls.size());
+    }
+
+    printf("  phrase cases: %zu\n", cases.size());
+
+    clean_dir(PARSER_DIR, nullptr);
+    clean_dir(INDEX_OUTPUT_DIR, "index_chunk_0_");
+}
+
 
 } // namespace
 
@@ -386,6 +687,7 @@ int main() {
 
     test_loaded_index_matches_corpus();
     test_chunk_manager_queries();
+    test_phrase_query();
 
     printf("\n=== ALL INDEX UTIL TESTS FINISHED ===\n\n");
     return 0;

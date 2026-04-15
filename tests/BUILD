@@ -174,8 +174,23 @@ cc_test(
 cc_test (
     name = "index_util_test",
     srcs = ["index_util_test.cpp"],
-    tags = ["no-sandbox", "local"],
+    tags = ["no-sandbox", "local", "exclusive"],
     deps = [
         "//index_chunk:chunk_manager",
+    ],
+)
+
+cc_test (
+    name = "index_manager_test",
+    srcs = ["index_manager_test.cpp"],
+    tags = ["no-sandbox", "local", "exclusive"],
+    deps = [
+        "//index_chunk:chunk_manager",
+        "//index_manager:index_manager",
+        "//index:index_lib",
+        "//lib:consts",
+        "//lib:query_response",
+        "//lib:string",
+        "//lib:vector",
     ],
 )

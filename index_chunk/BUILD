@@ -11,8 +11,10 @@ cc_library(
     deps = [
         "//index:index_lib",
         "//lib:algorithm",
+        "//lib:atomic_vector",
         "//lib:consts",
         "//lib:logger",
+        "//lib:query_response",
         "//lib:string",
         "//lib:utf8",
         "//lib:utils",

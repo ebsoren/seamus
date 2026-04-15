@@ -87,8 +87,9 @@ void IndexChunk::persist() {
             dict_offsets[slot] = curr_offset;
         }
 
-        // One byte per char, 6 bytes for posting list offset, 1 byte each for space and new line
-        curr_offset += alphabetized_entries[i].size() + 6 + 2;
+        // Dict entry on disk: <word><space><8B offset><\n>. Must match the
+        // actual write loop below (fwrite: word + space + uint64_t + '\n').
+        curr_offset += alphabetized_entries[i].size() + 1 + sizeof(uint64_t) + 1;
 
         // Mark where the byte offset where current word's posting list begins
         posting_list_locations[i] = posting_list_size;
@@ -168,8 +169,42 @@ void IndexChunk::persist() {
      * Write the posting lists themselves
      */
 
+    // Drift detection: first-pass sizing must match second-pass byte counts
+    // exactly, otherwise posting_list_locations[i] points at mid-post-list
+    // garbage. At each word header, compare ftell() against
+    // post_region_start + posting_list_locations[i]. On mismatch, log the
+    // per-word delta (bytes sized vs. bytes written for the PREVIOUS word,
+    // which is the word that just caused the new drift). Rate-limited so
+    // one bad chunk doesn't flood the log.
+    long post_region_start = ftell(fd);
+    long prev_word_ftell = post_region_start;
+    long prev_cumulative_delta = 0;
+    uint32_t drift_events_logged = 0;
+
     // Loop through all words
     for (uint32_t i = 0; i < N; i++) {
+        {
+            long expected_offset = post_region_start + static_cast<long>(posting_list_locations[i]);
+            long actual_offset = ftell(fd);
+            long cumulative_delta = actual_offset - expected_offset;
+            if (i > 0 && cumulative_delta != prev_cumulative_delta && drift_events_logged < 20) {
+                ++drift_events_logged;
+                uint64_t sized_prev_word = posting_list_locations[i] - posting_list_locations[i - 1];
+                long wrote_prev_word = actual_offset - prev_word_ftell;
+                long per_word_delta = wrote_prev_word - static_cast<long>(sized_prev_word);
+                logger::error(
+                    "Worker %u: drift at prev word %u '%.*s': sized=%llu wrote=%ld (per-word delta=%ld, cumulative delta=%ld)",
+                    WORKER_NUMBER, i - 1,
+                    static_cast<int>(alphabetized_entries[i - 1].size()),
+                    alphabetized_entries[i - 1].data(),
+                    static_cast<unsigned long long>(sized_prev_word),
+                    wrote_prev_word,
+                    per_word_delta,
+                    cumulative_delta);
+            }
+            prev_word_ftell = actual_offset;
+            prev_cumulative_delta = cumulative_delta;
+        }
         postings& entry = index[alphabetized_entries[i].str_view(0, alphabetized_entries[i].size())];
         uint64_t size = entry.posts.size(); // Needs to be an lvalue for fwrite
         uint32_t next_checkpoint = INDEX_SKIP_SIZE;
@@ -388,6 +423,31 @@ bool IndexChunk::index_file(const string &path) {
                 size_t len = strlen(buff);
                 if (len <= 1) continue; // skip empty lines
                 string_view word_view = string_view(buff, len - 1);
+
+                // Dict write/read format uses ' ' as the word/offset
+                // delimiter and '\n' as the entry terminator, so a word
+                // containing either byte desyncs the reader's memchr-based
+                // parser and silently truncates the chunk's dictionary.
+                // Upstream parser output occasionally contains URLs with
+                // embedded or trailing spaces — reject those defensively
+                // here rather than trust upstream to stay clean.
+                bool reject = false;
+                for (size_t wi = 0; wi < len - 1; ++wi) {
+                    unsigned char c = static_cast<unsigned char>(buff[wi]);
+                    if (c == ' ' || c == '\n' || c == '\t' || c == '\0') {
+                        reject = true;
+                        static uint32_t whitespace_word_count = 0;
+                        if (whitespace_word_count < 10) {
+                            ++whitespace_word_count;
+                            logger::warn("Worker %u: dropped word with byte 0x%02x at pos %zu: '%.*s' (len=%zu) from %s",
+                                         WORKER_NUMBER, (unsigned)c, wi,
+                                         static_cast<int>(len - 1), buff,
+                                         len - 1, path.data());
+                        }
+                        break;
+                    }
+                }
+                if (reject) continue;
 
                 if (!word_set[word_view]) {
                     word_set[word_view] = true;

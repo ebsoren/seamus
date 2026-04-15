@@ -9,7 +9,7 @@
 
 
 // Logging (0=DEBUG, 1=INFO, 2=WARN, 3=ERROR, 4=INSTR, 5=NONE)
-constexpr uint8_t LOG_LEVEL = 3;
+constexpr uint8_t LOG_LEVEL = 2;
 constexpr const char* USER_AGENT = "Seamus the Search Engine (web crawler for university course)";
 
 // Global
@@ -217,7 +217,7 @@ constexpr size_t HTMLSERVER_THREADS = 8;
 
 // Index
 constexpr size_t DOCS_PER_INDEX_CHUNK = 500000;
-constexpr size_t CHUNK_MEM_BUDGET = 1 << 30;
+constexpr size_t CHUNK_MEM_BUDGET = 1 << 30; 
 constexpr uint32_t INDEX_SKIP_SIZE = 500;
 static constexpr const char* INDEX_OUTPUT_DIR = "/var/seamus/index_output";
 constexpr size_t NUM_INDEXER_THREADS = 16; // Should be the number of cores     // todo(Aiden): change depending on number of cores we end up renting per machine
