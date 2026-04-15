@@ -171,28 +171,39 @@ void IndexChunk::persist() {
 
     // Drift detection: first-pass sizing must match second-pass byte counts
     // exactly, otherwise posting_list_locations[i] points at mid-post-list
-    // garbage. Capture the post-region base and compare ftell() against
-    // post_region_start + posting_list_locations[i] at every word header.
-    // Log the first divergence only (one line per chunk is enough to isolate).
+    // garbage. At each word header, compare ftell() against
+    // post_region_start + posting_list_locations[i]. On mismatch, log the
+    // per-word delta (bytes sized vs. bytes written for the PREVIOUS word,
+    // which is the word that just caused the new drift). Rate-limited so
+    // one bad chunk doesn't flood the log.
     long post_region_start = ftell(fd);
-    bool drift_logged = false;
+    long prev_word_ftell = post_region_start;
+    long prev_cumulative_delta = 0;
+    uint32_t drift_events_logged = 0;
 
     // Loop through all words
     for (uint32_t i = 0; i < N; i++) {
         {
             long expected_offset = post_region_start + static_cast<long>(posting_list_locations[i]);
             long actual_offset = ftell(fd);
-            if (!drift_logged && actual_offset != expected_offset) {
-                drift_logged = true;
+            long cumulative_delta = actual_offset - expected_offset;
+            if (i > 0 && cumulative_delta != prev_cumulative_delta && drift_events_logged < 20) {
+                ++drift_events_logged;
+                uint64_t sized_prev_word = posting_list_locations[i] - posting_list_locations[i - 1];
+                long wrote_prev_word = actual_offset - prev_word_ftell;
+                long per_word_delta = wrote_prev_word - static_cast<long>(sized_prev_word);
                 logger::error(
-                    "Worker %u: persist drift at word %u '%.*s': expected %ld, actual %ld, delta %ld (post_region_start=%ld, locations[i]=%llu)",
-                    WORKER_NUMBER, i,
-                    static_cast<int>(alphabetized_entries[i].size()),
-                    alphabetized_entries[i].data(),
-                    expected_offset, actual_offset, actual_offset - expected_offset,
-                    post_region_start,
-                    static_cast<unsigned long long>(posting_list_locations[i]));
+                    "Worker %u: drift at prev word %u '%.*s': sized=%llu wrote=%ld (per-word delta=%ld, cumulative delta=%ld)",
+                    WORKER_NUMBER, i - 1,
+                    static_cast<int>(alphabetized_entries[i - 1].size()),
+                    alphabetized_entries[i - 1].data(),
+                    static_cast<unsigned long long>(sized_prev_word),
+                    wrote_prev_word,
+                    per_word_delta,
+                    cumulative_delta);
             }
+            prev_word_ftell = actual_offset;
+            prev_cumulative_delta = cumulative_delta;
         }
         postings& entry = index[alphabetized_entries[i].str_view(0, alphabetized_entries[i].size())];
         uint64_t size = entry.posts.size(); // Needs to be an lvalue for fwrite
