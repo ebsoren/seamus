@@ -635,6 +635,41 @@ void test_phrase_query() {
                 assert(wi.pos[0] == anchor + i);
             }
         }
+
+        // Cross-check against default_query (AND semantics): every doc that
+        // matched the phrase must also match the AND, and the AND must pick
+        // up strictly more — each case has negative docs that contain every
+        // word but not adjacently/in-order.
+        vector<string> phrase_urls;
+        phrase_urls.reserve(got.size());
+        for (const DocInfo& di : got) phrase_urls.push_back(string(di.url.data(), di.url.size()));
+
+        // Build a fresh query vector for default_query — it also consumes
+        // vector<string> by const-ref, but we've already handed pc.query to
+        // phrase_query, so just pass pc.query again (the call is read-only).
+        vector<string> and_query;
+        and_query.reserve(pc.query.size());
+        for (size_t i = 0; i < pc.query.size(); ++i) {
+            and_query.push_back(string(pc.query[i].data(), pc.query[i].size()));
+        }
+        cm.default_query(and_query, &collector);
+        vector<DocInfo> and_got = collector.take();
+
+        vector<string> and_urls;
+        and_urls.reserve(and_got.size());
+        for (const DocInfo& di : and_got) and_urls.push_back(string(di.url.data(), di.url.size()));
+
+        // 1) Phrase matches ⊆ AND matches.
+        for (size_t i = 0; i < phrase_urls.size(); ++i) {
+            if (!contains_url(and_urls, phrase_urls[i])) {
+                printf("query %zu phrase hit missing from AND: %.*s\n",
+                       q, static_cast<int>(phrase_urls[i].size()), phrase_urls[i].data());
+            }
+            assert(contains_url(and_urls, phrase_urls[i]));
+        }
+        // 2) AND strictly larger (each case has a negative doc that contains
+        //    every query word but fails the adjacency constraint).
+        assert(and_urls.size() > phrase_urls.size());
     }
 
     printf("  phrase cases: %zu\n", cases.size());
