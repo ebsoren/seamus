@@ -19,7 +19,7 @@ public:
     // IndexChunk::get_index_chunk_path's naming.
     index_manager() {
         for (uint32_t w = 0; w < NUM_INDEXER_THREADS; ++w) {
-            for (uint32_t c = 0;; ++c) {
+            for (uint32_t c = 0; c < 5; ++c) {
                 string path = string::join("", string(INDEX_OUTPUT_DIR), "/index_chunk_", string(w), "_",
                                            string(c), ".txt");
                 if (!file_exists(path)) break;
