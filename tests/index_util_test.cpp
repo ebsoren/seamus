@@ -5,6 +5,7 @@
 #include <cstring>
 #include <dirent.h>
 #include <random>
+#include <set>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -17,11 +18,16 @@
 
 namespace {
 
-constexpr const char* PARSER_DIR     = "/tmp/index_util_test";
-constexpr size_t      NUM_FILES      = 3;
-constexpr size_t      DOCS_PER_FILE  = 5;
-constexpr size_t      WORDS_PER_DOC  = 200;
-constexpr uint64_t    RNG_SEED       = 0xC0FFEEULL;
+constexpr const char* PARSER_DIR             = "/tmp/index_util_test";
+constexpr size_t      NUM_FILES               = 5;
+constexpr size_t      DOCS_PER_FILE           = 20;
+constexpr size_t      WORDS_PER_DOC           = 200;
+// Each doc draws only DISTINCT_WORDS_PER_DOC unique words from the pool and
+// fills its WORDS_PER_DOC positions from that subset. Without this, uniform
+// sampling across a small pool makes every word land in every doc, so every
+// multi-word AND query trivially returns the full corpus.
+constexpr size_t      DISTINCT_WORDS_PER_DOC  = 6;
+constexpr uint64_t    RNG_SEED                = 0xC0FFEEULL;
 
 
 // Fixed word pool: each word is pure [a-z0-9] so it survives IndexChunk's
@@ -42,8 +48,11 @@ static vector<string> make_word_pool() {
 
 
 struct Corpus {
-    vector<string>           urls;       // urls[g] for global doc g
-    vector<vector<uint32_t>> doc_words;  // doc_words[g][l] = pool index
+    vector<string>             urls;         // urls[g] for global doc g
+    vector<vector<uint32_t>>   doc_words;    // doc_words[g][l] = pool index
+    // word_to_docs[pool_idx] = set of 1-indexed doc ids that contain the word.
+    // Ground truth for AND-query intersection checks.
+    vector<std::set<uint32_t>> word_to_docs;
 };
 
 
@@ -52,8 +61,20 @@ static Corpus generate_corpus(const vector<string>& pool, std::mt19937_64& rng) 
     const size_t total_docs = NUM_FILES * DOCS_PER_FILE;
     c.urls.reserve(total_docs);
     c.doc_words.reserve(total_docs);
+    c.word_to_docs.resize(pool.size());
+    assert(DISTINCT_WORDS_PER_DOC <= pool.size());
 
-    std::uniform_int_distribution<uint32_t> wd(0, pool.size() - 1);
+    // For per-doc subset sampling: shuffle a working copy of pool indices and
+    // take the first DISTINCT_WORDS_PER_DOC. Fisher-Yates keeps this O(k) per
+    // doc since we only need the prefix.
+    vector<uint32_t> idx_pool;
+    idx_pool.reserve(pool.size());
+    for (size_t i = 0; i < pool.size(); ++i) {
+        idx_pool.push_back(static_cast<uint32_t>(i));
+    }
+
+    std::uniform_int_distribution<uint32_t> subset_pick(
+        0, DISTINCT_WORDS_PER_DOC - 1);
 
     char url_buf[64];
     for (size_t f = 0; f < NUM_FILES; ++f) {
@@ -62,10 +83,26 @@ static Corpus generate_corpus(const vector<string>& pool, std::mt19937_64& rng) 
                              "http://test.local/f%zu/d%zu", f, d);
             c.urls.push_back(string(url_buf, static_cast<size_t>(n)));
 
+            const uint32_t doc_id = static_cast<uint32_t>(
+                f * DOCS_PER_FILE + d + 1); // 1-indexed, matches IndexChunk
+
+            // Partial Fisher-Yates: pick DISTINCT_WORDS_PER_DOC indices from
+            // idx_pool by swapping into the prefix. Subsequent docs see a
+            // permuted pool but that's fine — we're sampling uniformly.
+            for (size_t i = 0; i < DISTINCT_WORDS_PER_DOC; ++i) {
+                std::uniform_int_distribution<size_t> pick(i, pool.size() - 1);
+                size_t j = pick(rng);
+                uint32_t tmp = idx_pool[i];
+                idx_pool[i] = idx_pool[j];
+                idx_pool[j] = tmp;
+            }
+
             vector<uint32_t> row;
             row.reserve(WORDS_PER_DOC);
             for (size_t w = 0; w < WORDS_PER_DOC; ++w) {
-                row.push_back(wd(rng));
+                uint32_t pidx = idx_pool[subset_pick(rng)];
+                row.push_back(pidx);
+                c.word_to_docs[pidx].insert(doc_id);
             }
             c.doc_words.push_back(static_cast<vector<uint32_t>&&>(row));
         }
@@ -234,6 +271,108 @@ void test_loaded_index_matches_corpus() {
     clean_dir(INDEX_OUTPUT_DIR, "index_chunk_0_");
 }
 
+
+// Intersect word_to_docs[pidx] across every query word via two-pointer sweep.
+static std::set<uint32_t> expected_docs(const Corpus& corpus,
+                                        const vector<uint32_t>& pool_idxs) {
+    std::set<uint32_t> out;
+    if (pool_idxs.size() == 0) return out;
+    out = corpus.word_to_docs[pool_idxs[0]];
+    for (size_t i = 1; i < pool_idxs.size(); ++i) {
+        const std::set<uint32_t>& other = corpus.word_to_docs[pool_idxs[i]];
+        std::set<uint32_t> next;
+        auto a = out.begin();
+        auto b = other.begin();
+        while (a != out.end() && b != other.end()) {
+            if (*a < *b)      ++a;
+            else if (*b < *a) ++b;
+            else { next.insert(*a); ++a; ++b; }
+        }
+        out = next;
+    }
+    return out;
+}
+
+
+void test_chunk_manager_queries() {
+    constexpr size_t NUM_QUERIES = 200;
+
+    clean_dir(PARSER_DIR, nullptr);
+    mkdir_p(INDEX_OUTPUT_DIR);
+    clean_dir(INDEX_OUTPUT_DIR, "index_chunk_0_");
+
+    std::mt19937_64 rng(RNG_SEED ^ 0xA5A5A5A5ULL);
+    vector<string> pool = make_word_pool();
+    Corpus corpus = generate_corpus(pool, rng);
+
+    write_parser_files(pool, corpus);
+    string chunk_path = build_index_chunk();
+
+    chunk_manager cm(chunk_path);
+
+    std::uniform_int_distribution<uint32_t> pdist(0, pool.size() - 1);
+    std::uniform_int_distribution<size_t>   qlen(1, 4);
+
+    size_t nonempty = 0;
+    size_t empty    = 0;
+
+    for (size_t q = 0; q < NUM_QUERIES; ++q) {
+        size_t k = qlen(rng);
+        vector<uint32_t> pool_idxs;
+        vector<string>   words;
+        pool_idxs.reserve(k);
+        words.reserve(k);
+
+        // Sample without replacement
+        std::set<uint32_t> seen;
+        while (pool_idxs.size() < k) {
+            uint32_t p = pdist(rng);
+            if (seen.insert(p).second) {
+                pool_idxs.push_back(p);
+                words.push_back(string(pool[p].data(), pool[p].size()));
+            }
+        }
+
+        std::set<uint32_t> want = expected_docs(corpus, pool_idxs);
+        vector<uint32_t>   got  = cm.get_docIDs(words);
+
+        // Leapfrog emits strictly ascending, no duplicates.
+        for (size_t i = 1; i < got.size(); ++i) {
+            assert(got[i] > got[i - 1]);
+        }
+
+        assert(got.size() == want.size());
+        size_t j = 0;
+        for (uint32_t d : want) {
+            assert(got[j] == d);
+            ++j;
+        }
+
+        if (want.empty()) empty++;
+        else              nonempty++;
+    }
+
+    // Both codepaths must be exercised: sparse per-doc subsets give us plenty
+    // of empty intersections, and single-word queries guarantee hits.
+    assert(nonempty > 0);
+    assert(empty    > 0);
+
+    // Words not in the dictionary must short-circuit to an empty result.
+    vector<string> only_missing;
+    only_missing.push_back(string("nothing"));
+    assert(cm.get_docIDs(only_missing).size() == 0);
+
+    vector<string> mixed;
+    mixed.push_back(string(pool[0].data(), pool[0].size()));
+    mixed.push_back(string("nothing"));
+    assert(cm.get_docIDs(mixed).size() == 0);
+
+    printf("  queries: %zu non-empty, %zu empty\n", nonempty, empty);
+
+    clean_dir(PARSER_DIR, nullptr);
+    clean_dir(INDEX_OUTPUT_DIR, "index_chunk_0_");
+}
+
 } // namespace
 
 
@@ -241,6 +380,7 @@ int main() {
     printf("\n=== RUNNING INDEX UTIL TESTS ===\n\n");
 
     test_loaded_index_matches_corpus();
+    test_chunk_manager_queries();
 
     printf("\n=== ALL INDEX UTIL TESTS FINISHED ===\n\n");
     return 0;

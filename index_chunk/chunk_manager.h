@@ -230,6 +230,7 @@ public:
 
     // Return all doc ids in this chunk where every query word appears.
     // Uses a leapfrog join driven by the rarest word.
+    // INVARIANT: WORDS VECTOR MUST CONTAIN UNIQUE ELEMENTS
     vector<uint32_t> get_docIDs(const vector<string>& words) {
         vector<uint32_t> doc_ids;
         if (words.size() == 0) return doc_ids;
