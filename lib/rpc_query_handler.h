@@ -9,19 +9,6 @@
 #include <memory>
 #include <optional>
 
-struct WordInfo {
-    string word;
-    vector<size_t> pos;
-};
-
-struct DocInfo {
-    string url;
-    vector<WordInfo> wordInfo;
-};
-
-struct QueryResponse {
-    vector<DocInfo> pages;
-};
 
 struct LeanPageResponse {
     // clarifier: multiple RankedPage structs can be returned a a result to the client query handler

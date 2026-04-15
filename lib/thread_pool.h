@@ -1,4 +1,5 @@
 // Simple thread pool -- workers pull and execute std::function<void()> tasks from a shared queue
+#pragma once
 
 #include "deque.h"
 #include <condition_variable>
