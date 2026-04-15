@@ -424,25 +424,30 @@ bool IndexChunk::index_file(const string &path) {
                 if (len <= 1) continue; // skip empty lines
                 string_view word_view = string_view(buff, len - 1);
 
-                // Diagnostic: dict write/read format uses ' ' as the
-                // word/offset delimiter and '\n' as the entry terminator,
-                // so any word containing those bytes desyncs the reader's
-                // memchr-based parser. Log a sample so we can confirm
-                // whether this is actually happening in the wild.
-                static uint32_t whitespace_word_count = 0;
-                if (whitespace_word_count < 10) {
-                    for (size_t wi = 0; wi < len - 1; ++wi) {
-                        unsigned char c = static_cast<unsigned char>(buff[wi]);
-                        if (c == ' ' || c == '\n' || c == '\t' || c == '\0') {
+                // Dict write/read format uses ' ' as the word/offset
+                // delimiter and '\n' as the entry terminator, so a word
+                // containing either byte desyncs the reader's memchr-based
+                // parser and silently truncates the chunk's dictionary.
+                // Upstream parser output occasionally contains URLs with
+                // embedded or trailing spaces — reject those defensively
+                // here rather than trust upstream to stay clean.
+                bool reject = false;
+                for (size_t wi = 0; wi < len - 1; ++wi) {
+                    unsigned char c = static_cast<unsigned char>(buff[wi]);
+                    if (c == ' ' || c == '\n' || c == '\t' || c == '\0') {
+                        reject = true;
+                        static uint32_t whitespace_word_count = 0;
+                        if (whitespace_word_count < 10) {
                             ++whitespace_word_count;
-                            logger::warn("Worker %u: whitespace byte 0x%02x at pos %zu in word '%.*s' (len=%zu) from %s",
+                            logger::warn("Worker %u: dropped word with byte 0x%02x at pos %zu: '%.*s' (len=%zu) from %s",
                                          WORKER_NUMBER, (unsigned)c, wi,
                                          static_cast<int>(len - 1), buff,
                                          len - 1, path.data());
-                            break;
                         }
+                        break;
                     }
                 }
+                if (reject) continue;
 
                 if (!word_set[word_view]) {
                     word_set[word_view] = true;
