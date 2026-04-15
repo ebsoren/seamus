@@ -230,7 +230,7 @@ template <typename T>
 T max_element(vector<T> &v) {
     T max_elt = v[0];
     for(int i = 1; i < v.size(); i++) {
-        if(v[i] > min_elt) {
+        if(v[i] > max_elt) {
             max_elt = v[i];
         }
     }
@@ -336,10 +336,10 @@ double calc_dynamic_score(RankedPage &r, vector<string> &unique_query_words) {
 
     // This factor checks unique words in the query found in the anchor texts pointing to the link
     // PROBABLY WANT TO ADD MORE TO THIS FACTOR ONCE I KNOW MORE ABOUT ANCHOR TEXT
-    double factor_5 = (r.num_unique_words_found_anchor / unique_query_words.size()); 
+    double factor_4 = (r.num_unique_words_found_anchor / unique_query_words.size()); 
 
     // This factor checks the URL for keywords in it
-    double factor_6 = (r.num_unique_words_found_url / unique_query_words.size()) * double_pow(e, (-Gamma_url * r.url.size()));
+    double factor_5 = (r.num_unique_words_found_url / unique_query_words.size()) * double_pow(e, (-Gamma_url * r.url.size()));
 
     // This factor scores based on the rarity of each word combined with its frequency
     vector<int> counts(r.word_positions.size());
@@ -362,9 +362,9 @@ struct RankedCompare {
     double dynamic_weight;
     size_t unique_words_in_query;
 
-    RankedCompare(double f, size_t s) : dynamic_weight(f), unique_words_in_query(s) {}
+    RankedCompare(double f = DEFAULT_DYNAMIC_WEIGHT, size_t s = 10) : dynamic_weight(f), unique_words_in_query(s) {}
 
-    bool operator()(LeanPage a, LeanPage b) const {
+    bool operator()(const LeanPage& a, const LeanPage& b) const {
         return a.score > b.score; 
     }
 };
@@ -379,7 +379,7 @@ private:
 
 public:
     Ranker(int num_pages_returned_init = RANKED_ON_EACH, double dynamic_weight_init = DEFAULT_DYNAMIC_WEIGHT, bool verbose_init = false) : 
-        num_pages_returned(num_pages_returned_init), dynamic_weight(dynamic_weight_init), verbose_mode(verbose_init) { 
+        dynamic_weight(dynamic_weight_init), num_pages_returned(num_pages_returned_init), verbose_mode(verbose_init) { 
         
         if(verbose_mode) {
             logger::debug("Ranker is initialized with num pages returned of %d, and dynamic weighting of %f", 

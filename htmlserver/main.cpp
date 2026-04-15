@@ -2,12 +2,12 @@
 #include <sys/socket.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include <ctype.h>
 
-#include "lib/rpc_listener.h"
-#include "lib/consts.h"
-#include "lib/string.h"
+#include "../lib/rpc_listener.h"
+#include "../lib/consts.h"
+#include "../lib/string.h"
+#include "../ranker/Ranker.h"
 
 static const char HOMEPAGE_HTML[] =
     "<!doctype html>\n"
@@ -261,26 +261,6 @@ static string remove_special_chars(const string& s) {
     return out;
 }
 
-static string escape_html(const string& s) {
-    size_t max_len = s.size() * 5; 
-    char* tmp = static_cast<char*>(malloc(max_len));
-    size_t out_len = 0;
-    
-    for (size_t i = 0; i < s.size(); ++i) {
-        char c = s[i];
-        switch (c) {
-            case '<': memcpy(tmp + out_len, "&lt;", 4); out_len += 4; break;
-            case '>': memcpy(tmp + out_len, "&gt;", 4); out_len += 4; break;
-            case '&': memcpy(tmp + out_len, "&amp;", 5); out_len += 5; break;
-            default:  tmp[out_len++] = c;
-        }
-    }
-    
-    string out(tmp, out_len);
-    free(tmp);
-    return out;
-}
-
 static void send_all(int fd, const char* data, size_t len) {
     size_t sent = 0;
     while (sent < len) {
@@ -350,6 +330,77 @@ static void send_image(int fd, const char* filepath) {
     free(img_data);
 }
 
+vector<LeanPage> resultsTest() {
+    vector<LeanPage> res;
+    res.push_back(LeanPage{string("https://roar.com"), string("Roar R Us"), 0.5});
+    res.push_back(LeanPage{string("https://bing.com"), string("Bing"), 0.5});
+    res.push_back(LeanPage{string("https://toys.com"), string("Toys R Us"), 0.5});
+    res.push_back(LeanPage{string("https://supercalifragilistic.com"), string("Marry Poppins Fan Club"), 0.5});
+    res.push_back(LeanPage{string("https://wiki.org"), string("Wiki Fandom"), 0.5});
+    res.push_back(LeanPage{string("https://roar.com"), string("Roar R Us"), 0.5});
+    res.push_back(LeanPage{string("https://bing.com"), string("Bing"), 0.5});
+    res.push_back(LeanPage{string("https://toys.com"), string("Toys R Us"), 0.5});
+    res.push_back(LeanPage{string("https://supercalifragilistic.com"), string("Marry Poppins Fan Club"), 0.5});
+    res.push_back(LeanPage{string("https://wiki.org"), string("Wiki Fandom"), 0.5});
+    res.push_back(LeanPage{string("https://roar.com"), string("Roar R Us"), 0.5});
+    res.push_back(LeanPage{string("https://bing.com"), string("Bing"), 0.5});
+    res.push_back(LeanPage{string("https://toys.com"), string("Toys R Us"), 0.5});
+    res.push_back(LeanPage{string("https://supercalifragilistic.com"), string("Marry Poppins Fan Club"), 0.5});
+    res.push_back(LeanPage{string("https://wiki.org"), string("Wiki Fandom"), 0.5});
+    return res;
+}
+
+// Extract the page number from the URL query string (defaults to 1)
+static int get_page_number(const string_view& path) {
+    int page = 1;
+    const char* data = path.data();
+    size_t len = path.size();
+    for (size_t i = 0; i < len; ++i) {
+        if (data[i] == 'p' && i + 1 < len && data[i+1] == '=') {
+            if (i == 0 || data[i-1] == '?' || data[i-1] == '&') {
+                page = atoi(data + i + 2);
+                if (page < 1) page = 1;
+                break;
+            }
+        }
+    }
+    return page;
+}
+
+struct HtmlBuilder {
+    char* data;
+    size_t len;
+    size_t cap;
+    
+    HtmlBuilder() : len(0), cap(4096) { 
+        data = static_cast<char*>(malloc(cap)); 
+    }
+    
+    ~HtmlBuilder() { 
+        free(data); 
+    }
+    
+    void append(const char* str, size_t n) {
+        if (len + n > cap) {
+            while (len + n > cap) cap *= 2;
+            data = static_cast<char*>(realloc(data, cap));
+        }
+        memcpy(data + len, str, n);
+        len += n;
+    }
+    
+    void append(const char* str) { append(str, strlen(str)); }
+    void append(const string& s) { append(s.data(), s.size()); }
+    void append(const string_view& sv) { append(sv.data(), sv.size()); }
+    
+    // Convert integers to strings on the fly for our pagination links
+    void append(int n) {
+        char buf[32];
+        int l = snprintf(buf, sizeof(buf), "%d", n);
+        if (l > 0) append(buf, static_cast<size_t>(l));
+    }
+};
+
 static void handle_client(int fd) {
     string request = read_request(fd);
     if (request.size() == 0) {
@@ -364,36 +415,231 @@ static void handle_client(int fd) {
         send_response(fd, "200 OK", string_view(HOMEPAGE_HTML, sizeof(HOMEPAGE_HTML) - 1));
         
     } else if (path == "/favicon.ico") {
-        // Ignore background icon requests
         send_image(fd, "htmlserver/images/tank-favicon.png");
         
     } else if (path.size() > 0 && path[0] == '/') {
-        // 1. Clean the path FIRST (strips '?' query strings and percent-decodes)
         string raw_term = parse_query_term(path);
-        
-        // 2. NOW check if the cleaned term is asking for the image
+
         if (raw_term == "htmlserver/images/magnifying-glass.png") {
             send_image(fd, "htmlserver/images/magnifying-glass.png");
         } else if (raw_term == "htmlserver/images/tam-logo.png") {
             send_image(fd, "htmlserver/images/tam-logo.png");
         } else if (raw_term == "htmlserver/images/tank-favicon.png") {
             send_image(fd, "htmlserver/images/tank-favicon.png");
-        }else {
-            // 3. Otherwise, treat it as a search query!
+        } else {
+            // Text coming in is cleaned!
             string term = remove_special_chars(raw_term);
 
             printf("[htmlserver] query term: [%.*s]\n", static_cast<int>(term.size()), term.data());
             fflush(stdout);
-
-            string escaped_term = escape_html(term);
             
-            string body = string::join("", 
-                "<!doctype html><html><body><h3>Query term</h3><p>",
-                escaped_term,
-                "</p><a href=\"/\">back</a></body></html>"
+            // --- NEW PAGINATION SETUP ---
+            // Find the base URL without the ?p= parameter so we can attach it to the buttons cleanly
+            size_t q_pos = 0;
+            while (q_pos < path.size() && path[q_pos] != '?') q_pos++;
+            string_view base_url = path.substr(0, q_pos);
+            
+            int current_page = get_page_number(path);
+            // -----------------------------
+            
+            vector<LeanPage> results; 
+            results = resultsTest();
+            
+            HtmlBuilder html;
+            
+            html.append(
+                "<!doctype html>\n"
+                "<html lang=\"en\">\n"
+                "<head>\n"
+                "<meta charset=\"utf-8\">\n"
+                "<title>Search Results</title>\n"
+                "<link rel=\"icon\" type=\"image/png\" href=\"/htmlserver/images/tank-favicon.png\">\n"
+                "<style>\n"
+                "  body {\n"
+                "    margin: 0;\n"
+                "    padding: 30px 40px;\n"
+                "    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;\n"
+                "    background-color: #ffffff;\n"
+                "    box-sizing: border-box;\n"
+                "  }\n"
+                "  .top-bar {\n"
+                "    display: flex;\n"
+                "    align-items: center;\n"
+                "    gap: 15px;\n"
+                "    margin-bottom: 30px;\n"
+                "    border-bottom: 1px solid #eee;\n"
+                "    padding-bottom: 20px;\n"
+                "    width: 100%;\n"
+                "  }\n"
+                "  .top-right-logo {\n"
+                "    position: absolute;\n"
+                "    top: 25px;\n"
+                "    right: 40px;\n"
+                "    width: 70px;\n"
+                "    height: auto;\n"
+                "    transition: opacity 0.2s;\n"
+                "  }\n"
+                "  .top-right-logo:hover {\n"
+                "    opacity: 0.8;\n"
+                "  }\n"
+                "  .header-title {\n"
+                "    font-size: 1.8rem;\n"
+                "    color: #1a1a1a;\n"
+                "    margin: 0;\n"
+                "    margin-left: auto; /* Pushes the text all the way to the right */\n"
+                "    margin-right: 90px; /* Leaves perfect room for the absolute logo */\n"
+                "    white-space: nowrap;\n"
+                "  }\n"
+                "  .search-box {\n"
+                "    padding: 10px 20px;\n"
+                "    font-size: 1.2rem;\n"
+                "    border-radius: 30px;\n"
+                "    border: 1px solid #dfe1e5;\n"
+                "    width: 400px;\n"
+                "    outline: none;\n"
+                "    background: #f8f9fa;\n"
+                "    color: #333;\n"
+                "  }\n"
+                "  .back-btn {\n"
+                "    padding: 10px 20px;\n"
+                "    font-size: 1rem;\n"
+                "    color: white;\n"
+                "    background-color: #2e5c31;\n"
+                "    border: none;\n"
+                "    border-radius: 30px;\n"
+                "    text-decoration: none;\n"
+                "    cursor: pointer;\n"
+                "    transition: background-color 0.2s;\n"
+                "    font-weight: bold;\n"
+                "  }\n"
+                "  .back-btn:hover {\n"
+                "    background-color: #1e3c20;\n"
+                "  }\n"
+                "  .results-container {\n"
+                "    display: flex;\n"
+                "    flex-direction: column;\n"
+                "    gap: 24px; /* Increased gap for ever so slightly more padding */\n"
+                "    width: 90%;\n"
+                "    max-width: 1200px;\n"
+                "  }\n"
+                "  .result-item {\n"
+                "    display: flex;\n"
+                "    flex-direction: column;\n"
+                "    text-align: left;\n"
+                "  }\n"
+                "  .result-title {\n"
+                "    font-size: 1.4rem;\n"
+                "    color: #1a0dab;\n" 
+                "    text-decoration: none;\n"
+                "    margin-bottom: 3px;\n"
+                "  }\n"
+                "  .result-title:hover {\n"
+                "    text-decoration: underline;\n"
+                "  }\n"
+                "  .result-url {\n"
+                "    font-size: 0.95rem;\n"
+                "    color: #006621;\n" 
+                "    text-decoration: none;\n"
+                "  }\n"
+                "  .pagination {\n"
+                "    display: flex;\n"
+                "    justify-content: left;\n"
+                "    gap: 15px;\n"
+                "    margin-top: 30px;\n"
+                "    padding-bottom: 40px;\n"
+                "  }\n"
+                "  .page-btn {\n"
+                "    padding: 8px 16px;\n"
+                "    font-size: 1rem;\n"
+                "    color: #1a0dab;\n"
+                "    background-color: #fff;\n"
+                "    border: 1px solid #dfe1e5;\n"
+                "    border-radius: 4px;\n"
+                "    text-decoration: none;\n"
+                "    transition: all 0.2s;\n"
+                "  }\n"
+                "  .page-btn:hover {\n"
+                "    background-color: #f8f9fa;\n"
+                "    box-shadow: 0 1px 3px rgba(0,0,0,0.1);\n"
+                "  }\n"
+                "</style>\n"
+                "</head>\n"
+                "<body>\n"
+                "  <a href=\"https://tradersatmichigan.com\" target=\"_blank\">\n"
+                "    <img src=\"/htmlserver/images/tam-logo.png\" class=\"top-right-logo\" alt=\"TAM Logo\">\n"
+                "  </a>\n"
+                "  <div class=\"top-bar\">\n"
+                "    <input type=\"text\" class=\"search-box\" value=\""
             );
             
-            send_response(fd, "200 OK", string_view(body.data(), body.size()));
+            html.append(term);
+            
+            html.append(
+                "\" readonly>\n"
+                "    <a href=\"/\" class=\"back-btn\">BACK</a>\n"
+                "    <h1 class=\"header-title\">Seamus the Search Engine</h1>\n"
+                "  </div>\n"
+                "  <div class=\"results-container\">\n"
+            );
+            
+            // --- NEW VECTOR MATH ---
+            // Safely calculate start and end indices based on the page number
+            size_t start_idx = (current_page - 1) * 10;
+            if (start_idx > results.size()) start_idx = results.size();
+            
+            size_t end_idx = start_idx + 10;
+            if (end_idx > results.size()) end_idx = results.size();
+            
+            // Use standard index loop instead of range-based for so we only process 10 items
+            for (size_t i = start_idx; i < end_idx; ++i) {
+                const auto& res = results[i];
+                
+                html.append("    <div class=\"result-item\">\n");
+                
+                html.append("      <a class=\"result-title\" href=\"");
+                html.append(res.url);
+                html.append("\" target=\"_blank\">");
+                html.append(res.title);
+                html.append("</a>\n");
+                
+                html.append("      <a class=\"result-url\" href=\"");
+                html.append(res.url);
+                html.append("\" target=\"_blank\">");
+                html.append(res.url); 
+                html.append("</a>\n");
+                
+                html.append("    </div>\n");
+            }
+            
+            html.append("  </div>\n"); // Close results-container
+            
+            // --- HTML FOR PAGINATION BUTTONS ---
+            html.append("  <div class=\"pagination\">\n");
+            
+            if (current_page > 1) {
+                html.append("    <a class=\"page-btn\" href=\"");
+                html.append(base_url);
+                html.append("?p=");
+                html.append(current_page - 1);
+                html.append("\">&laquo; Previous</a>\n");
+            }
+            
+            if (end_idx < results.size()) {
+                html.append("    <a class=\"page-btn\" href=\"");
+                html.append(base_url);
+                html.append("?p=");
+                html.append(current_page + 1);
+                html.append("\">Next &raquo;</a>\n");
+            }
+            
+            html.append("  </div>\n");
+            
+            html.append(
+                "</body>\n"
+                "</html>"
+            );
+            
+            send_response(fd, "200 OK", string_view(html.data, html.len));
         }
     } else {
         send_response(fd, "400 Bad Request", string_view("bad request", 11));
