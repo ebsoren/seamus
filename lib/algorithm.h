@@ -99,14 +99,18 @@ inline void quickSort(vector<T> &vec, size_t low, size_t high, bool (*comp)(cons
     }
 }
 
-template <class T, class Comp>
-inline void quickSort(std::vector<T>& vec, size_t low, size_t high, Comp comp) {
-    if (low < high) {
-        size_t p = partition(vec, low, high, comp);
-        quickSort(vec, low, p, comp);
-        quickSort(vec, p + 1, high, comp);
-    }
-}
+// Unused std::vector overload — kept here for reference but commented out
+// because nothing includes <vector> at this point in the translation unit
+// and gcc refuses to parse it (Mac clang gets it transitively). Re-enable
+// by adding #include <vector> at the top of this file.
+// template <class T, class Comp>
+// inline void quickSort(std::vector<T>& vec, size_t low, size_t high, Comp comp) {
+//     if (low < high) {
+//         size_t p = partition(vec, low, high, comp);
+//         quickSort(vec, low, p, comp);
+//         quickSort(vec, p + 1, high, comp);
+//     }
+// }
 
 template <class T>
 inline void sort(vector<T> &vec, bool (*comp)(const T&, const T&)) {
