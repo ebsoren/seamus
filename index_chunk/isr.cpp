@@ -24,8 +24,9 @@ IndexStreamReader::IndexStreamReader(const string& word, LoadedIndex* index) : w
     // Header layout written by IndexChunk::persist:
     //   <8B n_posts><space><4B n_docs><\n>
     if (curr_loc_ + sizeof(uint64_t) + 1 + sizeof(uint32_t) + 1 > region_end) {
-        logger::error("ISR '%s': header offset %llu walks past region end (size=%lld)",
+        logger::error("ISR '%s' in %.*s: header offset %llu walks past region end (size=%lld)",
                       this->word.data(),
+                      static_cast<int>(index->path_.size()), index->path_.data(),
                       static_cast<unsigned long long>(offset),
                       static_cast<long long>(region_end - region_start));
         n_posts = 0;
@@ -49,8 +50,9 @@ IndexStreamReader::IndexStreamReader(const string& word, LoadedIndex* index) : w
         // Dump the 16 bytes at the dict-returned offset (i.e. the header the
         // reader expects) so we can see what's actually there on disk.
         const uint8_t* dump = postings_start_;
-        logger::error("ISR '%s': n_posts=%llu n_docs=%u exceeds max plausible %llu (offset=%llu, region_tail=%llu)",
+        logger::error("ISR '%s' in %.*s: n_posts=%llu n_docs=%u exceeds max plausible %llu (offset=%llu, region_tail=%llu)",
                       this->word.data(),
+                      static_cast<int>(index->path_.size()), index->path_.data(),
                       static_cast<unsigned long long>(n_posts),
                       static_cast<unsigned>(n_docs),
                       static_cast<unsigned long long>(max_plausible_posts),
