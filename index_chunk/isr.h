@@ -29,6 +29,10 @@ public:
     // returns {0, 0} if no posts exist for/after that document
     post advance_to(uint32_t doc);
 
+    // Advance past the current doc to the first post of the next doc.
+    // Returns {0, 0} if there is no next doc.
+    post advance_to_next_doc() { return advance_to(doc_offset_ + 1); }
+
     // Collect every position of `word` in the current doc into `out`, advancing
     // the ISR past that doc. Precondition: ISR is positioned at the first post
     // of the target doc right after a successful advance_to. The overshoot post 

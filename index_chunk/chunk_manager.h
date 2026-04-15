@@ -443,8 +443,96 @@ public:
     // 1) sequentially AND
     // 2) directly adjacent
     // Uses the same timer approach as default_query() by populating results depth first and stopping if TLE
-    vector<uint32_t> phrase_query(const vector<string>& words) {
+    void phrase_query(const vector<string>& words, atomic_vector<DocInfo>* data_channel) {
+        using clock = std::chrono::steady_clock;
+        const auto start_time = clock::now();
 
+        // If no words, do nothing
+        // If one word, just use default query algorithm
+        vector<DocInfo> docs;
+        if (words.size() == 0) {
+            return;
+        } else if (words.size() == 1) {
+            default_query(words, data_channel);
+            return;
+        }
+
+        // At this point, we know that we have >= 2 words in the phrase query
+        // Create sequential ISRs for each sequential word in the `words` vector query
+        vector<IndexStreamReader> isr_vec;
+        isr_vec.reserve(words.size());
+        for (size_t i = 0; i < words.size(); ++i) {
+            isr_vec.push_back(IndexStreamReader(words[i], &li));
+        }
+
+        // Anchor on isr_vec[0]. For the phrase to match at (ground.doc, ground.loc),
+        // every isr_vec[i] must have a post at (ground.doc, ground.loc + i).
+        post ground = isr_vec[0].advance();
+
+        // Check if the rest of the ISRs align adjacently behind `ground`.
+        // Returns true on a full-phrase match. Returns false if any ISR is
+        // missing the required (doc, loc + i) post; the caller then moves
+        // the anchor forward and retries.
+        auto validate_pos = [&]() -> bool {
+            for (size_t i = 1; i < isr_vec.size(); ++i) {
+                uint32_t want_loc = ground.loc + static_cast<uint32_t>(i);
+                post p = isr_vec[i].advance_to(ground.doc);
+                if (p.doc == 0 || p.doc != ground.doc) return false;
+                // advance_to only seeks by doc, so walk posts one at a time
+                // until loc catches up to want_loc (or overshoots).
+                while (p.doc == ground.doc && p.loc < want_loc) {
+                    p = isr_vec[i].advance();
+                    if (p.doc == 0) return false;
+                }
+                if (p.doc != ground.doc || p.loc != want_loc) return false;
+            }
+            return true;
+        };
+
+        while (true) {
+            // Timer check
+            auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(clock::now() - start_time).count();
+            if (static_cast<uint32_t>(elapsed) >= deadline_ms) {
+                logger::warn("chunk_manager::default_query hit %ums deadline after %zu matches", deadline_ms,
+                             docs.size());
+                data_channel->append_move(move(docs));
+                return;
+            }
+
+            // Check to see if the ground ISR is out of bounds
+            if (ground.doc == 0) {
+                data_channel->append_move(move(docs));
+                return;
+            }
+
+            // If the doc has the phrase, advance ground to the next doc
+            if (validate_pos()) {
+                // Phrase match at (ground.doc, ground.loc). Word i is at
+                // ground.loc + i by construction. One DocInfo per doc (we
+                // jump to the next doc below, so later hits in this doc
+                // aren't recorded).
+                vector<WordInfo> word_infos;
+                word_infos.reserve(isr_vec.size());
+                for (size_t i = 0; i < isr_vec.size(); ++i) {
+                    vector<size_t> positions;
+                    positions.push_back(static_cast<size_t>(ground.loc + i));
+                    word_infos.push_back(WordInfo{
+                        string(isr_vec[i].word.data(), isr_vec[i].word.size()),
+                        move(positions),
+                    });
+                }
+                docs.push_back(DocInfo{
+                    li.get_url(ground.doc),
+                    move(word_infos),
+                });
+
+                ground = isr_vec[0].advance_to_next_doc();
+
+            } else {
+                // Otherwise, advance ground to the next position in the doc and try again
+                ground = isr_vec[0].advance();
+            }
+        }
     }
 
 private:

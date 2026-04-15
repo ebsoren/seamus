@@ -5,6 +5,7 @@
 #include "vector.h"
 
 // USE AT UR OWN RISK I WROTE TS FOR MYSELF!!! -Esben
+// It's okay twin 👅 -- Hershey
 template <typename T>
 class atomic_vector {
 public:
