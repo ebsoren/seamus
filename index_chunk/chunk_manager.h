@@ -238,7 +238,7 @@ public:
     // `deadline_ms`, returns the matches found so far (a partial result) so
     // the caller isn't starved by a single slow chunk.
     // INVARIANT: WORDS VECTOR MUST CONTAIN UNIQUE ELEMENTS
-    vector<uint32_t> get_docIDs(const vector<string>& words) {
+    vector<uint32_t> default_query(const vector<string>& words) {
         using clock = std::chrono::steady_clock;
         const auto start_time = clock::now();
 

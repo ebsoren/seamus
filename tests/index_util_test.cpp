@@ -339,7 +339,7 @@ void test_chunk_manager_queries() {
         }
 
         std::set<uint32_t> want = expected_docs(corpus, pool_idxs);
-        vector<uint32_t>   got  = cm.get_docIDs(words);
+        vector<uint32_t>   got  = cm.default_query(words);
 
         // Leapfrog emits strictly ascending, no duplicates.
         for (size_t i = 1; i < got.size(); ++i) {
@@ -365,12 +365,12 @@ void test_chunk_manager_queries() {
     // Words not in the dictionary must short-circuit to an empty result.
     vector<string> only_missing;
     only_missing.push_back(string("nothing"));
-    assert(cm.get_docIDs(only_missing).size() == 0);
+    assert(cm.default_query(only_missing).size() == 0);
 
     vector<string> mixed;
     mixed.push_back(string(pool[0].data(), pool[0].size()));
     mixed.push_back(string("nothing"));
-    assert(cm.get_docIDs(mixed).size() == 0);
+    assert(cm.default_query(mixed).size() == 0);
 
     printf("  queries: %zu non-empty, %zu empty\n", nonempty, empty);
 

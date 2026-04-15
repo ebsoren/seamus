@@ -50,7 +50,7 @@ public:
     QueryResponse handle_query(const string &query) {
         vector<thread> threads(chunk_managers.size());
         for (const auto &worker : chunk_managers) {
-            threads.emplace_back(worker.get_docIDs(), words);
+            threads.emplace_back(worker.default_query(), words);
         }
         for (auto &t : threads) {
             if (t.joinable()) t.join();
