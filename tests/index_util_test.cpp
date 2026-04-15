@@ -294,6 +294,33 @@ static std::set<uint32_t> expected_docs(const Corpus& corpus,
 }
 
 
+// Map a corpus URL back to its 1-indexed doc id by linear scan. Used to
+// translate DocInfo.url into a doc id so we can compare results against the
+// existing expected_docs() ground truth.
+static uint32_t doc_id_for_url(const Corpus& corpus, const string& url) {
+    for (size_t d = 0; d < corpus.urls.size(); ++d) {
+        if (corpus.urls[d].size() == url.size() &&
+            memcmp(corpus.urls[d].data(), url.data(), url.size()) == 0) {
+            return static_cast<uint32_t>(d + 1);
+        }
+    }
+    return 0;
+}
+
+
+// Find a word string's pool index by linear scan, so we can look up its
+// corpus-side expected positions.
+static uint32_t pool_idx_for_word(const vector<string>& pool, const string& w) {
+    for (size_t k = 0; k < pool.size(); ++k) {
+        if (pool[k].size() == w.size() &&
+            memcmp(pool[k].data(), w.data(), w.size()) == 0) {
+            return static_cast<uint32_t>(k);
+        }
+    }
+    return UINT32_MAX;
+}
+
+
 void test_chunk_manager_queries() {
     constexpr size_t NUM_QUERIES = 200;
 
@@ -308,6 +335,9 @@ void test_chunk_manager_queries() {
     write_parser_files(pool, corpus);
     string chunk_path = build_index_chunk();
 
+    // chunk_manager now pushes matches into a caller-owned atomic_vector passed
+    // per-call. Drain the channel after each query via take().
+    atomic_vector<DocInfo> collector;
     chunk_manager cm(chunk_path);
 
     // Bump the per-call deadline so small-corpus leapfrog never hits the
@@ -339,18 +369,55 @@ void test_chunk_manager_queries() {
         }
 
         std::set<uint32_t> want = expected_docs(corpus, pool_idxs);
-        vector<uint32_t>   got  = cm.default_query(words);
-
-        // Leapfrog emits strictly ascending, no duplicates.
-        for (size_t i = 1; i < got.size(); ++i) {
-            assert(got[i] > got[i - 1]);
-        }
+        cm.default_query(words, &collector);
+        vector<DocInfo> got = collector.take();
 
         assert(got.size() == want.size());
+
+        // Translate each DocInfo back to a doc id via its URL, and check that
+        // the set matches expected_docs and the ordering is strictly ascending
+        // (leapfrog emits in doc-id order even though DocInfo carries urls).
+        vector<uint32_t> got_ids;
+        got_ids.reserve(got.size());
+        for (const DocInfo& di : got) {
+            uint32_t doc_id = doc_id_for_url(corpus, di.url);
+            assert(doc_id != 0);
+            got_ids.push_back(doc_id);
+        }
+        for (size_t i = 1; i < got_ids.size(); ++i) {
+            assert(got_ids[i] > got_ids[i - 1]);
+        }
         size_t j = 0;
         for (uint32_t d : want) {
-            assert(got[j] == d);
+            assert(got_ids[j] == d);
             ++j;
+        }
+
+        // For each returned DocInfo, verify that collect_positions_in_current_doc
+        // yielded exactly the positions the corpus recorded for that word in
+        // that doc. Positions on disk are 1-indexed (l_idx + 1 in the indexer),
+        // so we compare against the same shift here.
+        for (size_t di_i = 0; di_i < got.size(); ++di_i) {
+            const DocInfo& di = got[di_i];
+            const uint32_t doc_id = got_ids[di_i];
+            const size_t g = static_cast<size_t>(doc_id) - 1;
+
+            assert(di.wordInfo.size() == words.size());
+            for (const WordInfo& wi : di.wordInfo) {
+                uint32_t pidx = pool_idx_for_word(pool, wi.word);
+                assert(pidx != UINT32_MAX);
+
+                std::set<size_t> expected_positions;
+                const vector<uint32_t>& row = corpus.doc_words[g];
+                for (size_t l = 0; l < row.size(); ++l) {
+                    if (row[l] == pidx) expected_positions.insert(l + 1);
+                }
+
+                assert(wi.pos.size() == expected_positions.size());
+                std::set<size_t> got_positions;
+                for (size_t p : wi.pos) got_positions.insert(p);
+                assert(got_positions == expected_positions);
+            }
         }
 
         if (want.empty()) empty++;
@@ -365,12 +432,14 @@ void test_chunk_manager_queries() {
     // Words not in the dictionary must short-circuit to an empty result.
     vector<string> only_missing;
     only_missing.push_back(string("nothing"));
-    assert(cm.default_query(only_missing).size() == 0);
+    cm.default_query(only_missing, &collector);
+    assert(collector.take().size() == 0);
 
     vector<string> mixed;
     mixed.push_back(string(pool[0].data(), pool[0].size()));
     mixed.push_back(string("nothing"));
-    assert(cm.default_query(mixed).size() == 0);
+    cm.default_query(mixed, &collector);
+    assert(collector.take().size() == 0);
 
     printf("  queries: %zu non-empty, %zu empty\n", nonempty, empty);
 

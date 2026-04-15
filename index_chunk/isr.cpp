@@ -32,7 +32,7 @@ const inline post IndexStreamReader::loc() {
     return post{doc_offset_, loc_offset_};
 }
 
-post IndexStreamReader::advance() {
+post IndexStreamReader::advance_base() {
     if (posts_consumed_ == n_posts) return post{0, 0};
 
     posts_consumed_++;
@@ -48,12 +48,53 @@ post IndexStreamReader::advance() {
     return post{doc_offset_, loc_offset_};
 }
 
+post IndexStreamReader::advance() {
+    if (has_pending_) {
+        // Overshoot post already in state — serve it without touching curr_loc_.
+        // See isr.h comments if confused.
+        has_pending_ = false;
+        return post{doc_offset_, loc_offset_};
+    }
+    return advance_base();
+}
+
 post IndexStreamReader::advance_to(uint32_t doc) {
+    if (has_pending_) {
+        // Pending overshoot is at or after `doc`, or it isn't... either way we
+        // drop the flag here. If it already satisfies the request, return it.
+        // Otherwise fall through to walk forward from the overshoot state.
+        has_pending_ = false;
+        if (doc_offset_ >= doc) return post{doc_offset_, loc_offset_};
+    }
     while (doc_offset_ < doc) {
-        post p = advance();
+        post p = advance_base();
         if (p.doc == 0) return p;
     }
     return post{doc_offset_, loc_offset_};
+}
+
+// Important note: Because posting list is variable-length, you can't
+// just "go back one" after finding the last doc. This is why advance_base,
+// has_pending, etc. are necessary.
+void IndexStreamReader::collect_positions_in_current_doc(vector<size_t>& out) {
+    // Serve the current position (state reflects first post of current doc,
+    // or the pending overshoot — either way loc_offset_ is a valid position
+    // for doc_offset_).
+    uint32_t curr_doc = doc_offset_;
+    out.push_back(static_cast<size_t>(loc_offset_));
+    has_pending_ = false;
+
+    // Walk forward via raw advance so we can detect a doc change and stash
+    // the overshoot without the pending buffer interfering.
+    while (true) {
+        post p = advance_base();
+        if (p.doc == 0) return;   // end of posts
+        if (p.doc != curr_doc) {
+            has_pending_ = true;
+            return;
+        }
+        out.push_back(static_cast<size_t>(p.loc));
+    }
 }
 
 string IndexStreamReader::get_url(uint32_t doc) {

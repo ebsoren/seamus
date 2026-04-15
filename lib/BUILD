@@ -32,6 +32,23 @@ cc_library(
 )
 
 cc_library(
+    name = "atomic_vector",
+    hdrs = ["atomic_vector.h"],
+    visibility = ["//visibility:public"],
+    deps = [":vector"],
+)
+
+cc_library(
+    name = "query_response",
+    hdrs = ["query_response.h"],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":string",
+        ":vector",
+    ],
+)
+
+cc_library(
     name = "algorithm",
     hdrs = ["algorithm.h"],
     visibility = ["//visibility:public"],

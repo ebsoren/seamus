@@ -9,9 +9,10 @@
 #include "index/Index.h"
 #include "isr.h"
 #include "lib/algorithm.h"
+#include "lib/atomic_vector.h"
 #include "lib/consts.h"
 #include "lib/logger.h"
-#include "lib/queue.h"
+#include "lib/query_response.h"
 #include "lib/string.h"
 #include "lib/utils.h"
 #include "lib/vector.h"
@@ -202,6 +203,12 @@ public:
         const DictEntry &e = dict_entries_[i];
         return string(e.word, e.word_len);
     }
+
+    // Doc ids are 1-indexed on disk, so subtract 1 to index into urls.
+    string get_url(uint32_t doc) const {
+        const string_view &sv = urls[doc - 1];
+        return string(sv.data(), sv.size());
+    }
 };
 
 
@@ -228,23 +235,27 @@ public:
     // consts.h value; tests can reassign it to relax or tighten the bound.
     static inline uint32_t deadline_ms = CHUNK_MANAGER_DEADLINE_MS;
 
-    explicit chunk_manager(const string &path, atomic_queue *q)
-        : li(path)
-        , data_channel(q) {}
+    explicit chunk_manager(const string &path) : li(path) {}
 
     chunk_manager(const chunk_manager &) = delete;
     chunk_manager &operator=(const chunk_manager &) = delete;
 
-    // Return all doc ids in this chunk where every query word appears.
-    // Uses a leapfrog join driven by the rarest word. If the loop runs past
-    // `deadline_ms`, returns the matches found so far (a partial result) so
-    // the caller isn't starved by a single slow chunk.
+    // Default move ctor — required so vector<chunk_manager>::emplace_back
+    // works. LoadedIndex has its own move ctor, so member-wise move is
+    // correct.
+    chunk_manager(chunk_manager &&) noexcept = default;
+
+    // Run a leapfrog AND across `words` and append all matching docs (with
+    // url + per-word positions) into `data_channel`. On deadline, appends
+    // whatever has been found so far so the caller isn't starved by a single
+    // slow chunk. The collector is passed per-call (rather than stored on
+    // the chunk_manager) so it can be a per-query local owned by the caller.
     // INVARIANT: WORDS VECTOR MUST CONTAIN UNIQUE ELEMENTS
-    vector<uint32_t> default_query(const vector<string>& words) {
+    void default_query(const vector<string> &words, atomic_vector<DocInfo> *data_channel) {
         using clock = std::chrono::steady_clock;
         const auto start_time = clock::now();
 
-        vector<uint32_t> doc_ids;
+        vector<DocInfo> docs;
         if (words.size() == 0) {
             return;
         }
@@ -258,17 +269,29 @@ public:
         // If any word has zero posts, the AND intersection is empty.
         for (size_t i = 0; i < isrs.size(); ++i) {
             if (isrs[i].n_posts == 0) {
-                data_channel.push_front(doc_ids);
+                data_channel->append_move(move(docs));
                 return;
             }
         }
 
-        // Drive leapfrog from the rarest word (fewest documents).
-        sort(isrs, compare_by_n_docs);
+        // Leapfrog wants the rarest word as the driver. Simple O(n^2)
+        // sort because word array is tiny. Prob fastest sort here
+        vector<size_t> order;
+        order.reserve(isrs.size());
+        for (size_t i = 0; i < isrs.size(); ++i) order.push_back(i);
+        for (size_t i = 1; i < order.size(); ++i) {
+            size_t k = order[i];
+            size_t j = i;
+            while (j > 0 && isrs[order[j - 1]].n_docs > isrs[k].n_docs) {
+                order[j] = order[j - 1];
+                --j;
+            }
+            order[j] = k;
+        }
 
-        post p = isrs[0].advance();
+        post p = isrs[order[0]].advance();
         if (p.doc == 0) {
-            data_channel.push_front(doc_ids);
+            data_channel->append_move(move(docs));
             return;
         }
         uint32_t target = p.doc;
@@ -278,16 +301,16 @@ public:
             auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(clock::now() - start_time).count();
             if (static_cast<uint32_t>(elapsed) >= deadline_ms) {
                 logger::warn("chunk_manager::default_query hit %ums deadline after %zu matches", deadline_ms,
-                             doc_ids.size());
-                data_channel.push_front(doc_ids);
+                             docs.size());
+                data_channel->append_move(move(docs));
                 return;
             }
 
             bool all_match = true;
-            for (size_t i = 1; i < isrs.size(); ++i) {
-                post q = isrs[i].advance_to(target);
+            for (size_t i = 1; i < order.size(); ++i) {
+                post q = isrs[order[i]].advance_to(target);
                 if (q.doc == 0) {
-                    data_channel.push_front(doc_ids);
+                    data_channel->append_move(move(docs));
                     return;
                 }
                 if (q.doc > target) {
@@ -299,20 +322,42 @@ public:
 
             if (!all_match) {
                 // Pull the driver up to the new target and keep leaping.
-                post q = isrs[0].advance_to(target);
+                post q = isrs[order[0]].advance_to(target);
                 if (q.doc == 0) {
-                    data_channel.push_front(doc_ids);
+                    data_channel->append_move(move(docs));
                     return;
                 }
                 if (q.doc > target) target = q.doc;
                 continue;
             }
 
-            // All words match at `target` — emit and step past it.
-            doc_ids.push_back(target);
-            p = isrs[0].advance_to(target + 1);
+            // All words match at `target`. Build a DocInfo by collecting each
+            // word's positions in this doc. collect_positions_in_current_doc
+            // advances each ISR past the current doc (via the has_pending_
+            // overshoot buffer), so the next advance_to() lands correctly.
+            // string is move-only, so we aggregate-init each struct rather
+            // than default-constructing and assigning.
+            vector<WordInfo> word_infos;
+            word_infos.reserve(order.size());
+            for (size_t i = 0; i < order.size(); ++i) {
+                IndexStreamReader &isr = isrs[order[i]];
+                vector<size_t> positions;
+                isr.collect_positions_in_current_doc(positions);
+                word_infos.push_back(WordInfo{
+                    string(isr.word.data(), isr.word.size()),
+                    move(positions),
+                });
+            }
+            docs.push_back(DocInfo{
+                li.get_url(target),
+                move(word_infos),
+            });
+
+            // Driver is already past `target` after collect; advance_to just
+            // drains the pending slot and returns the overshoot post.
+            p = isrs[order[0]].advance_to(target + 1);
             if (p.doc == 0) {
-                data_channel.push_front(doc_ids);
+                data_channel->append_move(move(docs));
                 return;
             }
             target = p.doc;
@@ -329,9 +374,4 @@ public:
 
 private:
     LoadedIndex li;
-    atomic_queue<vector<uint32_t>> data_channel;
-
-    static bool compare_by_n_docs(const IndexStreamReader &a, const IndexStreamReader &b) {
-        return a.n_docs < b.n_docs;
-    }
 };
