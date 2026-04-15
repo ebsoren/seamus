@@ -23,7 +23,7 @@ class IndexServer {
             // TODO(charlie): call index_manager to query index chunks and get QueryResponse
             QueryResponse qr;
             // iterate through query response entries urls and retrieve appropriate info from urlStore
-                // construct rankedPages for each docInfo from queryResponse and send THIS back to as  client
+                // construct rankedPages for each docInfo from queryResponse and send THIS back to client as RankedPageResponse obj.
             for (const DocInfo& di : qr.pages) {
                 const string& url = di.url;
                 RankedPage page;
