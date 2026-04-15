@@ -94,6 +94,13 @@ public:
         heap_sort_up();
     }
 
+    void push(T&& elt) {
+        // std::move it into the underlying vector
+        heap.push_back(std::move(elt));
+        
+        heap_sort_up(); 
+    }
+
 
     // removes the top element and restores heap order by sifting down
     void pop() {
