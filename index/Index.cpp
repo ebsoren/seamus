@@ -5,20 +5,7 @@
 #include "lib/utf8.h"
 #include "lib/utils.h"
 #include "lib/logger.h"
-#include "../index-stream-reader/isr.h"
 #include <sys/stat.h>
-
-void recover_index_chunks(vector<LoadedIndex>& index_chunks) {
-    // read from index chunk numbers until files dont exist
-    int i = 0;
-    string fileName = string::join("", INDEX_OUTPUT_DIR, i);
-    while (file_exists(fileName)) {
-        LoadedIndex curr(fileName);
-        index_chunks.push_back(curr);
-        ++i;
-        fileName = string::join("", INDEX_OUTPUT_DIR, i);
-    }
-}
 
 string IndexChunk::get_index_chunk_path() const {
     return string::join("", string(INDEX_OUTPUT_DIR), "/index_chunk_", string(WORKER_NUMBER), "_", string(chunk), ".txt");

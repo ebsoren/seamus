@@ -232,6 +232,12 @@ constexpr uint32_t QUERY_HANDLER_PORT = 9200;
 constexpr size_t QUERY_NUM_LISTENING_THREADS = 16;
 constexpr uint16_t NUM_RESULTS_RETURN = 10;
 
+// Wall-clock budget for a single chunk_manager::get_docIDs call. If the
+// leapfrog join exceeds this, the call returns whatever matches it has
+// accumulated so far. Tests can override chunk_manager::deadline_ms to
+// disable/relax this.
+constexpr uint32_t CHUNK_MANAGER_DEADLINE_MS = 250;
+
 typedef uint32_t Unicode;
 typedef uint8_t  Utf8;
 typedef uint16_t Utf16;

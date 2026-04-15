@@ -5,7 +5,6 @@
 #include "lib/string.h"
 #include "lib/unordered_map.h"
 #include "lib/vector.h"
-#include "../index-stream-reader/isr.h"
 
 // Note that both documents and locations are 1-indexed (so that 0 can be used as a flag)
 
@@ -46,8 +45,3 @@ public:
     void flush();
 
 };
-
-class LoadedIndex;
-
-void recover_index_chunks(vector<LoadedIndex>& index_chunks);
-

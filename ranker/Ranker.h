@@ -334,7 +334,6 @@ double calc_dynamic_score(RankedPage &r, vector<string> &unique_query_words) {
     // This factor scores based on how many unique words in the query were found in the title but penalized on length of the title
     double factor_3 = (r.num_unique_words_found_title / unique_query_words.size()) * double_pow(e, (-Gamma_title * r.title.size()));
 
-
     // This factor checks unique words in the query found in the anchor texts pointing to the link
     // PROBABLY WANT TO ADD MORE TO THIS FACTOR ONCE I KNOW MORE ABOUT ANCHOR TEXT
     double factor_4 = (r.num_unique_words_found_anchor / unique_query_words.size()); 
@@ -351,7 +350,7 @@ double calc_dynamic_score(RankedPage &r, vector<string> &unique_query_words) {
 
     // final score returned here with extra weightings 
     return(((factor_1 * factor_1_weight) + (factor_2 * factor_2_weight) + (factor_3 * factor_3_weight)
-         + (factor_4 * factor_4_weight) + (factor_5 * factor_5_weight) + (factor_6 * factor_6_weight)) / dynamic_weight_sum);
+            + (factor_5 * factor_5_weight) + (factor_6 * factor_6_weight)) / dynamic_weight_sum);
 }
 
 // LeanPage input_total_score(RankedPage r, double dynamic_weight, size_t unique_words_in_query) {

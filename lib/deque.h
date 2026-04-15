@@ -202,3 +202,9 @@ private:
         deque_right = deque_left + deque_size - 1;
     }
 };
+
+
+template <typename T>
+class atomic_queue {
+    
+};

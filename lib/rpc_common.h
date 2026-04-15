@@ -57,6 +57,11 @@ inline bool send_u32(int fd, uint32_t val) {
     return send_exact(fd, &net, sizeof(uint32_t));
 }
 
+inline bool send_bool(int fd, bool value) {
+    uint8_t network_val = value ? 1 : 0;
+    return send_exact(fd, &network_val, sizeof(uint8_t));
+}
+
 inline bool send_string(int fd, const string& s) {
     if (!send_u32(fd, s.size())) return false; // Send 4-byte header
     return send_exact(fd, s.data(), s.size()); // Send characters
@@ -97,6 +102,11 @@ inline bool recv_u16(int fd, uint16_t& out) {
     return true;
 }
 
+inline std::optional<bool> recv_bool(int fd) {
+    uint8_t value;
+    if (!recv_exact(fd, &value, sizeof(uint8_t))) return std::nullopt;
+    return value != 0;
+}
 
 // Read a length-prefixed string from fd
 inline std::optional<string> recv_string(int fd) {
