@@ -27,6 +27,10 @@ class QueryHandler {
         IndexServer *index_server;
 
         vector<LeanPage> get_results(string& input) {
+            fprintf(stderr, "[QUERY_HANDLER] get_results query='%.*s' NUM_MACHINES=%zu my_machine_id=%zu\n",
+                    static_cast<int>(input.size()), input.data(), NUM_MACHINES, my_machine_id());
+            fflush(stderr);
+
             ParseResult result = parse_query_tree(input.str_view(0, input.size()));
             vector<std::future<vector<LeanPage>>> futures;
 
@@ -43,15 +47,23 @@ class QueryHandler {
                     try {
                         vector<LeanPage> local_hits;
                         if (i == my_machine_id()) {
+                            fprintf(stderr, "[QUERY_HANDLER] machine %zu: LOCAL path\n", i);
+                            fflush(stderr);
                             local_hits = index_server->local_retrieve(*input_ptr).get().pages;
+                            fprintf(stderr, "[QUERY_HANDLER] machine %zu: local returned %zu hits\n", i, local_hits.size());
+                            fflush(stderr);
                         } else {
-                            local_hits = send_recv_query_data(string(get_machine_addr(i)), INDEX_SERVER_PORT, *input_ptr).pages; 
+                            fprintf(stderr, "[QUERY_HANDLER] machine %zu: REMOTE path -> %s:%u\n", i, get_machine_addr(i), INDEX_SERVER_PORT);
+                            fflush(stderr);
+                            local_hits = send_recv_query_data(string(get_machine_addr(i)), INDEX_SERVER_PORT, *input_ptr).pages;
+                            fprintf(stderr, "[QUERY_HANDLER] machine %zu: remote returned %zu hits\n", i, local_hits.size());
+                            fflush(stderr);
                         }
                         task_promise->set_value(std::move(local_hits));
-                        
+
                     } catch (...) {
-                        // If the network fails, gracefully return 0 hits for this specific machine
-                        // instead of crashing the whole Query Handler!
+                        fprintf(stderr, "[QUERY_HANDLER] machine %zu: EXCEPTION caught, returning 0 hits\n", i);
+                        fflush(stderr);
                         task_promise->set_value(vector<LeanPage>());
                     }
                 });
@@ -59,11 +71,16 @@ class QueryHandler {
 
             // map from url to rankedPage data
             vector<LeanPage> final_results;
-            for (auto& fut : futures) {
-                // .get() will BLOCK the main thread here until this specific background task 
-                vector<LeanPage> machine_hits = fut.get(); 
+            for (size_t fi = 0; fi < futures.size(); ++fi) {
+                fprintf(stderr, "[QUERY_HANDLER] waiting on future[%zu]...\n", fi);
+                fflush(stderr);
+                vector<LeanPage> machine_hits = futures[fi].get();
+                fprintf(stderr, "[QUERY_HANDLER] future[%zu] returned %zu hits\n", fi, machine_hits.size());
+                fflush(stderr);
                 for (LeanPage& lp : machine_hits) final_results.push_back(std::move(lp));
             }
+            fprintf(stderr, "[QUERY_HANDLER] total merged results: %zu\n", final_results.size());
+            fflush(stderr);
 
             // merge sort these final_results and return final 10
             sort<LeanPage>(final_results, [](const LeanPage& a, const LeanPage& b) {

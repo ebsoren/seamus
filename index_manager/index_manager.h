@@ -31,9 +31,14 @@ public:
                 string path = string::join("", string(INDEX_OUTPUT_DIR), "/index_chunk_", string(w), "_",
                                            string(c), ".txt");
                 if (!file_exists(path)) break;
+                fprintf(stderr, "[INDEX_MANAGER] loaded chunk: %.*s\n",
+                        static_cast<int>(path.size()), path.data());
                 chunk_managers.emplace_back(path);
             }
         }
+        fprintf(stderr, "[INDEX_MANAGER] init complete: %zu chunks loaded from %s\n",
+                chunk_managers.size(), INDEX_OUTPUT_DIR);
+        fflush(stderr);
     }
 
     IndexManager(const IndexManager &)            = delete;
@@ -49,15 +54,23 @@ public:
     // Assumes a single-threaded dispatcher: pool.join() waits for every
     // currently pending task, not just the tasks this call submitted.
     LeanPageResponse handle_query(const string &query_str) {
+        fprintf(stderr, "[INDEX_MANAGER] handle_query query='%.*s' num_chunks=%zu\n",
+                static_cast<int>(query_str.size()), query_str.data(), chunk_managers.size());
+        fflush(stderr);
+
         LeanPageResponse resp;
 
         ASTNode ast;
         try {
             ast = parse_query_ast(string_view(query_str.data(), query_str.size()));
         } catch (const ParseError &e) {
-            logger::warn("index_manager::handle_query: parse failed: %s", e.message);
+            fprintf(stderr, "[INDEX_MANAGER] parse failed: %s\n", e.message);
+            fflush(stderr);
             return resp;
         }
+
+        fprintf(stderr, "[INDEX_MANAGER] AST parsed OK, fanning out to %zu chunks\n", chunk_managers.size());
+        fflush(stderr);
 
         atomic_vector<LeanPage> collector;
 
@@ -69,6 +82,8 @@ public:
         pool.join();
 
         resp.pages = collector.take();
+        fprintf(stderr, "[INDEX_MANAGER] query complete, collected %zu pages\n", resp.pages.size());
+        fflush(stderr);
         return resp;
     }
 
