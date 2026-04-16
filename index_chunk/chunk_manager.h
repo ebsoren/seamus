@@ -19,6 +19,7 @@
 #include "query/expressions.h"
 #include "query_isr.h"
 #include "lib/rpc_query_handler.h"
+#include "ranker/Ranker.h"
 
 
 class LoadedIndex {
@@ -341,7 +342,8 @@ public:
     // consts.h value; tests can reassign it to relax or tighten the bound.
     static inline uint32_t deadline_ms = CHUNK_MANAGER_DEADLINE_MS;
 
-    explicit chunk_manager(const string &path) : li(path) {}
+    explicit chunk_manager(const string &path, UrlStore *url_store = nullptr)
+        : li(path), url_store_(url_store) {}
 
     chunk_manager(const chunk_manager &) = delete;
     chunk_manager &operator=(const chunk_manager &) = delete;
@@ -351,9 +353,10 @@ public:
     // correct.
     chunk_manager(chunk_manager &&) noexcept = default;
 
-    // Phase 1 entry point for the complex query handler. Builds a per-call
-    // ISR tree out of the parsed AST and executes (HERSHEY - THIS NOT DONE)
-    void query(const ASTNode &ast, atomic_vector<DocInfo> *data_channel) {
+    // Builds a per-call ISR tree from the parsed AST, executes the query
+    // via default_query, then ranks results through the Ranker (if a
+    // UrlStore was provided) and pushes LeanPages to the collector.
+    void query(const ASTNode &ast, atomic_vector<LeanPage> *data_channel) {
         ISRArena arena;
         QueryISR *root = build_isr_tree(ast, arena, &li);
         if (root == nullptr) {
@@ -365,9 +368,7 @@ public:
             return;
         }
 
-        // Phase 1 fallback: extract unique positive terms and delegate
-        // to default_query. Dedup at extraction since the arena no
-        // longer dedupes (each tree position has its own TermISR).
+        // Extract unique positive terms and delegate to default_query.
         vector<string> positive_words;
         for (size_t i = 0; i < arena.terms().size(); ++i) {
             const TermISR *t = arena.terms()[i];
@@ -386,7 +387,26 @@ public:
         }
 
         if (positive_words.size() == 0) return;
-        default_query(positive_words, data_channel);
+
+        atomic_vector<DocInfo> doc_collector;
+        default_query(positive_words, &doc_collector);
+        vector<DocInfo> docs = doc_collector.take();
+        if (docs.size() == 0) return;
+
+        if (url_store_) {
+            ChunkQueryInfo cqi;
+            cqi.pages = move(docs);
+            Ranker ranker(url_store_);
+            vector<LeanPage> ranked = ranker.processQueryResponse(cqi);
+            data_channel->append_move(move(ranked));
+        } else {
+            vector<LeanPage> pages;
+            pages.reserve(docs.size());
+            for (DocInfo &di : docs) {
+                pages.push_back(LeanPage{move(di.url), string(""), 0.0});
+            }
+            data_channel->append_move(move(pages));
+        }
     }
 
     // Run a leapfrog AND across `words` and append all matching docs (with
@@ -606,4 +626,5 @@ public:
 
 private:
     LoadedIndex li;
+    UrlStore *url_store_ = nullptr;
 };

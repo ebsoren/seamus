@@ -3,7 +3,20 @@ load("@rules_cc//cc:defs.bzl", "cc_library")
 cc_library(
     name = "ranker",
     hdrs = ["Ranker.h"],
-    deps = ["//ranker:ranker_consts"],
+    deps = [
+        "//ranker:ranker_consts",
+        "//lib:chunk_manager_query",
+        "//lib:consts",
+        "//lib:logger",
+        "//lib:priority_queue",
+        "//lib:rpc_query_handler",
+        "//lib:string",
+        "//lib:unordered_map",
+        "//lib:utils",
+        "//lib:vector",
+        "//query:expressions",
+        "//url_store:url_store",
+    ],
     visibility = ["//visibility:public"],
 )
 

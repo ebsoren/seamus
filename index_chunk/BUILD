@@ -23,5 +23,6 @@ cc_library(
         "//lib:vector",
         "//query:expressions",
         "//lib:rpc_query_handler",
+        "//ranker:ranker",
     ],
 )
