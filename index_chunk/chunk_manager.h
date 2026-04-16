@@ -96,7 +96,7 @@ private:
         // nearby, binary search / dict parsing is wrong.
         if (lookup_miss_error_count_ < 5) {
             ++lookup_miss_error_count_;
-            logger::error("lookup miss: target_len=%zu target='%.*s' target_hex=[%02x %02x %02x %02x] in %.*s (dict size=%zu)",
+            logger::debug("lookup miss: target_len=%zu target='%.*s' target_hex=[%02x %02x %02x %02x] in %.*s (dict size=%zu)",
                           target_len,
                           static_cast<int>(target_len), target,
                           target_len > 0 ? (unsigned)(unsigned char)target[0] : 0,
@@ -110,7 +110,7 @@ private:
                 size_t hi_idx = lo < dict_entries_.size() ? lo : dict_entries_.size() - 1;
                 const DictEntry &el = dict_entries_[lo_idx];
                 const DictEntry &eh = dict_entries_[hi_idx];
-                logger::error("  neighbors: [%zu] '%.*s' (len=%u), [%zu] '%.*s' (len=%u)",
+                logger::debug("  neighbors: [%zu] '%.*s' (len=%u), [%zu] '%.*s' (len=%u)",
                               lo_idx, static_cast<int>(el.word_len), el.word, el.word_len,
                               hi_idx, static_cast<int>(eh.word_len), eh.word, eh.word_len);
             }

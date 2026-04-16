@@ -9,7 +9,7 @@
 IndexStreamReader::IndexStreamReader(const string& word, LoadedIndex* index) : word(word.data(), word.size()), index(index) {
     const auto *entry = index->lookup(this->word);
     if (!entry) {
-        logger::warn("Word '%s' not found in index", this->word.data());
+        logger::debug("Word '%s' not found in index", this->word.data());
         n_posts = 0;
         n_docs = 0;
         curr_loc_ = postings_start_ = nullptr;
@@ -60,7 +60,7 @@ IndexStreamReader::IndexStreamReader(const string& word, LoadedIndex* index) : w
                       static_cast<unsigned long long>(max_plausible_posts),
                       static_cast<unsigned long long>(offset),
                       static_cast<unsigned long long>(region_end - region_start));
-        logger::error("  header bytes: %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x",
+        logger::debug("  header bytes: %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x",
                       dump[0], dump[1], dump[2], dump[3], dump[4], dump[5], dump[6], dump[7],
                       dump[8], dump[9], dump[10], dump[11], dump[12], dump[13], dump[14], dump[15]);
         n_posts = 0;

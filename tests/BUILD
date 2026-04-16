@@ -195,6 +195,24 @@ cc_test (
 )
 
 cc_test (
+    name = "chunk_manager_ranking_test",
+    srcs = ["chunk_manager_ranking_test.cpp"],
+    tags = ["no-sandbox", "local", "exclusive"],
+    deps = [
+        "//index_chunk:chunk_manager",
+        "//index:index_lib",
+        "//lib:atomic_vector",
+        "//lib:chunk_manager_query",
+        "//lib:consts",
+        "//lib:rpc_query_handler",
+        "//lib:string",
+        "//lib:vector",
+        "//query:expressions",
+        "//ranker:ranker",
+    ],
+)
+
+cc_test (
     name = "index_manager_test",
     srcs = ["index_manager_test.cpp"],
     tags = ["no-sandbox", "local", "exclusive"],
