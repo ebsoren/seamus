@@ -18,24 +18,9 @@
 #include "lib/consts.h"
 #include "lib/query_response.h"
 #include "lib/string.h"
-#include "lib/vector.h"
 
 
 namespace {
-
-// Split a whitespace-delimited line into words. Skips empty tokens.
-static vector<string> split_whitespace(const char* line, size_t len) {
-    vector<string> out;
-    size_t i = 0;
-    while (i < len) {
-        while (i < len && (line[i] == ' ' || line[i] == '\t')) ++i;
-        if (i >= len) break;
-        size_t start = i;
-        while (i < len && line[i] != ' ' && line[i] != '\t') ++i;
-        out.push_back(string(line + start, i - start));
-    }
-    return out;
-}
 
 static void print_response(const QueryResponse& resp) {
     printf("  %zu matching doc(s)\n", resp.pages.size());
@@ -84,11 +69,10 @@ int main(int /*argc*/, char* /*argv*/[]) {
         if (len == 0) break;
         if (strcmp(line, "quit") == 0 || strcmp(line, "exit") == 0) break;
 
-        vector<string> words = split_whitespace(line, len);
-        if (words.size() == 0) continue;
+        string query_str(line, len);
 
         auto q_start = clock::now();
-        QueryResponse resp = im.handle_query(words);
+        QueryResponse resp = im.handle_query(query_str);
         auto q_ms =
           std::chrono::duration_cast<std::chrono::milliseconds>(clock::now() - q_start).count();
 

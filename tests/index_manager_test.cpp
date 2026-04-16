@@ -5,6 +5,7 @@
 #include <dirent.h>
 #include <random>
 #include <set>
+#include <string>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -291,7 +292,17 @@ void test_index_manager_discovery_and_query() {
         }
 
         std::set<std::string> want = expected_urls(word_to_urls, pool_idxs);
-        QueryResponse resp = im.handle_query(words);
+
+        // index_manager::handle_query now takes a raw query string. Join the
+        // sampled words with spaces — the parser treats space as AND, which
+        // matches what default_query was doing before.
+        std::string joined;
+        for (size_t i = 0; i < words.size(); ++i) {
+            if (i > 0) joined.push_back(' ');
+            joined.append(words[i].data(), words[i].size());
+        }
+        string query_str(joined.data(), joined.size());
+        QueryResponse resp = im.handle_query(query_str);
 
         assert(resp.pages.size() == want.size());
 
@@ -323,18 +334,17 @@ void test_index_manager_discovery_and_query() {
     // A missing word must fan out, hit every chunk's short-circuit, and
     // return an empty QueryResponse.
     {
-        vector<string> only_missing;
-        only_missing.push_back(string("NONEXISTENTWORD"));
-        QueryResponse resp = im.handle_query(only_missing);
+        QueryResponse resp = im.handle_query(string("nonexistentword"));
         assert(resp.pages.size() == 0);
     }
 
     // Try AND query with a nonexistenbt and a real, must return empty query.
     {
-        vector<string> mixed;
-        mixed.push_back(string(pool[0].data(), pool[0].size()));
-        mixed.push_back(string("NONEXISTENTWORD"));
-        QueryResponse resp = im.handle_query(mixed);
+        std::string joined;
+        joined.append(pool[0].data(), pool[0].size());
+        joined.push_back(' ');
+        joined.append("nonexistentword");
+        QueryResponse resp = im.handle_query(string(joined.data(), joined.size()));
         assert(resp.pages.size() == 0);
     }
 
@@ -353,9 +363,7 @@ void test_index_manager_empty_dir() {
 
     index_manager im;
 
-    vector<string> words;
-    words.push_back(string("apple"));
-    QueryResponse resp = im.handle_query(words);
+    QueryResponse resp = im.handle_query(string("apple"));
     assert(resp.pages.size() == 0);
 }
 

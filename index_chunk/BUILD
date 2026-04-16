@@ -6,6 +6,7 @@ cc_library(
     hdrs = [
         "chunk_manager.h",
         "isr.h",
+        "query_isr.h",
     ],
     visibility = ["//visibility:public"],
     deps = [
@@ -19,5 +20,6 @@ cc_library(
         "//lib:utf8",
         "//lib:utils",
         "//lib:vector",
+        "//query:expressions",
     ],
 )

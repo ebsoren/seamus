@@ -8,10 +8,12 @@ cc_library(
         "//index_chunk:chunk_manager",
         "//lib:atomic_vector",
         "//lib:consts",
+        "//lib:logger",
         "//lib:query_response",
         "//lib:string",
         "//lib:utils",
         "//lib:vector",
+        "//query:expressions",
     ],
 )
 
@@ -23,6 +25,5 @@ cc_binary(
         "//lib:consts",
         "//lib:query_response",
         "//lib:string",
-        "//lib:vector",
     ],
 )
