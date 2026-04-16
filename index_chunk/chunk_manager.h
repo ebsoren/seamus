@@ -352,38 +352,39 @@ public:
 
     // Phase 1 entry point for the complex query handler. Builds a per-call
     // ISR tree out of the parsed AST and executes (HERSHEY - THIS NOT DONE)
-    // TODO (Esben) matbe build irs tree in index manager and pass in queryISR root.
-    // Not 100% sure if that will work tho
     void query(const ASTNode &ast, atomic_vector<DocInfo> *data_channel) {
         ISRArena arena;
-        QueryISR *root = build_isr_tree(ast, arena);
+        QueryISR *root = build_isr_tree(ast, arena, &li);
         if (root == nullptr) {
             logger::warn("chunk_manager::query: build_isr_tree returned null");
             return;
         }
-
-        // Return if the query is logically impossible
         if (!root->is_driveable()) {
-            logger::warn("chunk_manager::query: query has no driveable path (all branches negated)");
+            logger::warn("chunk_manager::query: query has no driveable path");
             return;
         }
 
-        // 1. collect positive terms and run them through
-        // default_query. dedupe is already handled by the arena, so the
-        // unique-words invariant on default_query is satisfied.
+        // Phase 1 fallback: extract unique positive terms and delegate
+        // to default_query. Dedup at extraction since the arena no
+        // longer dedupes (each tree position has its own TermISR).
         vector<string> positive_words;
-        positive_words.reserve(arena.terms().size());
         for (size_t i = 0; i < arena.terms().size(); ++i) {
             const TermISR *t = arena.terms()[i];
             if (t->is_negated()) continue;
-            positive_words.push_back(string(t->word().data(), t->word().size()));
+            bool dupe = false;
+            for (size_t j = 0; j < positive_words.size(); ++j) {
+                if (positive_words[j].size() == t->word().size()
+                    && memcmp(positive_words[j].data(), t->word().data(), t->word().size()) == 0) {
+                    dupe = true;
+                    break;
+                }
+            }
+            if (!dupe) {
+                positive_words.push_back(string(t->word().data(), t->word().size()));
+            }
         }
 
-        // Return if the query is entirely negations.
-        if (positive_words.size() == 0) {
-            return;
-        }
-
+        if (positive_words.size() == 0) return;
         default_query(positive_words, data_channel);
     }
 
