@@ -66,7 +66,34 @@ public:
     using const_iterator = const LeanPage *;
     const_iterator begin() const { return pages_.begin(); }
     const_iterator end() const { return pages_.end(); }
+
     size_t size() const { return pages_.size(); }
+    void clear() { pages_.clear(); }
+
+    // Bidirectional cursor into the buffer with explicit increment /
+    // decrement / reset. Dereferencing gives a mutable LeanPage& so
+    // callers (e.g. merge_top_pages) can move pages out in-place.
+    class iterator {
+    public:
+        iterator() : begin_(nullptr), end_(nullptr), cur_(nullptr) {}
+        iterator(LeanPage *begin, LeanPage *end)
+            : begin_(begin), end_(end), cur_(begin) {}
+
+        void increment() { if (cur_ != end_)   ++cur_; }
+        void decrement() { if (cur_ != begin_) --cur_; }
+        void reset()     { cur_ = begin_; }
+        bool at_end() const { return cur_ == end_; }
+
+        LeanPage& operator*()  { return *cur_; }
+        LeanPage* operator->() { return cur_; }
+
+    private:
+        LeanPage *begin_;
+        LeanPage *end_;
+        LeanPage *cur_;
+    };
+
+    iterator iter() { return iterator(pages_.begin(), pages_.end()); }
 
 private:
     Ranker *ranker_;
@@ -87,40 +114,40 @@ inline void drain_into(atomic_vector<DocInfo> *data, RankedBuffer *buffer) {
 }
 
 
-// Simple k-way merge of already-sorted RankedBuffers. Each buffer holds
-// pages in descending-score order, so we keep one cursor per buffer and
-// at each step pick the cursor whose current head has the highest score,
-// move that page into the result, and advance. Stops when the result
-// hits `cap` pages or every cursor has exhausted its buffer. Drains the
-// buffers via take() — they are empty on return.
+// Simple k-way merge of already-sorted RankedBuffers using one
+// RankedBuffer::iterator per source. At each step, pick the iterator
+// whose current LeanPage has the highest score, move that page into the
+// result, and `increment()` that iterator. Stops when the result hits
+// `cap` pages or every iterator has reached at_end(). The buffers are
+// cleared at the end since their pages have been moved out.
 inline vector<LeanPage> merge_top_pages(const vector<RankedBuffer *> &buffers, size_t cap) {
     size_t k = buffers.size();
 
-    vector<vector<LeanPage>> sources;
-    sources.reserve(k);
+    vector<RankedBuffer::iterator> iters;
+    iters.reserve(k);
     for (size_t i = 0; i < k; ++i) {
-        sources.push_back(buffers[i]->take());
+        iters.push_back(buffers[i]->iter());
     }
-
-    vector<size_t> cursor;
-    cursor.reserve(k);
-    for (size_t i = 0; i < k; ++i) cursor.push_back(0);
 
     vector<LeanPage> result;
     result.reserve(cap);
 
     while (result.size() < cap) {
-        size_t best = k;  // sentinel: no source has anything left
+        size_t best = k;  // sentinel: every iterator at_end
         for (size_t i = 0; i < k; ++i) {
-            if (cursor[i] >= sources[i].size()) continue;
-            if (best == k || sources[i][cursor[i]].score > sources[best][cursor[best]].score) {
+            if (iters[i].at_end()) continue;
+            if (best == k || (*iters[i]).score > (*iters[best]).score) {
                 best = i;
             }
         }
         if (best == k) break;
-        result.push_back(move(sources[best][cursor[best]]));
-        ++cursor[best];
+        result.push_back(move(*iters[best]));
+        iters[best].increment();
     }
+
+    // Pages were moved out of each buffer via their iterators; release
+    // the moved-from entries so the buffers aren't left in a zombie state.
+    for (size_t i = 0; i < k; ++i) buffers[i]->clear();
 
     return result;
 }
