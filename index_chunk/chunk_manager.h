@@ -353,7 +353,7 @@ public:
 
     // Phase 1 entry point for the complex query handler. Builds a per-call
     // ISR tree out of the parsed AST and executes (HERSHEY - THIS NOT DONE)
-    void query(const ASTNode &ast, atomic_vector<LeanPage> *data_channel) {
+    void query(const ASTNode &ast, atomic_vector<DocInfo> *data_channel) {
         ISRArena arena;
         QueryISR *root = build_isr_tree(ast, arena, &li);
         if (root == nullptr) {
@@ -395,11 +395,11 @@ public:
     // slow chunk. The collector is passed per-call (rather than stored on
     // the chunk_manager) so it can be a per-query local owned by the caller.
     // INVARIANT: WORDS VECTOR MUST CONTAIN UNIQUE ELEMENTS
-    void default_query(const vector<string> &words, atomic_vector<LeanPage> *data_channel) {
+    void default_query(const vector<string> &words, atomic_vector<DocInfo> *data_channel) {
         using clock = std::chrono::steady_clock;
         const auto start_time = clock::now();
 
-        vector<LeanPage> docs;
+        vector<DocInfo> docs;
         if (words.size() == 0) {
             return;
         }
@@ -475,7 +475,7 @@ public:
                 continue;
             }
 
-            // All words match at `target`. Build a LeanPage by collecting each
+            // All words match at `target`. Build a DocInfo by collecting each
             // word's positions in this doc. collect_positions_in_current_doc
             // advances each ISR past the current doc (via the has_pending_
             // overshoot buffer), so the next advance_to() lands correctly.
@@ -492,7 +492,7 @@ public:
                     move(positions),
                 });
             }
-            docs.push_back(LeanPage{
+            docs.push_back(DocInfo{
                 li.get_url(target),
                 move(word_infos),
             });
@@ -512,13 +512,13 @@ public:
     // 1) sequentially AND
     // 2) directly adjacent
     // Uses the same timer approach as default_query() by populating results depth first and stopping if TLE
-    void phrase_query(const vector<string>& words, atomic_vector<LeanPage>* data_channel) {
+    void phrase_query(const vector<string>& words, atomic_vector<DocInfo>* data_channel) {
         using clock = std::chrono::steady_clock;
         const auto start_time = clock::now();
 
         // If no words, do nothing
         // If one word, just use default query algorithm
-        vector<LeanPage> docs;
+        vector<DocInfo> docs;
         if (words.size() == 0) {
             return;
         } else if (words.size() == 1) {
@@ -577,7 +577,7 @@ public:
             // If the doc has the phrase, advance ground to the next doc
             if (validate_pos()) {
                 // Phrase match at (ground.doc, ground.loc). Word i is at
-                // ground.loc + i by construction. One LeanPage per doc (we
+                // ground.loc + i by construction. One DocInfo per doc (we
                 // jump to the next doc below, so later hits in this doc
                 // aren't recorded).
                 vector<NodeInfo> word_infos;
@@ -590,7 +590,7 @@ public:
                         move(positions),
                     });
                 }
-                docs.push_back(LeanPage{
+                docs.push_back(DocInfo{
                     li.get_url(ground.doc),
                     move(word_infos),
                 });
