@@ -250,6 +250,18 @@ public:
     }
 
     uint32_t next_doc() override {
+        // Lazy advance: if a previous next_doc() returned a doc, advance
+        // the children that contributed to it now (deferred so callers
+        // can collect positions from those children first).
+        if (pending_advance_ != 0) {
+            for (size_t i = 0; i < current_docs_.size(); ++i) {
+                if (current_docs_[i] == pending_advance_) {
+                    current_docs_[i] = children_[i]->next_doc();
+                }
+            }
+            pending_advance_ = 0;
+        }
+
         // Find the minimum current doc across all children.
         uint32_t min_doc = 0;
         for (size_t i = 0; i < current_docs_.size(); ++i) {
@@ -259,12 +271,7 @@ public:
         }
         if (min_doc == 0) return 0;
 
-        // Advance all children that were at the minimum.
-        for (size_t i = 0; i < current_docs_.size(); ++i) {
-            if (current_docs_[i] == min_doc) {
-                current_docs_[i] = children_[i]->next_doc();
-            }
-        }
+        pending_advance_ = min_doc;
         return min_doc;
     }
 
@@ -278,6 +285,7 @@ public:
 private:
     vector<QueryISR *> children_;
     vector<uint32_t> current_docs_;
+    uint32_t pending_advance_ = 0;
 };
 
 

@@ -181,6 +181,20 @@ cc_test (
 )
 
 cc_test (
+    name = "query_isr_test",
+    srcs = ["query_isr_test.cpp"],
+    tags = ["no-sandbox", "local", "exclusive"],
+    deps = [
+        "//index_chunk:chunk_manager",
+        "//index:index_lib",
+        "//lib:consts",
+        "//lib:string",
+        "//lib:vector",
+        "//query:expressions",
+    ],
+)
+
+cc_test (
     name = "index_manager_test",
     srcs = ["index_manager_test.cpp"],
     tags = ["no-sandbox", "local", "exclusive"],
