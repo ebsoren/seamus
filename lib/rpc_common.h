@@ -8,6 +8,21 @@
 #include "string.h"
 #include <cstring>
 #include <optional>
+#include <bit>
+
+#if defined(__linux__) || defined(__CYGWIN__)
+    #include <endian.h>
+    #define htonll(x) htobe64(x)
+    #define ntohll(x) be64toh(x)
+#elif defined(__APPLE__)
+    #include <arpa/inet.h>
+    // htonll and ntohll are already defined here
+#elif defined(_WIN32)
+    #include <winsock2.h>
+    // htonll and ntohll are already defined here
+#else
+    #error "Platform not supported for 64-bit endianness conversion."
+#endif
 
 // Spin up a socket and connect. Returns the connected socket fd, or -1 on failure.
 inline int connect_to_host(const string& host, uint16_t port) {
@@ -93,32 +108,21 @@ inline bool recv_u32(int fd, uint32_t& out) {
     return true;
 }
 
-bool send_double(int fd, double value) {
+inline bool send_double(int fd, double value) {
     uint64_t int_representation;
     std::memcpy(&int_representation, &value, sizeof(value));
-    
-    // 2. Convert to Network Byte Order (Big-Endian)
-    uint64_t network_val = htobe64(int_representation);
-    
-    // 3. Send the 8 bytes
-    ssize_t bytes_written = write(fd, &network_val, sizeof(network_val));
-    return bytes_written == sizeof(network_val);
+    uint64_t network_val = htonll(std::bit_cast<uint64_t>(value));
+
+    return send_exact(fd, &network_val, sizeof(network_val));
 }
 
-std::optional<double> recv_double(int fd) {
+inline bool recv_double(int fd, double& value) {
     uint64_t network_val;
-    
-    // 1. Read exactly 8 bytes (using your recv_exact helper!)
-    if (!recv_exact(fd, &network_val, sizeof(network_val))) {
-        return std::nullopt; 
-    }
-    
-    // 2. Convert back to Host Byte Order
-    uint64_t int_representation = be64toh(network_val);
-    double value;
-    std::memcpy(&value, &int_representation, sizeof(value));
-    
-    return value;
+    if (!recv_exact(fd, &network_val, sizeof(network_val))) return false;
+
+    uint64_t host_val = ntohll(network_val);
+    value = std::bit_cast<double>(host_val);
+    return true;
 }
 
 

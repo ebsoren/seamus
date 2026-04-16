@@ -9,6 +9,21 @@
 #include <memory>
 #include <optional>
 
+#if defined(__linux__) || defined(__CYGWIN__)
+    #include <endian.h>
+    #define htonll(x) htobe64(x)
+    #define ntohll(x) be64toh(x)
+#elif defined(__APPLE__)
+    #include <arpa/inet.h>
+    // htonll and ntohll are already defined here
+#elif defined(_WIN32)
+    #include <winsock2.h>
+    // htonll and ntohll are already defined here
+#else
+    #error "Platform not supported for 64-bit endianness conversion."
+#endif
+
+
 struct LeanPage {
     string url = string("");
     string title = string("");
@@ -51,11 +66,14 @@ inline LeanPageResponse send_recv_query_data(const string& host, const uint16_t 
         LeanPage curr;
         std::optional<string> title = recv_string(sock_fd);
         std::optional<string> url = recv_string(sock_fd);
-        std::optional<double> score = recv_double(sock_fd);
-        if (title == std::nullopt || url == std::nullopt || score == std::nullopt) continue;
+
+        double score;
+        bool recv_double_result = recv_double(sock_fd, score);
+        if (title == std::nullopt || url == std::nullopt || !recv_double_result) continue;
+
         curr.title = std::move(url.value());
         curr.url = std::move(url.value());
-        curr.score = score.value();
+        curr.score = score;
         remote_hits.pages.push_back(std::move(curr));
     }
 
@@ -94,7 +112,7 @@ inline bool send_query_response(const uint16_t fd, const LeanPageResponse& resul
         off += page.url.size();
 
         uint64_t int_rep = std::bit_cast<uint64_t>(page.score);
-        uint64_t network_val = htobe64(int_rep);
+        uint64_t network_val = htonll(int_rep);
         std::memcpy(buf.get() + off, &network_val, sizeof(uint64_t));
         off += sizeof(double);
     }
