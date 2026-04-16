@@ -62,6 +62,12 @@ public:
     // Move the sorted pages out of the buffer. Leaves the buffer empty.
     vector<LeanPage> take() { return move(pages_); }
 
+    // Read-only traversal of the buffer in descending-score order.
+    using const_iterator = const LeanPage *;
+    const_iterator begin() const { return pages_.begin(); }
+    const_iterator end() const { return pages_.end(); }
+    size_t size() const { return pages_.size(); }
+
 private:
     Ranker *ranker_;
     UrlStore *url_store_;

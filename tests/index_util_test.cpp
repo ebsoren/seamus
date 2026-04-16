@@ -5,6 +5,7 @@
 #include <cstring>
 #include <dirent.h>
 #include <initializer_list>
+#include <limits>
 #include <random>
 #include <set>
 #include <sys/stat.h>
@@ -12,9 +13,12 @@
 
 #include "index/Index.h"
 #include "index_chunk/chunk_manager.h"
+#include "index_chunk/ranked_buffer.h"
 #include "lib/consts.h"
 #include "lib/string.h"
 #include "lib/vector.h"
+#include "ranker/Ranker.h"
+#include "url_store/url_store.h"
 
 
 namespace {
@@ -679,6 +683,82 @@ void test_phrase_query() {
 }
 
 
+// ---------------------------------------------------------------------------
+// RankedBuffer tests
+// ---------------------------------------------------------------------------
+
+// Stage NUM_DOCS fake DocInfos in an atomic_vector with URLs registered in a
+// real UrlStore (varying seed_distance so the ranker produces varying
+// scores), drain them into a RankedBuffer via drain_into, and walk the
+// buffer's iterator. The buffer's contract is "top-K descending by score",
+// so we check: (a) size caps at CAPACITY, and (b) iteration yields
+// non-increasing scores.
+void test_ranked_buffer_sorted_order() {
+    constexpr size_t NUM_DOCS = 15;  // > RankedBuffer::CAPACITY (10)
+
+    UrlStore store(nullptr, 0);
+    atomic_vector<DocInfo> channel;
+
+    char url_buf[64];
+    for (size_t i = 0; i < NUM_DOCS; ++i) {
+        int n = snprintf(url_buf, sizeof(url_buf), "http://rb.test/d%zu", i);
+        string url(url_buf, static_cast<size_t>(n));
+
+        // Register URL in the store with a unique seed_distance and title.
+        // updateUrl takes non-const refs, so pass mutable copies.
+        string url_key(url.data(), url.size());
+        vector<string> anchors;
+        anchors.push_back(string("ranked_buffer"));
+        store.updateUrl(url_key, anchors,
+                        static_cast<uint16_t>(i + 1),  // seed_distance varies
+                        1, 1);
+        store.markCrawled(url);
+
+        string title = string::join("", string("title_"),
+                                    string(static_cast<uint32_t>(i)));
+        store.updateTitle(url, title);
+        store.updateTitleLen(url, static_cast<uint16_t>(title.size()));
+        store.updateBodyLen(url, 100);
+
+        // Build a DocInfo pointing at the URL we just registered.
+        // string has no default ctor, so aggregate-initialize everything.
+        NodeInfo ni{string("ranked_buffer"), vector<size_t>(), 100, false};
+        ni.pos.push_back(1);
+        ni.pos.push_back(2);
+
+        vector<NodeInfo> nodes;
+        nodes.push_back(static_cast<NodeInfo&&>(ni));
+
+        DocInfo di{string(url.data(), url.size()), static_cast<vector<NodeInfo>&&>(nodes)};
+
+        vector<DocInfo> one;
+        one.push_back(static_cast<DocInfo&&>(di));
+        channel.append_move(static_cast<vector<DocInfo>&&>(one));
+    }
+
+    Ranker ranker(&store, RANKED_ON_EACH, DEFAULT_DYNAMIC_WEIGHT, false);
+    RankedBuffer buffer(&ranker, &store);
+
+    drain_into(&channel, &buffer);
+
+    // We fed more than CAPACITY docs — the buffer must have evicted down
+    // to exactly CAPACITY.
+    assert(buffer.size() == RankedBuffer::CAPACITY);
+
+    // Walk the iterator and check scores are non-increasing.
+    double prev = std::numeric_limits<double>::infinity();
+    size_t seen = 0;
+    for (const LeanPage &p : buffer) {
+        assert(p.score <= prev);
+        prev = p.score;
+        ++seen;
+    }
+    assert(seen == RankedBuffer::CAPACITY);
+
+    printf("  ranked buffer: %zu pages, scores monotone non-increasing\n", seen);
+}
+
+
 } // namespace
 
 
@@ -688,6 +768,7 @@ int main() {
     test_loaded_index_matches_corpus();
     test_chunk_manager_queries();
     test_phrase_query();
+    test_ranked_buffer_sorted_order();
 
     printf("\n=== ALL INDEX UTIL TESTS FINISHED ===\n\n");
     return 0;
