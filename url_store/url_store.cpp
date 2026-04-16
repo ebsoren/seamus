@@ -72,7 +72,7 @@ void UrlStore::batch_manage_frontier_and_update_url(BatchURLStoreUpdateRequest& 
 
     for (size_t i = 0; i < batch_req.reqs.size(); ++i) {
         URLStoreUpdateRequest& req = batch_req.reqs[i];
-        size_t priority = get_priority_bucket(req.url, req.seed_list_url_hops. req.seed_list_domain_hops);
+        size_t priority = get_priority_bucket(req.url, req.seed_list_url_hops, req.seed_list_domain_hops);
         bool is_new = updateUrl(req.url, req.anchor_text, req.seed_list_url_hops, req.seed_list_domain_hops, req.num_encountered, priority);
 
         if (is_new && dc && priority < PRIORITY_BUCKETS) {
