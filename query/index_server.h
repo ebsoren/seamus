@@ -28,16 +28,17 @@ class IndexServer {
                 close(fd);
                 return;
             }
-
-            query_pool.enqueue_task([this, fd, query = std::move(query_opt.value())]() {
-                LeanPageResponse results = handle_request(query);
+            
+            auto query_ptr = std::make_shared<string>(query_opt.value().data(), query_opt.value().size());
+            query_pool.enqueue_task([this, fd, query_ptr]() {
+                LeanPageResponse results = handle_request(*query_ptr);
                 send_query_response(fd, results);
                 close(fd);
             });  
         }
 
     public:
-        IndexServer(IndexManager* index_manager) : query_pool(INDEX_SERVER_NUM_THREADS), index_manager(index_manager), ranker(ranker) {
+        IndexServer(IndexManager* index_manager) : query_pool(INDEX_SERVER_NUM_THREADS), index_manager(index_manager) {
             rpc_listener = new RPCListener(INDEX_SERVER_PORT, INDEX_SERVER_NUM_THREADS);
             listener_thread = std::thread([this]() {
                 rpc_listener->listener_loop([this](int fd) { client_handler(fd); });
@@ -54,12 +55,12 @@ class IndexServer {
         // some internal method that this machine's query handler can traverse this index without needing to make a network call
         std::future<LeanPageResponse> local_retrieve(const string& query) {
             auto promise = std::make_shared<std::promise<LeanPageResponse>>();
+
             std::future<LeanPageResponse> future = promise->get_future();
-            
-            string query_copy = string(query.data(), query.size());
-            query_pool.enqueue_task([this, new_query = std::move(query_copy), promise]() {
+            auto query_ptr = std::make_shared<string>(query.data(), query.size());
+            query_pool.enqueue_task([this, query_ptr, promise]() {
                 try {
-                    LeanPageResponse response = this->handle_request(new_query);
+                    LeanPageResponse response = this->handle_request(*query_ptr);
                     promise->set_value(std::move(response));
                 } catch (...) {
                     promise->set_exception(std::current_exception());
