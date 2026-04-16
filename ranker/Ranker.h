@@ -1,11 +1,12 @@
 #pragma once
 
-#include <cstddef>    // for size_t
 #include <cassert>
+#include <cmath>
+#include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <iomanip>
 #include <stdio.h>
-#include <cstring>
 #include "../lib/vector.h"
 #include "../lib/string.h"
 #include "../lib/unordered_map.h"
