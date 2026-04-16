@@ -46,6 +46,16 @@ inline int connect_to_host(const string& host, uint16_t port) {
     return sockfd;
 }
 
+inline bool send_exact(int fd, const void* buf, size_t len) {
+    size_t total_sent = 0;
+    while (total_sent < len) {
+        ssize_t sent = send(fd, (const char*)buf + total_sent, len - total_sent, 0);
+        if (sent <= 0) return false;
+        total_sent += sent;
+    }
+    return true;
+}
+
 // Send a buffer to an end host over TCP
 // This operation spins up a short-lived socket but is completely stateless beyond the success of the creation of the socket
 inline bool send_buffer(const string& host, uint16_t port, const void* buf, size_t len) {
@@ -55,16 +65,6 @@ inline bool send_buffer(const string& host, uint16_t port, const void* buf, size
     bool result = send_exact(sockfd, buf, len);
     close(sockfd);
     return result;
-}
-
-inline bool send_exact(int fd, const void* buf, size_t len) {
-    size_t total_sent = 0;
-    while (total_sent < len) {
-        ssize_t sent = send(fd, (const char*)buf + total_sent, len - total_sent, 0);
-        if (sent <= 0) return false;
-        total_sent += sent;
-    }
-    return true;
 }
 
 inline bool send_u32(int fd, uint32_t val) {

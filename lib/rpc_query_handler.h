@@ -3,7 +3,6 @@
 #include "../lib/string.h"
 #include "../lib/vector.h"
 #include "../lib/rpc_common.h"
-#include "../ranker/Ranker.h"
 
 #include <cstdint>
 #include <memory>

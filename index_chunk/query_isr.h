@@ -1,5 +1,6 @@
 #pragma once
 
+#include <climits>
 #include <cstdint>
 #include <cstring>
 
@@ -103,7 +104,7 @@ class AndOp : public QueryISR {
 public:
     void add_child(QueryISR *c) {
         children_.push_back(c);
-        uint32_t s = c->estimated_n_docs;
+        uint32_t s = c->estimated_n_docs();
         if (!driver_ || c->is_driveable() && s < driver_score_) {
             driver_ = c;
             driver_score_ = s;
@@ -163,7 +164,7 @@ public:
 private:
     vector<QueryISR *> children_;
     QueryISR *driver_ = nullptr;
-    size_t driver_score_ = INT_MAX:
+    size_t driver_score_ = INT_MAX;
 };
 
 
