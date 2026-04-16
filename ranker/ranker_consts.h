@@ -35,7 +35,10 @@ constexpr double static_weight_sum = static_1_weight + static_2_weight + static_
     static_5_weight + static_6_weight + static_7_weight + static_8_weight + static_9_weight;
 
 // PARAMS FOR WORD POS SCORE
-constexpr double lambda = 1.0; // modify this factor during tuning
+constexpr double LAMBDA_POS = 1.0; // modify this factor during tuning
+
+// PARAMS FOR WORD FREQ AND RARITY SCORE
+constexpr double LAMBDA_FREQ = 0.5;
 
 // PARAM FOR DYNAMIC VS STATIC WEIGHTING
 constexpr double DEFAULT_DYNAMIC_WEIGHT = 0.72;
