@@ -21,7 +21,6 @@ cc_library(
         "//lib:unordered_map",
         "//lib:utils",
         "//lib:consts",
-        "//lib:rpc_listener",
         "//lib:rpc_query_handler",
         "//lib:thread_pool",
         "//lib:algorithm",

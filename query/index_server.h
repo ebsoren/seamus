@@ -46,6 +46,13 @@ class IndexServer {
             });
         }
 
+        ~IndexServer() {
+            delete rpc_listener;
+            if (listener_thread.joinable()) {
+                listener_thread.join();
+            }
+        }
+
         // some internal method that this machine's query handler can traverse this index without needing to make a network call
         std::future<LeanPageResponse> local_retrieve(const string& query) {
             auto promise = std::make_shared<std::promise<LeanPageResponse>>();
