@@ -314,12 +314,12 @@ void test_index_manager_discovery_and_query() {
 
         // Each DocInfo must carry positions for every queried word.
         for (const DocInfo& di : resp.pages) {
-            assert(di.wordInfo.size() == words.size());
+            assert(di.nodeInfo.size() == words.size());
             // Every word's pos list must be non-empty (the doc matched the
             // AND query, so every word has at least one hit).
-            for (const WordInfo& wi : di.wordInfo) {
-                assert(wi.pos.size() > 0);
-                uint32_t pidx = pool_idx_for_word(pool, wi.word);
+            for (const NodeInfo& ni : di.nodeInfo) {
+                assert(ni.pos.size() > 0);
+                uint32_t pidx = pool_idx_for_word(pool, ni.phrase);
                 assert(pidx != UINT32_MAX);
             }
         }

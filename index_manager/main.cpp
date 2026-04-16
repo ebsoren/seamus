@@ -27,11 +27,11 @@ static void print_response(const ChunkQueryInfo& resp) {
     for (size_t i = 0; i < resp.pages.size(); ++i) {
         const DocInfo& di = resp.pages[i];
         printf("    [%zu] %.*s\n", i, static_cast<int>(di.url.size()), di.url.data());
-        for (size_t w = 0; w < di.wordInfo.size(); ++w) {
-            const WordInfo& wi = di.wordInfo[w];
+        for (size_t w = 0; w < di.nodeInfo.size(); ++w) {
+            const NodeInfo& ni = di.nodeInfo[w];
             printf("        %.*s (%zu hit%s)\n",
-                   static_cast<int>(wi.word.size()), wi.word.data(),
-                   wi.pos.size(), wi.pos.size() == 1 ? "" : "s");
+                   static_cast<int>(ni.phrase.size()), ni.phrase.data(),
+                   ni.pos.size(), ni.pos.size() == 1 ? "" : "s");
         }
     }
 }

@@ -403,9 +403,9 @@ void test_chunk_manager_queries() {
             const uint32_t doc_id = got_ids[di_i];
             const size_t g = static_cast<size_t>(doc_id) - 1;
 
-            assert(di.wordInfo.size() == words.size());
-            for (const WordInfo& wi : di.wordInfo) {
-                uint32_t pidx = pool_idx_for_word(pool, wi.word);
+            assert(di.nodeInfo.size() == words.size());
+            for (const NodeInfo& ni : di.nodeInfo) {
+                uint32_t pidx = pool_idx_for_word(pool, ni.phrase);
                 assert(pidx != UINT32_MAX);
 
                 std::set<size_t> expected_positions;
@@ -414,9 +414,9 @@ void test_chunk_manager_queries() {
                     if (row[l] == pidx) expected_positions.insert(l + 1);
                 }
 
-                assert(wi.pos.size() == expected_positions.size());
+                assert(ni.pos.size() == expected_positions.size());
                 std::set<size_t> got_positions;
-                for (size_t p : wi.pos) got_positions.insert(p);
+                for (size_t p : ni.pos) got_positions.insert(p);
                 assert(got_positions == expected_positions);
             }
         }
@@ -621,18 +621,18 @@ void test_phrase_query() {
             assert(contains_url(got_urls, expected_urls[i]));
         }
 
-        // WordInfo sanity: each DocInfo should carry one position per query
+        // NodeInfo sanity: each DocInfo should carry one position per query
         // word, and those positions must be consecutive (anchor, anchor+1, ...).
         for (const DocInfo& di : got) {
-            assert(di.wordInfo.size() == pc.query.size());
-            assert(di.wordInfo[0].pos.size() == 1);
-            size_t anchor = di.wordInfo[0].pos[0];
-            for (size_t i = 0; i < di.wordInfo.size(); ++i) {
-                const WordInfo& wi = di.wordInfo[i];
-                assert(wi.word.size() == pc.query[i].size());
-                assert(memcmp(wi.word.data(), pc.query[i].data(), wi.word.size()) == 0);
-                assert(wi.pos.size() == 1);
-                assert(wi.pos[0] == anchor + i);
+            assert(di.nodeInfo.size() == pc.query.size());
+            assert(di.nodeInfo[0].pos.size() == 1);
+            size_t anchor = di.nodeInfo[0].pos[0];
+            for (size_t i = 0; i < di.nodeInfo.size(); ++i) {
+                const NodeInfo& ni = di.nodeInfo[i];
+                assert(ni.phrase.size() == pc.query[i].size());
+                assert(memcmp(ni.phrase.data(), pc.query[i].data(), ni.phrase.size()) == 0);
+                assert(ni.pos.size() == 1);
+                assert(ni.pos[0] == anchor + i);
             }
         }
 
