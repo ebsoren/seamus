@@ -49,8 +49,6 @@ int main() {
     UrlStore url_store(&dc, my_machine_id());
     logger::info("URL store listener started on port %u with %u threads", URL_STORE_PORT, URL_STORE_NUM_THREADS);
 
-    // Crawler instrumentation — declared after url_store so it is destroyed
-    // first, ensuring drain_thread joins before url_store is torn down.
     CrawlerInstrumentation instrumentation(CRAWLER_THREADPOOL_SIZE);
     instrumentation.start();
     logger::info("Crawler instrumentation started (drain interval: %zu sec)", CRAWLER_INSTRUMENTATION_INTERVAL_SEC);
