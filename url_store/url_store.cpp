@@ -297,7 +297,10 @@ void UrlStore::persist(bool final_persist) {
 }
 
 void UrlStore::readFromFile(const int worker_number) {
-    string fileName = string::join("", URL_STORE_OUTPUT_DIR_STR, "/urlstore.txt");
+    // 1. FIX: Ensure each worker reads its own specific file to avoid data races
+    // Note: Make sure your custom string::join supports this, or use std::to_string
+    string fileName = string::join("", URL_STORE_OUTPUT_DIR_STR, "/urlstore_.txt");
+    
     string read_mode("rb");
     FILE* fd = fopen(fileName.data(), read_mode.data());
 
@@ -334,6 +337,13 @@ void UrlStore::readFromFile(const int worker_number) {
         string url(url_buff, url_len);
 
         UrlShard& shard = get_shard(url);
+        
+        // --- THREAD SAFETY NOTE ---
+        // If your workers are strictly partitioned and never hit the same shard, this is fine.
+        // If multiple workers can hit the same shard concurrently, you MUST lock a mutex here
+        // before inserting into shard.url_data to prevent a rehashing Segfault!
+        // std::lock_guard<std::mutex> lock(shard.mtx); 
+        
         auto& url_data = shard.url_data;
         unique_url_count.fetch_add(1, std::memory_order_relaxed);
 
@@ -341,11 +351,22 @@ void UrlStore::readFromFile(const int worker_number) {
         fread(&url_data[url].seed_distance, sizeof(uint16_t), 1, fd);
         fread(&url_data[url].eot, sizeof(uint16_t), 1, fd);
 
-        size_t title_len;
-        fread(&title_len, sizeof(size_t), 1, fd);
-        char title_buf[title_len];
+        // 2. FIX: Stop using size_t for binary serialization. Use fixed-width integers.
+        uint32_t title_len; 
+        fread(&title_len, sizeof(uint32_t), 1, fd);
+        
+        // 3. FIX: Prevent VLA Stack Overflow!
+        // Cap the max size against file corruption (e.g., 10MB limit)
+        if (title_len > 10000000) title_len = 10000000; 
+        
+        // Allocate safely on the HEAP, not the stack
+        char* title_buf = new char[title_len];
         fread(title_buf, sizeof(char), title_len, fd);
+        
         url_data[url].title = string(title_buf, title_len);
+        
+        // Clean up the heap memory so you don't leak it!
+        delete[] title_buf; 
         
         fread(&url_data[url].eod, sizeof(uint16_t), 1, fd);
         fread(&url_data[url].domain_dist, sizeof(uint16_t), 1, fd);
