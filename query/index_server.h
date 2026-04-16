@@ -5,8 +5,6 @@
 #include "../lib/consts.h"
 #include "../lib/thread_pool.h"
 #include "../ranker/Ranker.h"
-#include "../lib/chunk_manager_query.h"
-#include "../lib/chunk_manager_query.h"
 #include "../index_manager/index_manager.h"
 
 #include <future>

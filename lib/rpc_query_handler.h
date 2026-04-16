@@ -47,20 +47,14 @@ inline LeanPageResponse send_recv_query_data(const string& host, const uint16_t 
         return LeanPageResponse(); // Send failed
     }
 
+    LeanPageResponse remote_hits;
     uint32_t num_pages;
     if (!recv_u32(sock_fd, num_pages)) {
-        close(sock_fd);
-        return LeanPageResponse(); // Server dropped connection
-    }
-
-    LeanPageResponse remote_hits;
-    uint32_t page_count;
-    if (!recv_u32(sock_fd, page_count)) {
         close(sock_fd);
         return LeanPageResponse();
     }
 
-    for (uint32_t i = 0; i < page_count; ++i) {
+    for (uint32_t i = 0; i < num_pages; ++i) {
         // recv title, url, then score in that order
         LeanPage curr;
         std::optional<string> title = recv_string(sock_fd);
@@ -70,7 +64,7 @@ inline LeanPageResponse send_recv_query_data(const string& host, const uint16_t 
         bool recv_double_result = recv_double(sock_fd, score);
         if (title == std::nullopt || url == std::nullopt || !recv_double_result) continue;
 
-        curr.title = std::move(url.value());
+        curr.title = std::move(title.value());
         curr.url = std::move(url.value());
         curr.score = score;
         remote_hits.pages.push_back(std::move(curr));

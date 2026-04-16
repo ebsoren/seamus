@@ -180,4 +180,5 @@ cc_library(
     hdrs = ["rpc_query_handler.h"],
     visibility = ["//visibility:public"],
     deps = [":string", ":vector", ":rpc_common", "//ranker:ranker"],
+    
 )

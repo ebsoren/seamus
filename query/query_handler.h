@@ -10,7 +10,6 @@
 #include "../lib/thread_pool.h"
 #include "../lib/algorithm.h"
 
-#include "../index_chunk/chunk_manager.h"
 #include "index_server.h"
 #include "query_helpers.h"
 
@@ -82,17 +81,8 @@ class QueryHandler {
     public:
         QueryHandler(IndexServer* index_server, uint16_t port = QUERY_HANDLER_PORT, size_t n_pool_threads = NUM_MACHINES, size_t n_query_threads = QUERY_NUM_LISTENING_THREADS) : pool(n_pool_threads), index_server(index_server), rpc_listener(port, n_query_threads) { };
 
-        bool handle_client_req(int client_fd) {
-            char buffer[2048] = {0};
-            ssize_t bytes_read = read(client_fd, buffer, sizeof(buffer) - 1);
-            
-            if (bytes_read <= 0) {
-                close(client_fd);
-                return;
-            }
-
-            string raw_request(buffer);
-            send_query_response(client_fd, { get_results(raw_request) });
+        vector<LeanPage> handle_client_req(string& query_str) {
+            return get_results(query_str);
         }
 
 };

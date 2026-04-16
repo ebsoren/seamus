@@ -109,8 +109,6 @@ inline bool recv_u32(int fd, uint32_t& out) {
 }
 
 inline bool send_double(int fd, double value) {
-    uint64_t int_representation;
-    std::memcpy(&int_representation, &value, sizeof(value));
     uint64_t network_val = htonll(std::bit_cast<uint64_t>(value));
 
     return send_exact(fd, &network_val, sizeof(network_val));

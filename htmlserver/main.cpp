@@ -451,7 +451,10 @@ static void handle_client(int fd) {
             auto start_time = std::chrono::high_resolution_clock::now();
             
             // Ranking logic and query handling happens here!
-            results = resultsTest();
+
+            // here create all components
+
+            results = query_handler.handle_client_req(fd);
             
             // STOP TIMER
             auto end_time = std::chrono::high_resolution_clock::now();
