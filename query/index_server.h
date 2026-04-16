@@ -6,8 +6,10 @@
 #include "../lib/thread_pool.h"
 #include "../ranker/Ranker.h"
 #include "../lib/chunk_manager_query.h"
+#include "../lib/chunk_manager_query.h"
 #include "../index_manager/index_manager.h"
 
+#include <future>
 #include <thread>
 
 // receives requests for word doc data from another machine's query handlers
@@ -15,19 +17,12 @@ class IndexServer {
     private:
         IndexManager* index_manager;
         RPCListener* rpc_listener;      // Listener for client requests
-        UrlStore* url_store;            // For looking up url info to include in the response
         std::thread listener_thread;    // Thread running the listener loop
         ThreadPool query_pool;           // thread pool to concurrently handle multiple word queries at once
         Ranker* ranker;
 
         LeanPageResponse handle_request(const string& query) {
-            // TODO(charlie): call index_manager to query index chunks and get ChunkQueryInfo
-            ChunkQueryInfo qr;
-            // iterate through query response entries urls and retrieve appropriate info from urlStore
-                // construct rankedPages for each docInfo from ChunkQueryInfo and send THIS back to client as RankedPageResponse obj.
-            vector<LeanPage> results = ranker->processChunkQueryInfo(qr);
-            ranker->reset();
-            return { results };
+            return index_manager->handle_query(query);
         }
 
         void client_handler(int fd) {

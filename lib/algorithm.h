@@ -69,8 +69,8 @@ inline constexpr const T& max(const T& a, const T& b) {
     return (a < b) ? b : a;
 }
 
-template <class T>
-inline size_t partition(vector<T> &vec, size_t low, size_t high, bool (*comp)(const T&, const T&)) {
+template <class T, class Compare>
+inline size_t partition(vector<T> &vec, size_t low, size_t high, Compare comp) {
     // std::sort often uses "Median-of-Three" for the pivot, but 
     // for now, we'll pick the middle element to avoid O(N^2) on sorted data.
     T pivot = move(vec[low + (high - low) / 2]);
@@ -90,8 +90,8 @@ inline size_t partition(vector<T> &vec, size_t low, size_t high, bool (*comp)(co
     }
 }
 
-template <class T>
-inline void quickSort(vector<T> &vec, size_t low, size_t high, bool (*comp)(const T&, const T&)) {
+template <class T, class Compare>
+inline void quickSort(vector<T> &vec, size_t low, size_t high, Compare comp) {
     if (low < high) {
         size_t p = partition(vec, low, high, comp);
         quickSort(vec, low, p, comp);
@@ -112,8 +112,8 @@ inline void quickSort(vector<T> &vec, size_t low, size_t high, bool (*comp)(cons
 //     }
 // }
 
-template <class T>
-inline void sort(vector<T> &vec, bool (*comp)(const T&, const T&)) {
+template <class T, class Compare>
+inline void sort(vector<T> &vec, Compare comp) {
     if (vec.size() <= 1) return;
     quickSort(vec, 0, vec.size() - 1, comp);
 }

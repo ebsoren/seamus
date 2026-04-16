@@ -1,5 +1,6 @@
 #pragma once
 
+#include <climits>
 #include <cstdint>
 #include <cstring>
 
@@ -52,16 +53,11 @@ public:
     uint32_t estimated_n_docs() const override { return isr_.n_docs; }
     bool is_driveable() const override { return !is_negated_; }
 
-    // Advance to the next doc containing this word. On a fresh ISR
-    // (doc_offset_==0), advance_to_next_doc calls advance_to(1) which
-    // reads the first post. Returns 0 when exhausted.
     uint32_t next_doc() override {
         post p = isr_.advance_to_next_doc();
         return p.doc;
     }
 
-    // Seek to `doc` and check presence. For negated terms, invert:
-    // the word being absent means the negation is satisfied.
     bool probe(uint32_t doc) override {
         post p = isr_.advance_to(doc);
         bool present = (p.doc == doc);
@@ -75,36 +71,98 @@ private:
 };
 
 
-// Phrase leaf — Phase 4 will hold per-word ISRs and check adjacency.
-// Stubbed for now: next_doc returns 0, probe returns false.
+// Phrase leaf: holds per-word IndexStreamReaders internally and
+// checks position adjacency. A phrase "w0 w1 w2" matches a doc iff
+// there exists a position P where w0 is at P, w1 at P+1, w2 at P+2.
+// Anchors on stream 0 (first word) and walks positions to verify.
 class PhraseISR : public QueryISR {
 public:
-    PhraseISR(const string_view &phrase, bool is_negated)
-        : phrase_(phrase.data(), phrase.size())
-        , is_negated_(is_negated) {}
+    PhraseISR(const string_view &phrase, bool is_negated, LoadedIndex *li)
+        : is_negated_(is_negated) {
+        // Split phrase on spaces into individual word streams.
+        size_t i = 0;
+        while (i < phrase.size()) {
+            while (i < phrase.size() && phrase[i] == ' ') i++;
+            if (i >= phrase.size()) break;
+            size_t start = i;
+            while (i < phrase.size() && phrase[i] != ' ') i++;
+            streams_.push_back(IndexStreamReader(
+                string(phrase.data() + start, i - start), li));
+        }
+    }
 
-    const string &phrase() const { return phrase_; }
     bool is_negated() const { return is_negated_; }
 
-    uint32_t estimated_n_docs() const override { return 0; }
+    uint32_t estimated_n_docs() const override {
+        if (streams_.size() == 0) return 0;
+        uint32_t min_docs = streams_[0].n_docs;
+        for (size_t i = 1; i < streams_.size(); ++i) {
+            if (streams_[i].n_docs < min_docs) min_docs = streams_[i].n_docs;
+        }
+        return min_docs;
+    }
+
     bool is_driveable() const override { return !is_negated_; }
 
-    uint32_t next_doc() override { return 0; }
-    bool probe(uint32_t) override { return false; }
+    uint32_t next_doc() override {
+        if (streams_.size() == 0) return 0;
+
+        post ground = streams_[0].advance_to_next_doc();
+        while (ground.doc != 0) {
+            if (streams_.size() == 1) return ground.doc;
+            if (check_adjacency(ground)) return ground.doc;
+            // Try next position of stream 0 — might be same doc or next.
+            ground = streams_[0].advance();
+        }
+        return 0;
+    }
+
+    bool probe(uint32_t doc) override {
+        if (streams_.size() == 0) return is_negated_;
+
+        post ground = streams_[0].advance_to(doc);
+        if (ground.doc != doc) return is_negated_;
+        if (streams_.size() == 1) return !is_negated_;
+
+        while (ground.doc == doc) {
+            if (check_adjacency(ground)) return !is_negated_;
+            ground = streams_[0].advance();
+            if (ground.doc == 0) break;
+        }
+        return is_negated_;
+    }
 
 private:
-    string phrase_;
+    // Given stream 0 is at `ground`, check that streams 1..n-1 each
+    // have a post at (ground.doc, ground.loc + i). Same algorithm as
+    // chunk_manager::phrase_query's validate_pos.
+    bool check_adjacency(post ground) {
+        for (size_t i = 1; i < streams_.size(); ++i) {
+            uint32_t want_loc = ground.loc + static_cast<uint32_t>(i);
+            post p = streams_[i].advance_to(ground.doc);
+            if (p.doc != ground.doc) return false;
+            while (p.doc == ground.doc && p.loc < want_loc) {
+                p = streams_[i].advance();
+                if (p.doc == 0) return false;
+            }
+            if (p.doc != ground.doc || p.loc != want_loc) return false;
+        }
+        return true;
+    }
+
     bool is_negated_;
+    vector<IndexStreamReader> streams_;
 };
 
 
-// AND over children. Step 3 implements real leapfrog execution.
+// AND over children. Picks the rarest driveable child as driver
+// during add_child, then leapfrogs: driver advances, others are probed.
 class AndOp : public QueryISR {
 public:
     void add_child(QueryISR *c) {
         children_.push_back(c);
-        uint32_t s = c->estimated_n_docs;
-        if (!driver_ || c->is_driveable() && s < driver_score_) {
+        uint32_t s = c->estimated_n_docs();
+        if (c->is_driveable() && (!driver_ || s < driver_score_)) {
             driver_ = c;
             driver_score_ = s;
         }
@@ -133,29 +191,25 @@ public:
     }
 
     uint32_t next_doc() override {
-        bool success = false;
-        uint32_t res;
-        while (!success) {
-            success = true;
-            res = driver_->next_doc();
-            if (!res) return 0;
-            for (const auto &child : children_) {
-                if (child == driver_) continue;
-                uint32_t cand = child->probe(res);
-                if (cand == 0) return 0;
-                if (cand != res) {
-                    success = false;
+        if (!driver_) return 0;
+        while (true) {
+            uint32_t candidate = driver_->next_doc();
+            if (candidate == 0) return 0;
+            bool all_match = true;
+            for (size_t i = 0; i < children_.size(); ++i) {
+                if (children_[i] == driver_) continue;
+                if (!children_[i]->probe(candidate)) {
+                    all_match = false;
                     break;
                 }
             }
+            if (all_match) return candidate;
         }
-        return res;
-
     }
 
-    bool probe(uint32_t doc) override { 
-        for (const auto& child : children_) {
-            if (!child->probe(doc)) return false;
+    bool probe(uint32_t doc) override {
+        for (size_t i = 0; i < children_.size(); ++i) {
+            if (!children_[i]->probe(doc)) return false;
         }
         return true;
     }
@@ -163,14 +217,19 @@ public:
 private:
     vector<QueryISR *> children_;
     QueryISR *driver_ = nullptr;
-    size_t driver_score_ = INT_MAX:
+    uint32_t driver_score_ = UINT32_MAX;
 };
 
 
-// OR over children. Step 4 implements real union execution.
+// OR over children. Tracks each child's current doc; next_doc returns
+// the global minimum and advances only the children that were at it.
 class OrOp : public QueryISR {
 public:
-    void add_child(QueryISR *c) { children_.push_back(c); }
+    void add_child(QueryISR *c) {
+        children_.push_back(c);
+        // Prime the child's first doc so current_docs_ is ready.
+        current_docs_.push_back(c->next_doc());
+    }
     const vector<QueryISR *> &children() const { return children_; }
 
     bool is_driveable() const override {
@@ -190,11 +249,35 @@ public:
         return static_cast<uint32_t>(sum);
     }
 
-    uint32_t next_doc() override { return 0; }
-    bool probe(uint32_t) override { return false; }
+    uint32_t next_doc() override {
+        // Find the minimum current doc across all children.
+        uint32_t min_doc = 0;
+        for (size_t i = 0; i < current_docs_.size(); ++i) {
+            uint32_t d = current_docs_[i];
+            if (d == 0) continue;
+            if (min_doc == 0 || d < min_doc) min_doc = d;
+        }
+        if (min_doc == 0) return 0;
+
+        // Advance all children that were at the minimum.
+        for (size_t i = 0; i < current_docs_.size(); ++i) {
+            if (current_docs_[i] == min_doc) {
+                current_docs_[i] = children_[i]->next_doc();
+            }
+        }
+        return min_doc;
+    }
+
+    bool probe(uint32_t doc) override {
+        for (size_t i = 0; i < children_.size(); ++i) {
+            if (children_[i]->probe(doc)) return true;
+        }
+        return false;
+    }
 
 private:
     vector<QueryISR *> children_;
+    vector<uint32_t> current_docs_;
 };
 
 
@@ -224,8 +307,8 @@ public:
         return t;
     }
 
-    PhraseISR *make_phrase(const string_view &p, bool is_negated) {
-        PhraseISR *ph = new PhraseISR(p, is_negated);
+    PhraseISR *make_phrase(const string_view &p, bool is_negated, LoadedIndex *li) {
+        PhraseISR *ph = new PhraseISR(p, is_negated, li);
         phrases_.push_back(ph);
         return ph;
     }
@@ -258,7 +341,7 @@ private:
 inline QueryISR *build_isr_tree(const ASTNode &ast, ISRArena &arena, LoadedIndex *li) {
     if (ast.type == AST_TERM) {
         if (ast.term.is_phrase) {
-            return arena.make_phrase(ast.term.val, ast.term.is_negated);
+            return arena.make_phrase(ast.term.val, ast.term.is_negated, li);
         }
         return arena.make_term(ast.term.val, ast.term.is_negated, li);
     }

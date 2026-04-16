@@ -8,6 +8,7 @@
 #include "../lib/rpc_listener.h"
 #include "../lib/rpc_query_handler.h"
 #include "../lib/thread_pool.h"
+#include "../lib/algorithm.h"
 
 #include "../index_chunk/chunk_manager.h"
 #include "index_server.h"
@@ -64,7 +65,14 @@ class QueryHandler {
             }
 
             // merge sort these final_results and return final 10
+            sort<LeanPage>(final_results, [](const LeanPage& a, const LeanPage& b) {
+                    return a.score > b.score; 
+                }
+            );
 
+            if (final_results.size() > NUM_RESULTS_RETURN) {
+                final_results.resize(NUM_RESULTS_RETURN);
+            }
 
             return final_results;
         }
