@@ -107,7 +107,7 @@ inline int calcPriorityScore(const string& u, int seed_list_dist, int domains_fr
     size_t start = 0;
     size_t len_ext = 0;
     for(int i = start_pos; i < url.size(); i++) {
-        if(url[i] == '/' || url[i] == '?' || url[i] == '#' || url[i] == ':') {
+        if(url[i] == '/' || url[i] == '?' || url[i] == '#') {
             while(i < url.size()) {
                 if(url[i] == '/') { 
                     path_depth++;
@@ -131,7 +131,7 @@ inline int calcPriorityScore(const string& u, int seed_list_dist, int domains_fr
     }
     string_view extension = (url.substr(start, len_ext));
     auto slot = tldWeight.find(extension);
-    double factor_2 = (slot == tldWeight.end()) ? 0.6 : (*slot).value; 
+    double factor_2 = (slot == tldWeight.end()) ? 0.8 : (*slot).value; 
 
     // points for closer to seed list
 
@@ -144,11 +144,11 @@ inline int calcPriorityScore(const string& u, int seed_list_dist, int domains_fr
 
     // points for less subdomains
 
-    double factor_5 = 1.0 / (1.0 + 0.1 * subdomain_count);
+    double factor_5 = 1.0 / (1.0 + 0.1 * max(subdomain_count-1, 0));
 
     // digit count in domain name hurts the score
 
-    double factor_6 = 1.0 / (1.0 + 0.15 * digit_count_domain);
+    double factor_6 = 1.0 / (1.0 + 0.25 * digit_count_domain);
 
     // points for shortness of overall url
 
@@ -158,7 +158,7 @@ inline int calcPriorityScore(const string& u, int seed_list_dist, int domains_fr
 
     double factor_9 = (qmarkfound) ? 0.75 : 1.0;
 
-    double factor_10 = max(double_pow(e, -0.1 * domains_from_seed), 0.3);  // NOTE: may need to tune the constant here
+    double factor_10 = max(double_pow(e, -0.08 * domains_from_seed), 0.3);  // NOTE: may need to tune the constant here
     
     return int((factor_1 * factor_2 * factor_3 * factor_4 * factor_5 * factor_6 * factor_7 * factor_8 * factor_9 * factor_10) * 1000000000.0);
 }
@@ -171,7 +171,7 @@ inline size_t get_priority_bucket(const string& url, int seed_list_dist = 0, int
     // CURRENT FUNCTION WRITTEN WITH 8 EXPECTED BUCKETS, WILL NEED TO CHANGE IF THAT IS CHANGED!!
     int score = calcPriorityScore(url, seed_list_dist, domains_from_seed);
 
-    if      (score >= 450000000) return 0;  // elite
+    if      (score >= 400000000) return 0;  // elite
     if      (score >= 300000000) return 1;
     if      (score >= 200000000) return 2;
     if      (score >= 100000000) return 3;
