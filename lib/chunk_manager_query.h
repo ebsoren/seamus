@@ -3,7 +3,7 @@
 #include "string.h"
 #include "vector.h"
 
-// Important structs for query return type
+// Important structs for query logic
 
 struct NodeInfo {
     string phrase;
@@ -17,6 +17,6 @@ struct DocInfo {
     vector<NodeInfo> nodeInfo;
 };
 
-struct QueryResponse {
+struct ChunkQueryInfo {
     vector<DocInfo> pages;
 };
