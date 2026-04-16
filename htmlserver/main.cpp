@@ -8,9 +8,10 @@
 #include "../lib/rpc_listener.h"
 #include "../lib/consts.h"
 #include "../lib/string.h"
-#include "../lib/vector.h"      // Use your custom vector
-#include "../lib/algorithm.h"   // Use your custom algorithm
+#include "../lib/vector.h"     
+#include "../lib/algorithm.h"   
 #include "../ranker/Ranker.h"
+#include "../query/query_handler.h"  
 #include "html_templates.h"
 
 // HTML Builder
@@ -49,7 +50,11 @@ struct HtmlBuilder {
 class SearchServer {
 public:
     SearchServer() {
-        // Initialize your components here
+        // Initialize components here
+        url_store = new UrlStore(nullptr, 0);
+        index_manager = new IndexManager();
+        index_server = new IndexServer(index_manager);
+        query_handler = new QueryHandler(index_server);
     }
 
     void run(uint16_t port, int threads) {
@@ -67,6 +72,11 @@ public:
     }
 
 private:
+    QueryHandler * query_handler;
+    UrlStore * url_store;
+    IndexManager * index_manager;
+    IndexServer * index_server;
+
     void handle_client(int fd) {
         string request = read_request(fd);
         if (request.size() == 0) {
@@ -103,8 +113,7 @@ private:
 
         auto start_time = std::chrono::high_resolution_clock::now();
         
-        // Use your custom vector class
-        vector<LeanPage> results = resultsTest(); 
+        vector<LeanPage> results = query_handler->handle_client_req(term);
         
         auto end_time = std::chrono::high_resolution_clock::now();
         int duration_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();

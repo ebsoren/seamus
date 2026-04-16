@@ -7,17 +7,14 @@ cc_binary(
         "html_templates.h",  
     ],
     deps = [
-        "//lib:rpc_listener", 
-        "//lib:consts", 
-        "//ranker:ranker", 
-        "//lib:string",      
-        "//lib:unordered_map", 
-        "//lib:priority_queue", 
+        "//lib:rpc_listener",
+        "//lib:algorithm",
+        "//ranker:ranker",
+        "//lib:unordered_map",
+        "//lib:priority_queue",
         "//lib:logger",
-        "//query:expressions", 
-        "//lib:algorithm", 
-        "//index_chunk:chunk_manager",
-        "//url_store:url_store"
+        "//query:expressions",
+        "//query:query_handler"
     ],
     data = [
         "images/magnifying-glass.png",

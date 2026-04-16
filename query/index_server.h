@@ -4,7 +4,6 @@
 #include "../lib/rpc_query_handler.h"
 #include "../lib/consts.h"
 #include "../lib/thread_pool.h"
-#include "../ranker/Ranker.h"
 #include "../index_manager/index_manager.h"
 
 #include <future>
@@ -17,7 +16,6 @@ class IndexServer {
         RPCListener* rpc_listener;      // Listener for client requests
         std::thread listener_thread;    // Thread running the listener loop
         ThreadPool query_pool;           // thread pool to concurrently handle multiple word queries at once
-        Ranker* ranker;
 
         LeanPageResponse handle_request(const string& query) {
             return index_manager->handle_query(query);
@@ -39,7 +37,7 @@ class IndexServer {
         }
 
     public:
-        IndexServer(IndexManager* index_manager, Ranker* ranker) : query_pool(INDEX_SERVER_NUM_THREADS), index_manager(index_manager), ranker(ranker) {
+        IndexServer(IndexManager* index_manager) : query_pool(INDEX_SERVER_NUM_THREADS), index_manager(index_manager), ranker(ranker) {
             rpc_listener = new RPCListener(INDEX_SERVER_PORT, INDEX_SERVER_NUM_THREADS);
             listener_thread = std::thread([this]() {
                 rpc_listener->listener_loop([this](int fd) { client_handler(fd); });
@@ -58,7 +56,8 @@ class IndexServer {
             auto promise = std::make_shared<std::promise<LeanPageResponse>>();
             std::future<LeanPageResponse> future = promise->get_future();
             
-            query_pool.enqueue_task([this, new_query = string(query.data(), query.size()), promise]() {
+            string query_copy = string(query.data(), query.size());
+            query_pool.enqueue_task([this, new_query = std::move(query_copy), promise]() {
                 try {
                     LeanPageResponse response = this->handle_request(new_query);
                     promise->set_value(std::move(response));

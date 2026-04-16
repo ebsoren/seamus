@@ -37,8 +37,8 @@ class QueryHandler {
             for (size_t i = 0; i < NUM_MACHINES; ++i) {
                 auto task_promise = std::make_shared<std::promise<vector<LeanPage>>>();
                 futures.push_back(task_promise->get_future());
-                
-                pool.enqueue_task([this, query = string(input.data(), input.size()), i, task_promise]() {
+                string input_copy = string(input.data(), input.size());
+                pool.enqueue_task([this, query = std::move(input_copy), i, task_promise]() {
                     try {
                         vector<LeanPage> local_hits;
                         if (i == my_machine_id()) {

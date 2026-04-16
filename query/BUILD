@@ -38,7 +38,6 @@ cc_library(
         "//lib:rpc_query_handler",
         "//lib:consts",
         "//lib:thread_pool",
-        "//ranker:ranker",
         "//index_manager:index_manager",
     ],
 )
