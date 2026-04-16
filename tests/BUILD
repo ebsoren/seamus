@@ -189,7 +189,7 @@ cc_test (
         "//index_manager:index_manager",
         "//index:index_lib",
         "//lib:consts",
-        "//lib:query_response",
+        "//lib:chunk_manager_query",
         "//lib:string",
         "//lib:vector",
     ],

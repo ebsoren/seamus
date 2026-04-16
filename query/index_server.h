@@ -5,7 +5,7 @@
 #include "../lib/consts.h"
 #include "../lib/thread_pool.h"
 #include "../ranker/Ranker.h"
-#include "../lib/query_response.h"
+#include "../lib/chunk_manager_query.h"
 #include "../index_manager/index_manager.h"
 
 #include <thread>
@@ -21,11 +21,11 @@ class IndexServer {
         Ranker* ranker;
 
         LeanPageResponse handle_request(const string& query) {
-            // TODO(charlie): call index_manager to query index chunks and get QueryResponse
-            QueryResponse qr;
+            // TODO(charlie): call index_manager to query index chunks and get ChunkQueryInfo
+            ChunkQueryInfo qr;
             // iterate through query response entries urls and retrieve appropriate info from urlStore
-                // construct rankedPages for each docInfo from queryResponse and send THIS back to client as RankedPageResponse obj.
-            vector<LeanPage> results = ranker->processQueryResponse(qr);
+                // construct rankedPages for each docInfo from ChunkQueryInfo and send THIS back to client as RankedPageResponse obj.
+            vector<LeanPage> results = ranker->processChunkQueryInfo(qr);
             ranker->reset();
             return { results };
         }

@@ -16,13 +16,13 @@
 
 #include "index_manager/index_manager.h"
 #include "lib/consts.h"
-#include "lib/query_response.h"
+#include "lib/chunk_manager_query.h"
 #include "lib/string.h"
 
 
 namespace {
 
-static void print_response(const QueryResponse& resp) {
+static void print_response(const ChunkQueryInfo& resp) {
     printf("  %zu matching doc(s)\n", resp.pages.size());
     for (size_t i = 0; i < resp.pages.size(); ++i) {
         const DocInfo& di = resp.pages[i];
@@ -72,7 +72,7 @@ int main(int /*argc*/, char* /*argv*/[]) {
         string query_str(line, len);
 
         auto q_start = clock::now();
-        QueryResponse resp = im.handle_query(query_str);
+        ChunkQueryInfo resp = im.handle_query(query_str);
         auto q_ms =
           std::chrono::duration_cast<std::chrono::milliseconds>(clock::now() - q_start).count();
 

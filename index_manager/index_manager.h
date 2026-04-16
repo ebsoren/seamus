@@ -7,7 +7,7 @@
 #include "lib/atomic_vector.h"
 #include "lib/consts.h"
 #include "lib/logger.h"
-#include "lib/query_response.h"
+#include "lib/rpc_query_handler.h"
 #include "lib/string.h"
 #include "lib/utils.h"
 #include "lib/vector.h"
@@ -38,8 +38,8 @@ public:
     // off the shared AST inside chunk_manager::query — the AST itself is
     // immutable across chunks so the read-only share is safe. Blocks until
     // every worker has joined, so the lambda captures stay valid.
-    QueryResponse handle_query(const string &query_str) {
-        QueryResponse resp;
+    LeanPageResponse handle_query(const string &query_str) {
+        LeanPageResponse resp;
 
         ASTNode ast;
         try {
@@ -49,7 +49,7 @@ public:
             return resp;
         }
 
-        atomic_vector<DocInfo> collector;
+        atomic_vector<LeanPage> collector;
 
         vector<std::thread> threads;
         threads.reserve(chunk_managers.size());

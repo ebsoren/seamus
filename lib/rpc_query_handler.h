@@ -9,6 +9,12 @@
 #include <memory>
 #include <optional>
 
+struct LeanPage {
+    string url = string("");
+    string title = string("");
+    double score; 
+};
+
 
 struct LeanPageResponse {
     // clarifier: multiple RankedPage structs can be returned a a result to the client query handler

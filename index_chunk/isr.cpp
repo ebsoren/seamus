@@ -3,6 +3,7 @@
 #include "lib/logger.h"
 #include "lib/utf8.h"
 
+
 #include <cstring>
 
 IndexStreamReader::IndexStreamReader(const string& word, LoadedIndex* index) : word(word.data(), word.size()), index(index) {

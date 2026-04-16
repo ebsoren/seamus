@@ -12,12 +12,13 @@
 #include "lib/atomic_vector.h"
 #include "lib/consts.h"
 #include "lib/logger.h"
-#include "lib/query_response.h"
+#include "lib/chunk_manager_query.h"
 #include "lib/string.h"
 #include "lib/utils.h"
 #include "lib/vector.h"
 #include "query/expressions.h"
 #include "query_isr.h"
+#include "lib/rpc_query_handler.h"
 
 
 class LoadedIndex {
@@ -352,7 +353,7 @@ public:
 
     // Phase 1 entry point for the complex query handler. Builds a per-call
     // ISR tree out of the parsed AST and executes (HERSHEY - THIS NOT DONE)
-    void query(const ASTNode &ast, atomic_vector<DocInfo> *data_channel) {
+    void query(const ASTNode &ast, atomic_vector<LeanPage> *data_channel) {
         ISRArena arena;
         QueryISR *root = build_isr_tree(ast, arena, &li);
         if (root == nullptr) {
@@ -394,11 +395,11 @@ public:
     // slow chunk. The collector is passed per-call (rather than stored on
     // the chunk_manager) so it can be a per-query local owned by the caller.
     // INVARIANT: WORDS VECTOR MUST CONTAIN UNIQUE ELEMENTS
-    void default_query(const vector<string> &words, atomic_vector<DocInfo> *data_channel) {
+    void default_query(const vector<string> &words, atomic_vector<LeanPage> *data_channel) {
         using clock = std::chrono::steady_clock;
         const auto start_time = clock::now();
 
-        vector<DocInfo> docs;
+        vector<LeanPage> docs;
         if (words.size() == 0) {
             return;
         }
@@ -474,24 +475,24 @@ public:
                 continue;
             }
 
-            // All words match at `target`. Build a DocInfo by collecting each
+            // All words match at `target`. Build a LeanPage by collecting each
             // word's positions in this doc. collect_positions_in_current_doc
             // advances each ISR past the current doc (via the has_pending_
             // overshoot buffer), so the next advance_to() lands correctly.
             // string is move-only, so we aggregate-init each struct rather
             // than default-constructing and assigning.
-            vector<WordInfo> word_infos;
+            vector<NodeInfo> word_infos;
             word_infos.reserve(order.size());
             for (size_t i = 0; i < order.size(); ++i) {
                 IndexStreamReader &isr = isrs[order[i]];
                 vector<size_t> positions;
                 isr.collect_positions_in_current_doc(positions);
-                word_infos.push_back(WordInfo{
+                word_infos.push_back(NodeInfo{
                     string(isr.word.data(), isr.word.size()),
                     move(positions),
                 });
             }
-            docs.push_back(DocInfo{
+            docs.push_back(LeanPage{
                 li.get_url(target),
                 move(word_infos),
             });
@@ -511,13 +512,13 @@ public:
     // 1) sequentially AND
     // 2) directly adjacent
     // Uses the same timer approach as default_query() by populating results depth first and stopping if TLE
-    void phrase_query(const vector<string>& words, atomic_vector<DocInfo>* data_channel) {
+    void phrase_query(const vector<string>& words, atomic_vector<LeanPage>* data_channel) {
         using clock = std::chrono::steady_clock;
         const auto start_time = clock::now();
 
         // If no words, do nothing
         // If one word, just use default query algorithm
-        vector<DocInfo> docs;
+        vector<LeanPage> docs;
         if (words.size() == 0) {
             return;
         } else if (words.size() == 1) {
@@ -576,20 +577,20 @@ public:
             // If the doc has the phrase, advance ground to the next doc
             if (validate_pos()) {
                 // Phrase match at (ground.doc, ground.loc). Word i is at
-                // ground.loc + i by construction. One DocInfo per doc (we
+                // ground.loc + i by construction. One LeanPage per doc (we
                 // jump to the next doc below, so later hits in this doc
                 // aren't recorded).
-                vector<WordInfo> word_infos;
+                vector<NodeInfo> word_infos;
                 word_infos.reserve(isr_vec.size());
                 for (size_t i = 0; i < isr_vec.size(); ++i) {
                     vector<size_t> positions;
                     positions.push_back(static_cast<size_t>(ground.loc + i));
-                    word_infos.push_back(WordInfo{
+                    word_infos.push_back(NodeInfo{
                         string(isr_vec[i].word.data(), isr_vec[i].word.size()),
                         move(positions),
                     });
                 }
-                docs.push_back(DocInfo{
+                docs.push_back(LeanPage{
                     li.get_url(ground.doc),
                     move(word_infos),
                 });

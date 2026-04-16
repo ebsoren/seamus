@@ -426,7 +426,7 @@ public:
         pq.clear();
     }
 
-    vector<LeanPage> processQueryResponse(QueryResponse& qr) {
+    vector<LeanPage> processQueryResponse(ChunkQueryInfo& qr) {
         vector<LeanPage> result;
         vector<RankedPage> candidates;
         vector<RankerNodeInfo> ranker_info; // TODO: construct this for ranker.set_new_query()
