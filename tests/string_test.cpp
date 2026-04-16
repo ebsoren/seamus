@@ -252,6 +252,46 @@ void test_ostream() {
 }
 
 
+void test_contains() {
+    std::cout << "Testing string::contains..." << std::endl;
+
+    string short_s("hello world");
+    string long_s("the quick brown fox jumps over the lazy dog");
+
+    // 1. Contains with string argument
+    assert(short_s.contains(string("hello")));
+    assert(short_s.contains(string("world")));
+    assert(short_s.contains(string("lo wo")));
+    assert(!short_s.contains(string("planet")));
+
+    // 2. Contains with string_view argument
+    string_view sv_quick("quick", 5);
+    string_view sv_missing("zebra", 5);
+    assert(long_s.contains(sv_quick));
+    assert(!long_s.contains(sv_missing));
+
+    // 3. Empty needle (always true)
+    assert(short_s.contains(string("")));
+    assert(short_s.contains(string_view("", 0)));
+
+    // 4. Needle longer than haystack
+    assert(!short_s.contains(string("hello world and then some more")));
+
+    // 5. Exact match (needle == haystack)
+    assert(short_s.contains(string("hello world")));
+
+    // 6. Match at the very end
+    assert(short_s.contains(string("orld")));
+
+    // 7. Single character
+    assert(short_s.contains(string("w")));
+    assert(!short_s.contains(string("z")));
+
+    // 8. Long string contains (heap-allocated haystack and needle)
+    assert(long_s.contains(string("the lazy dog")));
+    assert(!long_s.contains(string("the lazy cat")));
+}
+
 void test_join() {
     std::cout << "Testing Variadic Join..." << std::endl;
 
@@ -311,6 +351,7 @@ int main() {
         test_heterogeneous_equality();
         test_advanced_move_assignments();
         test_ostream();
+        test_contains();
         test_join();
 
         std::cout << "\n--------------------------" << std::endl;

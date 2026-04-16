@@ -362,6 +362,25 @@ public:
     bool operator!=(const string_view& rhs) const {
         return !(operator==(rhs));
     }
+
+
+    [[nodiscard]] bool contains(const auto& other) const {
+        const size_t other_len = other.size();
+        if (other_len == 0) return true;
+        const size_t len = size();
+        if (other_len > len) return false;
+
+        const char* haystack = data();
+        const char* needle = other.data();
+        const size_t limit = len - other_len;
+
+        for (size_t i = 0; i <= limit; ++i) {
+            if (memcmp(haystack + i, needle, other_len) == 0) {
+                return true;
+            }
+        }
+        return false;
+    }
 };
 
 
