@@ -23,6 +23,7 @@ public:
     // (lowest score, at the end of the vector) — but only if `doc`
     // beats it. Returns true if the page was inserted, false if it
     // was rejected (buffer full and new score no better than worst).
+    // INVARIANT: MUST HAVE URLSTORE SET
     bool insert(DocInfo doc) {
         double score = ranker_->getScore(doc);
 
@@ -55,6 +56,8 @@ public:
         }
         return true;
     }
+
+    void set_url_store(UrlStore* us) { url_store_ = us; }
 
     // Move the sorted pages out of the buffer. Leaves the buffer empty.
     vector<LeanPage> take() { return move(pages_); }
