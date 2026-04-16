@@ -10,7 +10,7 @@
 
 
 UrlStore::UrlStore(DomainCarousel* dc, const int worker_num) : dc(dc) {
-    if (!URL_FROM_SCRATCH) readFromFile(worker_num);
+    if (!URL_FROM_SCRATCH) readFromFile();
     
     rpc_listener = new RPCListener(URL_STORE_PORT, URL_STORE_NUM_THREADS);
     listener_thread = std::thread([this]() {
@@ -267,8 +267,8 @@ void UrlStore::persist(bool final_persist) {
             fwrite(&data.seed_distance, sizeof(uint16_t), 1, fd);
             fwrite(&data.eot, sizeof(uint16_t), 1, fd);
 
-            size_t title_len = data.title.size();
-            fwrite(&title_len, sizeof(size_t), 1, fd);
+            uint32_t title_len = static_cast<uint32_t>(data.title.size());
+            fwrite(&title_len, sizeof(uint32_t), 1, fd);
             fwrite(data.title.data(), sizeof(char), title_len, fd);
 
             fwrite(&data.eod, sizeof(uint16_t), 1, fd);
@@ -296,10 +296,10 @@ void UrlStore::persist(bool final_persist) {
     }
 }
 
-void UrlStore::readFromFile(const int worker_number) {
+void UrlStore::readFromFile() {
     // 1. FIX: Ensure each worker reads its own specific file to avoid data races
     // Note: Make sure your custom string::join supports this, or use std::to_string
-    string fileName = string::join("", URL_STORE_OUTPUT_DIR_STR, "/urlstore_.txt");
+    string fileName = string::join("", URL_STORE_OUTPUT_DIR_STR, "/urlstore.txt");
     
     string read_mode("rb");
     FILE* fd = fopen(fileName.data(), read_mode.data());
@@ -351,7 +351,6 @@ void UrlStore::readFromFile(const int worker_number) {
         fread(&url_data[url].seed_distance, sizeof(uint16_t), 1, fd);
         fread(&url_data[url].eot, sizeof(uint16_t), 1, fd);
 
-        // 2. FIX: Stop using size_t for binary serialization. Use fixed-width integers.
         uint32_t title_len; 
         fread(&title_len, sizeof(uint32_t), 1, fd);
         
