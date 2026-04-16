@@ -160,7 +160,7 @@ inline int calcPriorityScore(const string& u, int seed_list_dist, int domains_fr
 
     double factor_10 = max(double_pow(e, -0.1 * domains_from_seed), 0.3);  // NOTE: may need to tune the constant here
     
-    return int((factor_1 * factor_2 * factor_3 * factor_4 * factor_5 * factor_6 * factor_7 * factor_8 * factor_9 * factor_10) * 1000000.0);
+    return int((factor_1 * factor_2 * factor_3 * factor_4 * factor_5 * factor_6 * factor_7 * factor_8 * factor_9 * factor_10) * 1000000000.0);
 }
 
 inline size_t get_priority_bucket(const string& url, int seed_list_dist, int domains_from_seed) {
@@ -171,14 +171,14 @@ inline size_t get_priority_bucket(const string& url, int seed_list_dist, int dom
     // CURRENT FUNCTION WRITTEN WITH 8 EXPECTED BUCKETS, WILL NEED TO CHANGE IF THAT IS CHANGED!!
     int score = calcPriorityScore(url, seed_list_dist, domains_from_seed);
 
-    if      (score >= 450000) return 0;  // elite
-    if      (score >= 300000) return 1;
-    if      (score >= 200000) return 2;
-    if      (score >= 100000) return 3;
-    if      (score >= 50000) return 4;
-    if      (score >= 40000) return 5;
-    if      (score >= 30000) return 6;
-    if      (score >= 20000) return 7;
+    if      (score >= 450000000) return 0;  // elite
+    if      (score >= 300000000) return 1;
+    if      (score >= 200000000) return 2;
+    if      (score >= 100000000) return 3;
+    if      (score >= 50000000) return 4;
+    if      (score >= 40000000) return 5;
+    if      (score >= 30000000) return 6;
+    if      (score >= 20000000) return 7;
     else                     return PRIORITY_BUCKETS;  // don't add to the buckets (bad url)
 }
 
