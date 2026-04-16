@@ -3,7 +3,6 @@
 #include "../lib/rpc_listener.h"
 #include "../lib/rpc_query_handler.h"
 #include "../lib/consts.h"
-#include "../url_store/url_store.h"
 #include "../lib/thread_pool.h"
 #include "../ranker/Ranker.h"
 #include "../lib/query_response.h"
@@ -22,49 +21,13 @@ class IndexServer {
         Ranker* ranker;
 
         LeanPageResponse handle_request(const string& query) {
-
-
-            LeanPageResponse results;
-            vector<RankedPage> candidates;
-            vector<RankerNodeInfo> ranker_info;
             // TODO(charlie): call index_manager to query index chunks and get QueryResponse
             QueryResponse qr;
             // iterate through query response entries urls and retrieve appropriate info from urlStore
                 // construct rankedPages for each docInfo from queryResponse and send THIS back to client as RankedPageResponse obj.
-            for (const DocInfo& di : qr.pages) {
-                const string& url = di.url;
-                const vector<NodeInfo>& phrases = di.nodeInfo;
-                RankedPage page;
-                page.url = string(url.data(), url.size());
-                auto data = url_store->getUrl(url);
-                if (data) {
-                    page.title = string(data->title.data(), data->title.size());
-                    page.seed_list_dist = data->seed_distance;
-                    page.domains_from_seed = data->domain_dist;
-                    page.num_unique_words_found_anchor = data->anchor_freqs.size();
-
-                    // Work to calculate:
-                    // int num_unique_words_found_title;
-                    // int num_unique_words_found_url;
-                    for (const NodeInfo& ni : phrases) {
-                        const string& phrase = ni.phrase;
-                        
-                    }
-                    
-                    page.doc_len = data->eod;
-                    page.times_seen = data->num_encountered; 
-
-                    // TODO: populate word_positions
-
-
-                    candidates.push_back(std::move(page));;
-                }
-            }
-
-            ranker->set_new_query(ranker_info);
-            results.pages = r->rank(candidates);
+            vector<LeanPage> results = ranker->processQueryResponse(qr);
             ranker->reset();
-            return results;
+            return { results };
         }
 
         void client_handler(int fd) {
@@ -83,7 +46,7 @@ class IndexServer {
         }
 
     public:
-        IndexServer(UrlStore* url_store, IndexManager* index_manager, Ranker* ranker) : url_store(url_store), query_pool(INDEX_SERVER_NUM_THREADS), index_manager(index_manager), ranker(ranker) {
+        IndexServer(IndexManager* index_manager, Ranker* ranker) : query_pool(INDEX_SERVER_NUM_THREADS), index_manager(index_manager), ranker(ranker) {
             rpc_listener = new RPCListener(INDEX_SERVER_PORT, INDEX_SERVER_NUM_THREADS);
             listener_thread = std::thread([this]() {
                 rpc_listener->listener_loop([this](int fd) { client_handler(fd); });

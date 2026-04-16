@@ -15,6 +15,7 @@
 #include "../lib/logger.h"
 #include "../query/expressions.h"
 #include "../index_chunk/chunk_manager.h"
+#include "../url_store/url_store.h"
 #include "ranker_consts.h"
 #include <optional>
 
@@ -406,10 +407,11 @@ private:
     vector<string> unique_query_words; 
     int num_pages_returned;
     bool verbose_mode;
+    UrlStore* url_store;
 
 public:
-    Ranker(int num_pages_returned_init = RANKED_ON_EACH, double dynamic_weight_init = DEFAULT_DYNAMIC_WEIGHT, bool verbose_init = false) : 
-        dynamic_weight(dynamic_weight_init), num_pages_returned(num_pages_returned_init), verbose_mode(verbose_init) { 
+    Ranker(UrlStore* url_store, int num_pages_returned_init = RANKED_ON_EACH, double dynamic_weight_init = DEFAULT_DYNAMIC_WEIGHT, bool verbose_init = false) : 
+        url_store(url_store), dynamic_weight(dynamic_weight_init), num_pages_returned(num_pages_returned_init), verbose_mode(verbose_init) { 
         
         if(verbose_mode) {
             logger::debug("Ranker is initialized with num pages returned of %d, and dynamic weighting of %f", 
@@ -422,6 +424,45 @@ public:
             logger::debug("Ranker has cleared the vector and reset for next query");
         }
         pq.clear();
+    }
+
+    vector<LeanPage> processQueryResponse(QueryResponse& qr) {
+        vector<LeanPage> result;
+        vector<RankedPage> candidates;
+        vector<RankerNodeInfo> ranker_info; // TODO: construct this for ranker.set_new_query()
+        for (const DocInfo& di : qr.pages) {
+            const string& url = di.url;
+            const vector<NodeInfo>& phrases = di.nodeInfo;
+            RankedPage page;
+            page.url = string(url.data(), url.size());
+            auto data = url_store->getUrl(url);
+            if (data) {
+                page.title = string(data->title.data(), data->title.size());
+                page.seed_list_dist = data->seed_distance;
+                page.domains_from_seed = data->domain_dist;
+                page.num_unique_words_found_anchor = data->anchor_freqs.size();
+
+                // Work to calculate:
+                // int num_unique_words_found_title;
+                // int num_unique_words_found_url;
+                for (const NodeInfo& ni : phrases) {
+                    const string& phrase = ni.phrase;
+                    page.num_unique_words_found_title += data->title.contains(phrase);
+                    page.num_unique_words_found_url += url.contains(phrase);
+                }
+                
+                page.doc_len = data->eod;
+                page.times_seen = data->num_encountered; 
+
+                // TODO: populate word_positions
+            
+
+                candidates.push_back(std::move(page));;
+            }
+        }
+
+        set_new_query(ranker_info);
+        return rank(candidates);
     }
 
     void set_new_query(vector<RankerNodeInfo> node_info) {
