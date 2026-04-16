@@ -8,367 +8,12 @@
 #include "../lib/rpc_listener.h"
 #include "../lib/consts.h"
 #include "../lib/string.h"
+#include "../lib/vector.h"      // Use your custom vector
+#include "../lib/algorithm.h"   // Use your custom algorithm
 #include "../ranker/Ranker.h"
+#include "html_templates.h"
 
-static const char HOMEPAGE_HTML[] =
-    "<!doctype html>\n"
-    "<html lang=\"en\">\n"
-    "<head>\n"
-    "<meta charset=\"utf-8\">\n"
-    "<title>Seamus the Search Engine</title>\n"
-    "\n"
-    "<link rel=\"icon\" type=\"image/png\" href=\"/htmlserver/images/tank-favicon.png\">\n"
-    "<style>\n"
-    "  body {\n"
-    "    margin: 0;\n"
-    "    padding: 0;\n"
-    "    min-height: 100vh;\n"
-    "    display: flex;\n"
-    "    flex-direction: column;\n"
-    "    align-items: center;\n"
-    "    background: linear-gradient(to top, #5375c9 0%, #ffffff 85%, #ffffff 100%);\n"
-    "    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;\n"
-    "  }\n"
-    "  .top-right-logo {\n"
-    "    position: absolute;\n"
-    "    top: 25px;\n"
-    "    right: 30px;\n"
-    "    width: 80px;\n"
-    "    height: auto;\n"
-    "    transition: opacity 0.2s;\n"
-    "  }\n"
-    "  .top-right-logo:hover {\n"
-    "    opacity: 0.8;\n"
-    "  }\n"
-    "  .header {\n"
-    "    margin-top: 15vh; /* PULLS THE LOGO AND SEARCH BAR FURTHER UP */\n" 
-    "    text-align: center;\n"
-    "  }\n"
-    "  .main-seamus-logo {\n"
-    "    width: 750px;\n"
-    "    max-width: 90vw;\n"
-    "    height: auto;\n"
-    "    margin-bottom: 50px;\n"
-    "  }\n"
-    "  .search-container {\n"
-    "    display: flex;\n"
-    "    align-items: center;\n"
-    "    justify-content: center;\n"
-    "    width: 100%;\n"
-    "  }\n"
-    "  .search-box {\n"
-    "    display: flex;\n"
-    "    align-items: center;\n"
-    "    width: 60%;\n"
-    "    max-width: 800px;\n"
-    "    box-shadow: 0 8px 24px rgba(0,0,0,0.15);\n"
-    "    border-radius: 40px;\n"
-    "    background: white;\n"
-    "    overflow: hidden;\n"
-    "    border: 1px solid #e0e0e0;\n"
-    "  }\n"
-    "  #q {\n"
-    "    flex: 1;\n"
-    "    border: none;\n"
-    "    padding: 20px 30px;\n"
-    "    font-size: 1.5rem;\n"
-    "    outline: none;\n"
-    "    background: transparent;\n"
-    "  }\n"
-    "  #go {\n"
-    "    border: none;\n"
-    "    background: transparent;\n"
-    "    padding: 15px 25px;\n"
-    "    cursor: pointer;\n"
-    "    display: flex;\n"
-    "    align-items: center;\n"
-    "    justify-content: center;\n"
-    "  }\n"
-    "  #go img {\n"
-    "    width: 30px;\n"
-    "    height: 30px;\n"
-    "    opacity: 0.7;\n"
-    "    transition: opacity 0.2s;\n"
-    "  }\n"
-    "  #go:hover img {\n"
-    "    opacity: 1;\n"
-    "  }\n"
-    "  .footer {\n"
-    "    margin-top: auto;\n"
-    "    width: 100%;\n"
-    "    display: flex;\n"
-    "    justify-content: space-evenly;\n"
-    "    padding: 30px 10px;\n"
-    "    font-size: 0.9rem;\n"
-    "    color: rgba(255, 255, 255, 0.9);\n"
-    "    box-sizing: border-box;\n"
-    "  }\n"
-    "  .footer a {\n"
-    "    white-space: nowrap;\n"
-    "    text-decoration: none;\n"
-    "    color: inherit;\n"
-    "    transition: opacity 0.2s;\n"
-    "  }\n"
-    "  .footer a:hover {\n"
-    "    opacity: 0.7;\n"
-    "  }\n"
-    "</style>\n"
-    "</head>\n"
-    "<body>\n"
-    "  <a href=\"https://tradersatmichigan.com\" target=\"_blank\">\n"
-    "    <img src=\"/htmlserver/images/tam-logo.png\" class=\"top-right-logo\" alt=\"TAM Logo\">\n"
-    "  </a>\n"
-    "  <div class=\"header\">\n"
-    "    <img src=\"/htmlserver/images/seamusfinalphoto.png\" class=\"main-seamus-logo\" alt=\"Seamus the Search Engine\">\n"
-    "  </div>\n"
-    "  <div class=\"search-container\">\n"
-    "    <div class=\"search-box\">\n"
-    "      <input id=\"q\" type=\"text\" autofocus>\n"
-    "      <button id=\"go\"><img src=\"/htmlserver/images/magnifying-glass.png\" alt=\"Search\"></button>\n"
-    "    </div>\n"
-    "  </div>\n"
-    "  <div class=\"footer\">\n"
-    "    <a href=\"https://www.linkedin.com/in/erikvnielsen/\" target=\"_blank\">Erik Nielsen</a>\n"
-    "    <a href=\"https://www.linkedin.com/in/amizhen/\" target=\"_blank\">Aiden Mizhen</a>\n"
-    "    <a href=\"https://www.linkedin.com/in/dmcde/\" target=\"_blank\">David McDermott</a>\n"
-    "    <a href=\"https://www.linkedin.com/in/charles-huang-02a123205/\" target=\"_blank\">Charles Huang</a>\n"
-    "    <a href=\"https://www.linkedin.com/in/hbagalkote/\" target=\"_blank\">Hrishkesh Bagalkote</a>\n"
-    "    <a href=\"https://www.linkedin.com/in/esben-sorensen/\" target=\"_blank\">Esben Sorensen</a>\n"
-    "  </div>\n"
-    "  <script>\n"
-    "    function submit(){\n"
-    "      var v=document.getElementById('q').value.trim();\n"
-    "      if(!v)return;\n"
-    "      var term=encodeURIComponent(v);\n"
-    "      window.location.href='/'+term;\n"
-    "    }\n"
-    "    document.getElementById('go').addEventListener('click',submit);\n"
-    "    document.getElementById('q').addEventListener('keydown',function(e){\n"
-    "      if(e.key==='Enter'){submit();}\n"
-    "    });\n"
-    "  </script>\n"
-    "</body>\n"
-    "</html>";
-
-// Read the full HTTP request headers from the socket into a raw buffer,
-static string read_request(int fd) {
-    size_t capacity = 4096;
-    char* buf = static_cast<char*>(malloc(capacity));
-    size_t total = 0;
-    int matched = 0; 
-    
-    while (matched < 4) {
-        if (total == capacity) {
-            capacity *= 2;
-            if (capacity > (1 << 16)) { free(buf); return string(""); }
-            buf = static_cast<char*>(realloc(buf, capacity));
-        }
-        
-        ssize_t n = read(fd, buf + total, capacity - total);
-        if (n <= 0) {
-            free(buf);
-            return string("");
-        }
-        
-        for (ssize_t i = 0; i < n; ++i) {
-            char c = buf[total + i];
-            if (matched == 0 && c == '\r') matched = 1;
-            else if (matched == 1 && c == '\n') matched = 2;
-            else if (matched == 2 && c == '\r') matched = 3;
-            else if (matched == 3 && c == '\n') matched = 4;
-            else if (c == '\r') matched = 1;
-            else matched = 0;
-            
-            if (matched == 4) {
-                total += static_cast<size_t>(i + 1);
-                break;
-            }
-        }
-        if (matched != 4) total += static_cast<size_t>(n);
-    }
-    
-    string req(buf, total);
-    free(buf);
-    return req;
-}
-
-static string_view parse_path(const string& request) {
-    const char* data = request.data();
-    size_t len = request.size();
-    
-    size_t sp1 = 0;
-    while (sp1 < len && data[sp1] != ' ') sp1++;
-    if (sp1 == len) return string_view();
-    
-    size_t sp2 = sp1 + 1;
-    while (sp2 < len && data[sp2] != ' ') sp2++;
-    if (sp2 == len) return string_view();
-    
-    return request.str_view(sp1 + 1, sp2 - sp1 - 1);
-}
-
-static string percent_decode(const string_view& s) {
-    size_t len = s.size();
-    char* tmp = static_cast<char*>(malloc(len));
-    size_t out_len = 0;
-    
-    for (size_t i = 0; i < len; ++i) {
-        if (s[i] == '%' && i + 2 < len) {
-            auto hex = [](char c) -> int {
-                if (c >= '0' && c <= '9') return c - '0';
-                if (c >= 'a' && c <= 'f') return 10 + c - 'a';
-                if (c >= 'A' && c <= 'F') return 10 + c - 'A';
-                return -1;
-            };
-            int hi = hex(s[i + 1]);
-            int lo = hex(s[i + 2]);
-            if (hi >= 0 && lo >= 0) {
-                tmp[out_len++] = static_cast<char>((hi << 4) | lo);
-                i += 2;
-                continue;
-            }
-        }
-        tmp[out_len++] = s[i];
-    }
-    
-    string out(tmp, out_len);
-    free(tmp);
-    return out;
-}
-
-static string parse_query_term(const string_view& path) {
-    if (path.size() < 2 || path[0] != '/') return string("");
-    
-    size_t q_pos = 1;
-    while (q_pos < path.size() && path[q_pos] != '?') q_pos++;
-    
-    return percent_decode(path.substr(1, q_pos - 1));
-}
-
-// strip out anything that isn't a letter, number, or space
-static string remove_special_chars(const string& s) {
-    size_t len = s.size();
-    char* tmp = static_cast<char*>(malloc(len));
-    size_t out_len = 0;
-    
-    for (size_t i = 0; i < len; ++i) {
-        char c = s[i];
-        if (isalnum((unsigned char)c) || c == ' ' || c == '/' || c == '-' || c == '-' || c =='.') {
-            tmp[out_len++] = c;
-        }
-    }
-    
-    string out(tmp, out_len);
-    free(tmp);
-    return out;
-}
-
-static void send_all(int fd, const char* data, size_t len) {
-    size_t sent = 0;
-    while (sent < len) {
-        ssize_t n = write(fd, data + sent, len - sent);
-        if (n <= 0) return;
-        sent += static_cast<size_t>(n);
-    }
-}
-
-static void send_response(int fd, const char* status, string_view body) {
-    char header[256];
-    int hlen = snprintf(
-        header, sizeof(header),
-        "HTTP/1.1 %s\r\n"
-        "Content-Type: text/html; charset=utf-8\r\n"
-        "Content-Length: %zu\r\n"
-        "Connection: close\r\n"
-        "\r\n",
-        status, body.size());
-        
-    if (hlen <= 0) return;
-    send_all(fd, header, static_cast<size_t>(hlen));
-    send_all(fd, body.data(), body.size());
-}
-
-static void send_image(int fd, const char* filepath) {
-    FILE* f = fopen(filepath, "rb");
-    if (!f) {
-        // Find out EXACTLY where the program is running from
-        char cwd[1024];
-        if (getcwd(cwd, sizeof(cwd)) != nullptr) {
-            printf("[htmlserver] ERROR: I am currently in folder: %s\n", cwd);
-        }
-        printf("[htmlserver] ERROR: Could not find file '%s' relative to that folder.\n", filepath);
-        fflush(stdout);
-        
-        send_response(fd, "404 Not Found", string_view("Image not found", 15));
-        return;
-    }
-
-    printf("[htmlserver] SUCCESS: Found and sending '%s'\n", filepath);
-    fflush(stdout);
-
-    fseek(f, 0, SEEK_END);
-    long fsize = ftell(f);
-    fseek(f, 0, SEEK_SET);
-
-    char* img_data = static_cast<char*>(malloc(fsize));
-    fread(img_data, 1, fsize, f);
-    fclose(f);
-
-    char header[256];
-    int hlen = snprintf(
-        header, sizeof(header),
-        "HTTP/1.1 200 OK\r\n"
-        "Content-Type: image/png\r\n"
-        "Content-Length: %ld\r\n"
-        "Connection: close\r\n"
-        "\r\n",
-        fsize);
-        
-    if (hlen > 0) {
-        send_all(fd, header, static_cast<size_t>(hlen));
-        send_all(fd, img_data, static_cast<size_t>(fsize));
-    }
-    
-    free(img_data);
-}
-
-vector<LeanPage> resultsTest() {
-    vector<LeanPage> res;
-    res.push_back(LeanPage{string("https://roar.com"), string("Roar R Us"), 0.5});
-    res.push_back(LeanPage{string("https://bing.com"), string("Bing"), 0.5});
-    res.push_back(LeanPage{string("https://toys.com"), string("Toys R Us"), 0.5});
-    res.push_back(LeanPage{string("https://supercalifragilistic.com"), string("Marry Poppins Fan Club"), 0.5});
-    res.push_back(LeanPage{string("https://wiki.org"), string("Wiki Fandom"), 0.5});
-    res.push_back(LeanPage{string("https://roar.com"), string("Roar R Us"), 0.5});
-    res.push_back(LeanPage{string("https://bing.com"), string("Bing"), 0.5});
-    res.push_back(LeanPage{string("https://toys.com"), string("Toys R Us"), 0.5});
-    res.push_back(LeanPage{string("https://supercalifragilistic.com"), string("Marry Poppins Fan Club"), 0.5});
-    res.push_back(LeanPage{string("https://wiki.org"), string("Wiki Fandom"), 0.5});
-    res.push_back(LeanPage{string("https://roar.com"), string("Roar R Us"), 0.5});
-    res.push_back(LeanPage{string("https://bing.com"), string("Bing"), 0.5});
-    res.push_back(LeanPage{string("https://toys.com"), string("Toys R Us"), 0.5});
-    res.push_back(LeanPage{string("https://supercalifragilistic.com"), string("Marry Poppins Fan Club"), 0.5});
-    res.push_back(LeanPage{string("https://wiki.org"), string("Wiki Fandom"), 0.5});
-    return res;
-}
-
-// Extract the page number from the URL query string (defaults to 1)
-static int get_page_number(const string_view& path) {
-    int page = 1;
-    const char* data = path.data();
-    size_t len = path.size();
-    for (size_t i = 0; i < len; ++i) {
-        if (data[i] == 'p' && i + 1 < len && data[i+1] == '=') {
-            if (i == 0 || data[i-1] == '?' || data[i-1] == '&') {
-                page = atoi(data + i + 2);
-                if (page < 1) page = 1;
-                break;
-            }
-        }
-    }
-    return page;
-}
-
+// --- Custom HTML Builder for dynamic assembly ---
 struct HtmlBuilder {
     char* data;
     size_t len;
@@ -378,9 +23,7 @@ struct HtmlBuilder {
         data = static_cast<char*>(malloc(cap)); 
     }
     
-    ~HtmlBuilder() { 
-        free(data); 
-    }
+    ~HtmlBuilder() { free(data); }
     
     void append(const char* str, size_t n) {
         if (len + n > cap) {
@@ -395,7 +38,6 @@ struct HtmlBuilder {
     void append(const string& s) { append(s.data(), s.size()); }
     void append(const string_view& sv) { append(sv.data(), sv.size()); }
     
-    // Convert integers to strings on the fly for our pagination links
     void append(int n) {
         char buf[32];
         int l = snprintf(buf, sizeof(buf), "%d", n);
@@ -403,320 +45,263 @@ struct HtmlBuilder {
     }
 };
 
-static void handle_client(int fd) {
-    string request = read_request(fd);
-    if (request.size() == 0) {
-        close(fd);
-        return;
+// --- Main Server Class ---
+class SearchServer {
+public:
+    SearchServer() {
+        // Initialize your components here
     }
 
-    string_view path = parse_path(request);
+    void run(uint16_t port, int threads) {
+        RPCListener listener(port, threads);
+        if (!listener.valid()) {
+            fprintf(stderr, "failed to bind port %u\n", port);
+            exit(1);
+        }
+        printf("Seamus Search Engine serving on http://0.0.0.0:%u\n", port);
+        fflush(stdout);
 
-    if (path == "/") {
-        // Serve the homepage
-        send_response(fd, "200 OK", string_view(HOMEPAGE_HTML, sizeof(HOMEPAGE_HTML) - 1));
-        
-    } else if (path == "/favicon.ico") {
-        send_image(fd, "htmlserver/images/tank-favicon.png");
-        
-    } else if (path.size() > 0 && path[0] == '/') {
+        listener.listener_loop([this](int fd) {
+            this->handle_client(fd);
+        });
+    }
+
+private:
+    void handle_client(int fd) {
+        string request = read_request(fd);
+        if (request.size() == 0) {
+            close(fd);
+            return;
+        }
+
+        string_view path = parse_path(request);
+
+        if (path == "/") {
+            send_response(fd, "200 OK", string_view(HOMEPAGE_HTML, strlen(HOMEPAGE_HTML)));
+        } 
+        else if (is_static_asset(path)) {
+            string local_path = (path[0] == '/') ? string(path.substr(1, path.size()-1).data(), path.size()-1) : string(path.data(), path.size());
+            send_image(fd, local_path.data());
+        } 
+        else if (path.size() > 0 && path[0] == '/') {
+            serve_search_results(fd, path);
+        } 
+        else {
+            send_response(fd, "400 Bad Request", string_view("bad request", 11));
+        }
+        close(fd);
+    }
+
+    void serve_search_results(int fd, string_view path) {
         string raw_term = parse_query_term(path);
+        string term = remove_special_chars(raw_term);
+        int current_page = get_page_number(path);
+
+        size_t q_pos = 0;
+        while (q_pos < path.size() && path[q_pos] != '?') q_pos++;
+        string_view base_url = path.substr(0, q_pos);
+
+        auto start_time = std::chrono::high_resolution_clock::now();
         
-        if (raw_term == "htmlserver/images/magnifying-glass.png") {
-            send_image(fd, "htmlserver/images/magnifying-glass.png");
-        } else if (raw_term == "htmlserver/images/tam-logo.png") {
-            send_image(fd, "htmlserver/images/tam-logo.png");
-        } else if (raw_term == "htmlserver/images/tank-favicon.png") {
-            send_image(fd, "htmlserver/images/tank-favicon.png");
-        } else if (raw_term == "htmlserver/images/seamusfinalphoto.png") {
-            send_image(fd, "htmlserver/images/seamusfinalphoto.png");
-        } else if (raw_term == "htmlserver/images/sirtophamhatt.png") {
-            send_image(fd, "htmlserver/images/sirtophamhatt.png");
-        } else {
+        // Use your custom vector class
+        vector<LeanPage> results = resultsTest(); 
+        
+        auto end_time = std::chrono::high_resolution_clock::now();
+        int duration_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
 
-            string term = remove_special_chars(raw_term);
+        HtmlBuilder html;
+        html.append(RESULTS_PART_1);
+        
+        html.append("<input type=\"text\" class=\"search-box\" value=\"");
+        html.append(term);
+        html.append("\" readonly>\n<a href=\"/\" class=\"back-btn\">BACK</a>\n");
+        html.append("<h1 class=\"header-title\">Seamus the Search Engine</h1>\n</div>\n");
 
-            printf("[htmlserver] query term: [%.*s]\n", static_cast<int>(term.size()), term.data());
-            fflush(stdout);
+        html.append("<div class=\"results-container\">\n");
+        size_t start_idx = (current_page - 1) * 10;
+        
+        // Use your custom min algorithm from lib/algorithm.h
+        size_t end_idx = min(start_idx + 10, results.size());
 
-            size_t q_pos = 0;
-            while (q_pos < path.size() && path[q_pos] != '?') q_pos++;
-            string_view base_url = path.substr(0, q_pos);
-            
-            int current_page = get_page_number(path);
-            
-            vector<LeanPage> results; 
-            
-            // START TIMER
-            auto start_time = std::chrono::high_resolution_clock::now();
-            
-            // Ranking logic and query handling happens here!
-
-            // here create all components
-
-            results = query_handler.handle_client_req(fd);
-            
-            // STOP TIMER
-            auto end_time = std::chrono::high_resolution_clock::now();
-            auto duration_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
-            
-            
-            HtmlBuilder html;
-            
-            html.append(
-                "<!doctype html>\n"
-                "<html lang=\"en\">\n"
-                "<head>\n"
-                "<meta charset=\"utf-8\">\n"
-                "<title>Search Results</title>\n"
-                "<link rel=\"icon\" type=\"image/png\" href=\"/htmlserver/images/tank-favicon.png\">\n"
-                "<style>\n"
-                "  body {\n"
-                "    margin: 0;\n"
-                "    padding: 30px 40px;\n"
-                "    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;\n"
-                "    background-color: #ffffff;\n"
-                "    box-sizing: border-box;\n"
-                "  }\n"
-                "  .top-bar {\n"
-                "    display: flex;\n"
-                "    align-items: center;\n"
-                "    gap: 15px;\n"
-                "    margin-bottom: 30px;\n"
-                "    border-bottom: 1px solid #eee;\n"
-                "    padding-bottom: 20px;\n"
-                "    width: 100%;\n"
-                "  }\n"
-                "  .top-right-logo {\n"
-                "    position: absolute;\n"
-                "    top: 25px;\n"
-                "    right: 40px;\n"
-                "    width: 70px;\n"
-                "    height: auto;\n"
-                "    transition: opacity 0.2s;\n"
-                "  }\n"
-                "  .top-right-logo:hover {\n"
-                "    opacity: 0.8;\n"
-                "  }\n"
-                "  .header-title {\n"
-                "    font-size: 1.8rem;\n"
-                "    color: #1a1a1a;\n"
-                "    margin: 0;\n"
-                "    margin-left: auto;\n"
-                "    margin-right: 90px;\n"
-                "    white-space: nowrap;\n"
-                "  }\n"
-                "  .search-box {\n"
-                "    padding: 10px 20px;\n"
-                "    font-size: 1.2rem;\n"
-                "    border-radius: 30px;\n"
-                "    border: 1px solid #dfe1e5;\n"
-                "    width: 400px;\n"
-                "    outline: none;\n"
-                "    background: #f8f9fa;\n"
-                "    color: #333;\n"
-                "  }\n"
-                "  .back-btn {\n"
-                "    padding: 10px 20px;\n"
-                "    font-size: 1rem;\n"
-                "    color: white;\n"
-                "    background-color: #2e5c31;\n"
-                "    border: none;\n"
-                "    border-radius: 30px;\n"
-                "    text-decoration: none;\n"
-                "    cursor: pointer;\n"
-                "    transition: background-color 0.2s;\n"
-                "    font-weight: bold;\n"
-                "  }\n"
-                "  .back-btn:hover {\n"
-                "    background-color: #1e3c20;\n"
-                "  }\n"
-                "  .results-container {\n"
-                "    display: flex;\n"
-                "    flex-direction: column;\n"
-                "    gap: 24px;\n"
-                "    width: 90%;\n"
-                "    max-width: 1200px;\n"
-                "  }\n"
-                "  .result-item {\n"
-                "    display: flex;\n"
-                "    flex-direction: column;\n"
-                "    text-align: left;\n"
-                "  }\n"
-                "  .result-title {\n"
-                "    font-size: 1.4rem;\n"
-                "    color: #1a0dab;\n" 
-                "    text-decoration: none;\n"
-                "    margin-bottom: 3px;\n"
-                "  }\n"
-                "  .result-title:hover {\n"
-                "    text-decoration: underline;\n"
-                "  }\n"
-                "  .result-url {\n"
-                "    font-size: 0.95rem;\n"
-                "    color: #006621;\n" 
-                "    text-decoration: none;\n"
-                "  }\n"
-                "  .pagination {\n"
-                "    display: flex;\n"
-                "    justify-content: left;\n"
-                "    gap: 15px;\n"
-                "    margin-top: 30px;\n"
-                "    padding-bottom: 40px;\n"
-                "  }\n"
-                "  .page-btn {\n"
-                "    padding: 8px 16px;\n"
-                "    font-size: 1rem;\n"
-                "    color: #1a0dab;\n"
-                "    background-color: #fff;\n"
-                "    border: 1px solid #dfe1e5;\n"
-                "    border-radius: 4px;\n"
-                "    text-decoration: none;\n"
-                "    transition: all 0.2s;\n"
-                "  }\n"
-                "  .page-btn:hover {\n"
-                "    background-color: #f8f9fa;\n"
-                "    box-shadow: 0 1px 3px rgba(0,0,0,0.1);\n"
-                "  }\n"
-                "  /* --- NEW FLEX CONTAINER FOR HATT AND THE TIMER BOX --- */\n"
-                "  .bottom-right-container {\n"
-                "    position: fixed;\n"
-                "    bottom: 0;\n"
-                "    right: 0;\n"
-                "    display: flex;\n"
-                "    flex-direction: column;\n"
-                "    align-items: flex-end;\n"
-                "    z-index: 10;\n"
-                "    pointer-events: none; /* Allows clicks to pass through to links */\n"
-                "  }\n"
-                "  .response-time-box {\n"
-                "    background-color: rgba(255, 255, 255, 0.95);\n"
-                "    border: 1px solid #dfe1e5;\n"
-                "    border-radius: 8px;\n"
-                "    padding: 10px 15px;\n"
-                "    box-shadow: 0 4px 10px rgba(0,0,0,0.15);\n"
-                "    margin-right: 30px; /* Aligns slightly inside the right edge */\n"
-                "    margin-bottom: 10px; /* Space between box and Hatt */\n"
-                "    font-size: 0.9rem;\n"
-                "    color: #333;\n"
-                "    text-align: center;\n"
-                "  }\n"
-                "  .response-time-title {\n"
-                "    font-weight: bold;\n"
-                "    margin-bottom: 4px;\n"
-                "    color: #1a0dab;\n"
-                "    font-size: 0.8rem;\n"
-                "    text-transform: uppercase;\n"
-                "  }\n"
-                "  .bottom-right-hatt {\n"
-                "    height: 35vh;\n"
-                "    max-height: 400px;\n"
-                "    width: auto;\n"
-                "  }\n"
-                "</style>\n"
-                "</head>\n"
-                "<body>\n"
-                "  <a href=\"https://tradersatmichigan.com\" target=\"_blank\">\n"
-                "    <img src=\"/htmlserver/images/tam-logo.png\" class=\"top-right-logo\" alt=\"TAM Logo\">\n"
-                "  </a>\n"
-                "  <div class=\"top-bar\">\n"
-                "    <input type=\"text\" class=\"search-box\" value=\""
-            );
-            
-            html.append(term);
-            
-            html.append(
-                "\" readonly>\n"
-                "    <a href=\"/\" class=\"back-btn\">BACK</a>\n"
-                "    <h1 class=\"header-title\">Seamus the Search Engine</h1>\n" 
-                "  </div>\n"
-                "  <div class=\"results-container\">\n"
-            );
-            
-            size_t start_idx = (current_page - 1) * 10;
-            if (start_idx > results.size()) start_idx = results.size();
-            
-            size_t end_idx = start_idx + 10;
-            if (end_idx > results.size()) end_idx = results.size();
-            
+        if (start_idx < results.size()) {
             for (size_t i = start_idx; i < end_idx; ++i) {
                 const auto& res = results[i];
-                
-                html.append("    <div class=\"result-item\">\n");
-                
-                html.append("      <a class=\"result-title\" href=\"");
-                html.append(res.url);
-                html.append("\" target=\"_blank\">");
-                html.append(res.title);
-                html.append("</a>\n");
-                
-                html.append("      <a class=\"result-url\" href=\"");
-                html.append(res.url);
-                html.append("\" target=\"_blank\">");
-                html.append(res.url); 
-                html.append("</a>\n");
-                
-                html.append("    </div>\n");
+                html.append("<div class=\"result-item\">\n");
+                html.append("<a class=\"result-title\" href=\""); html.append(res.url); html.append("\" target=\"_blank\">");
+                html.append(res.title); html.append("</a>\n");
+                html.append("<a class=\"result-url\" href=\""); html.append(res.url); html.append("\" target=\"_blank\">");
+                html.append(res.url); html.append("</a>\n</div>\n");
             }
-            
-            html.append("  </div>\n"); 
-            
-            html.append("  <div class=\"pagination\">\n");
-            
-            if (current_page > 1) {
-                html.append("    <a class=\"page-btn\" href=\"");
-                html.append(base_url);
-                html.append("?p=");
-                html.append(current_page - 1);
-                html.append("\">&laquo; Previous</a>\n");
-            }
-            
-            if (end_idx < results.size()) {
-                html.append("    <a class=\"page-btn\" href=\"");
-                html.append(base_url);
-                html.append("?p=");
-                html.append(current_page + 1);
-                html.append("\">Next &raquo;</a>\n");
-            }
-            
-            html.append("  </div>\n");
-            
-            // --- INJECT THE BOX AND SIR TOPHAM HATT ---
-            html.append("  <div class=\"bottom-right-container\">\n");
-            html.append("    <div class=\"response-time-box\">\n");
-            html.append("      <div class=\"response-time-title\">Query Response Time</div>\n");
-            
-            // Append the integer time we calculated using Chrono
-            html.append(static_cast<int>(duration_ms)); 
-            
-            html.append(" ms\n");
-            html.append("    </div>\n");
-            html.append("    <img src=\"/htmlserver/images/sirtophamhatt.png\" class=\"bottom-right-hatt\" alt=\"Sir Topham Hatt\">\n");
-            html.append("  </div>\n");
-            
-            html.append(
-                "</body>\n"
-                "</html>"
-            );
-            
-            send_response(fd, "200 OK", string_view(html.data, html.len));
         }
-    } else {
-        send_response(fd, "400 Bad Request", string_view("bad request", 11));
+        html.append("</div>\n");
+
+        html.append("<div class=\"pagination\">\n");
+        if (current_page > 1) {
+            html.append("<a class=\"page-btn\" href=\""); html.append(base_url);
+            html.append("?p="); html.append(current_page - 1); html.append("\">&laquo; Previous</a>\n");
+        }
+        if (end_idx < results.size()) {
+            html.append("<a class=\"page-btn\" href=\""); html.append(base_url);
+            html.append("?p="); html.append(current_page + 1); html.append("\">Next &raquo;</a>\n");
+        }
+        html.append("</div>\n");
+
+        html.append(RESULTS_PART_2);
+        html.append(duration_ms);
+        html.append(RESULTS_PART_3);
+
+        send_response(fd, "200 OK", string_view(html.data, html.len));
     }
 
-    close(fd);
-}
+    bool is_static_asset(string_view path) {
+        return (path.substr(path.size() - 4, 4) == ".png" || path == "/favicon.ico");
+    }
+
+    string read_request(int fd) {
+        size_t capacity = 4096;
+        char* buf = static_cast<char*>(malloc(capacity));
+        size_t total = 0;
+        int matched = 0; 
+        while (matched < 4) {
+            if (total == capacity) {
+                capacity *= 2;
+                if (capacity > (1 << 16)) { free(buf); return string(""); }
+                buf = static_cast<char*>(realloc(buf, capacity));
+            }
+            ssize_t n = read(fd, buf + total, capacity - total);
+            if (n <= 0) { free(buf); return string(""); }
+            for (ssize_t i = 0; i < n; ++i) {
+                char c = buf[total + i];
+                if (matched == 0 && c == '\r') matched = 1;
+                else if (matched == 1 && c == '\n') matched = 2;
+                else if (matched == 2 && c == '\r') matched = 3;
+                else if (matched == 3 && c == '\n') matched = 4;
+                else if (c == '\r') matched = 1;
+                else matched = 0;
+                if (matched == 4) { total += static_cast<size_t>(i + 1); break; }
+            }
+            if (matched != 4) total += static_cast<size_t>(n);
+        }
+        string req(buf, total);
+        free(buf);
+        return req;
+    }
+
+    string_view parse_path(const string& request) {
+        const char* data = request.data();
+        size_t len = request.size();
+        size_t sp1 = 0;
+        while (sp1 < len && data[sp1] != ' ') sp1++;
+        if (sp1 == len) return string_view();
+        size_t sp2 = sp1 + 1;
+        while (sp2 < len && data[sp2] != ' ') sp2++;
+        if (sp2 == len) return string_view();
+        return request.str_view(sp1 + 1, sp2 - sp1 - 1);
+    }
+
+    string percent_decode(const string_view& s) {
+        size_t len = s.size();
+        char* tmp = static_cast<char*>(malloc(len));
+        size_t out_len = 0;
+        for (size_t i = 0; i < len; ++i) {
+            if (s[i] == '%' && i + 2 < len) {
+                auto hex = [](char c) -> int {
+                    if (c >= '0' && c <= '9') return c - '0';
+                    if (c >= 'a' && c <= 'f') return 10 + c - 'a';
+                    if (c >= 'A' && c <= 'F') return 10 + c - 'A';
+                    return -1;
+                };
+                int hi = hex(s[i + 1]), lo = hex(s[i + 2]);
+                if (hi >= 0 && lo >= 0) {
+                    tmp[out_len++] = static_cast<char>((hi << 4) | lo);
+                    i += 2; continue;
+                }
+            }
+            tmp[out_len++] = s[i];
+        }
+        string out(tmp, out_len);
+        free(tmp);
+        return out;
+    }
+
+    string parse_query_term(const string_view& path) {
+        if (path.size() < 2 || path[0] != '/') return string("");
+        size_t q_pos = 1;
+        while (q_pos < path.size() && path[q_pos] != '?') q_pos++;
+        return percent_decode(path.substr(1, q_pos - 1));
+    }
+
+    string remove_special_chars(const string& s) {
+        size_t len = s.size();
+        char* tmp = static_cast<char*>(malloc(len));
+        size_t out_len = 0;
+        for (size_t i = 0; i < len; ++i) {
+            char c = s[i];
+            if (isalnum((unsigned char)c) || c == ' ' || c == '/' || c == '-' || c == '.') {
+                tmp[out_len++] = c;
+            }
+        }
+        string out(tmp, out_len);
+        free(tmp);
+        return out;
+    }
+
+    void send_response(int fd, const char* status, string_view body) {
+        char header[256];
+        int hlen = snprintf(header, sizeof(header),
+            "HTTP/1.1 %s\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: %zu\r\nConnection: close\r\n\r\n",
+            status, body.size());
+        write(fd, header, hlen);
+        write(fd, body.data(), body.size());
+    }
+
+    void send_image(int fd, const char* filepath) {
+        FILE* f = fopen(filepath, "rb");
+        if (!f) {
+            send_response(fd, "404 Not Found", string_view("Image not found", 15));
+            return;
+        }
+        fseek(f, 0, SEEK_END);
+        long fsize = ftell(f);
+        fseek(f, 0, SEEK_SET);
+        char* img_data = static_cast<char*>(malloc(fsize));
+        fread(img_data, 1, fsize, f);
+        fclose(f);
+
+        char header[256];
+        int hlen = snprintf(header, sizeof(header),
+            "HTTP/1.1 200 OK\r\nContent-Type: image/png\r\nContent-Length: %ld\r\nConnection: close\r\n\r\n",
+            fsize);
+        write(fd, header, hlen);
+        write(fd, img_data, fsize);
+        free(img_data);
+    }
+
+    int get_page_number(const string_view& path) {
+        int page = 1;
+        const char* data = path.data();
+        size_t len = path.size();
+        for (size_t i = 0; i < len; ++i) {
+            if (data[i] == 'p' && i + 1 < len && data[i+1] == '=') {
+                if (i == 0 || data[i-1] == '?' || data[i-1] == '&') {
+                    page = atoi(data + i + 2);
+                    if (page < 1) page = 1;
+                    break;
+                }
+            }
+        }
+        return page;
+    }
+
+    vector<LeanPage> resultsTest() {
+        vector<LeanPage> res;
+        for(int i=0; i<15; ++i) res.push_back(LeanPage{string("https://roar.com"), string("Roar R Us"), 0.5});
+        return res;
+    }
+};
 
 int main() {
-    RPCListener listener(HTMLSERVER_PORT, HTMLSERVER_THREADS);
-    if (!listener.valid()) {
-        fprintf(stderr, "failed to bind port %u\n", HTMLSERVER_PORT);
-        return 1;
-    }
-    printf("serving on http://0.0.0.0:%u\n", HTMLSERVER_PORT);
-    fflush(stdout);
-
-    listener.listener_loop(handle_client);
+    SearchServer engine;
+    engine.run(HTMLSERVER_PORT, HTMLSERVER_THREADS);
     return 0;
 }
