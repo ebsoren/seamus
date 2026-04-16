@@ -201,142 +201,142 @@ struct UncrawledComp {
     bool operator()(const UncrawledItem& u1, const UncrawledItem& u2) const;
 };
 
-class Frontier {
-private:
-    priority_queue<UncrawledItem, vector<UncrawledItem>, UncrawledComp> pq;
-    vector<vector<UncrawledItem>> priority_buckets;
-    // unordered_map<string, uint32_t> curr_urls;
-    uint16_t worker_id;
-public:
-    Frontier(u_int16_t worker_id_init) 
-        : priority_buckets(PRIORITY_BUCKETS), worker_id(worker_id_init) { }
+// class Frontier {
+// private:
+//     priority_queue<UncrawledItem, vector<UncrawledItem>, UncrawledComp> pq;
+//     vector<vector<UncrawledItem>> priority_buckets;
+//     // unordered_map<string, uint32_t> curr_urls;
+//     uint16_t worker_id;
+// public:
+//     Frontier(u_int16_t worker_id_init) 
+//         : priority_buckets(PRIORITY_BUCKETS), worker_id(worker_id_init) { }
 
-    void push(UncrawledItem u) {
-        size_t bucket = get_priority_bucket(u.url, u.seed_list_dist);
-        for(size_t i = bucket; i < PRIORITY_BUCKETS; i++) {
-            if(priority_buckets[i].size() < MAX_SIZE_BUCKET) {
-                priority_buckets[i].push_back(UncrawledItem(std::move(u.url), std::move(u.seed_list_dist)));
-                return;
-            }
-        }
-    }
+//     void push(UncrawledItem u) {
+//         size_t bucket = get_priority_bucket(u.url, u.seed_list_dist);
+//         for(size_t i = bucket; i < PRIORITY_BUCKETS; i++) {
+//             if(priority_buckets[i].size() < MAX_SIZE_BUCKET) {
+//                 priority_buckets[i].push_back(UncrawledItem(std::move(u.url), std::move(u.seed_list_dist)));
+//                 return;
+//             }
+//         }
+//     }
 
-    void push(string &url, int seed_list_dist) {
-        size_t bucket = get_priority_bucket(url, seed_list_dist);
-        for(size_t i = bucket; i < PRIORITY_BUCKETS; i++) {
-            if(priority_buckets[i].size() < MAX_SIZE_BUCKET) {
-                priority_buckets[i].push_back(UncrawledItem(std::move(url), seed_list_dist));
-                return;
-            }
-        }
-    }
+//     void push(string &url, int seed_list_dist) {
+//         size_t bucket = get_priority_bucket(url, seed_list_dist);
+//         for(size_t i = bucket; i < PRIORITY_BUCKETS; i++) {
+//             if(priority_buckets[i].size() < MAX_SIZE_BUCKET) {
+//                 priority_buckets[i].push_back(UncrawledItem(std::move(url), seed_list_dist));
+//                 return;
+//             }
+//         }
+//     }
 
-    void push(string &&url, int seed_list_dist)  {
-        size_t bucket = get_priority_bucket(url, seed_list_dist);
-        for(size_t i = bucket; i < PRIORITY_BUCKETS; i++) {
-            if(priority_buckets[i].size() < MAX_SIZE_BUCKET) {
-                priority_buckets[i].push_back(UncrawledItem(std::move(url), seed_list_dist));
-                return;
-            }
-        }
-    }
+//     void push(string &&url, int seed_list_dist)  {
+//         size_t bucket = get_priority_bucket(url, seed_list_dist);
+//         for(size_t i = bucket; i < PRIORITY_BUCKETS; i++) {
+//             if(priority_buckets[i].size() < MAX_SIZE_BUCKET) {
+//                 priority_buckets[i].push_back(UncrawledItem(std::move(url), seed_list_dist));
+//                 return;
+//             }
+//         }
+//     }
 
 
-    void pop() {
-        for(size_t i = 0; i < PRIORITY_BUCKETS; i++) {
-            if(!priority_buckets[i].empty()) {
-                priority_buckets[i].pop_back();
-                return;
-            }
-        }
-    }
+//     void pop() {
+//         for(size_t i = 0; i < PRIORITY_BUCKETS; i++) {
+//             if(!priority_buckets[i].empty()) {
+//                 priority_buckets[i].pop_back();
+//                 return;
+//             }
+//         }
+//     }
 
-    CrawledItem front() {
-        for(size_t i = 0; i < PRIORITY_BUCKETS; i++) {
-            size_t idx = priority_buckets[i].size();
-            if(idx != 0) {
-                UncrawledItem& item = priority_buckets[i][idx-1];
-                return CrawledItem(
-                    (item.url.str_view(0,item.url.size()).to_string()),
-                    item.seed_list_dist
-                );
-            }
-        }
-        throw std::runtime_error("Frontier empty");
-    }
+//     CrawledItem front() {
+//         for(size_t i = 0; i < PRIORITY_BUCKETS; i++) {
+//             size_t idx = priority_buckets[i].size();
+//             if(idx != 0) {
+//                 UncrawledItem& item = priority_buckets[i][idx-1];
+//                 return CrawledItem(
+//                     (item.url.str_view(0,item.url.size()).to_string()),
+//                     item.seed_list_dist
+//                 );
+//             }
+//         }
+//         throw std::runtime_error("Frontier empty");
+//     }
 
-    size_t size() {
-        size_t sz = 0;
-        for(size_t i = 0; i < PRIORITY_BUCKETS; i++) {
-            sz += priority_buckets[i].size();
-        }
-        return sz;
-    }
+//     size_t size() {
+//         size_t sz = 0;
+//         for(size_t i = 0; i < PRIORITY_BUCKETS; i++) {
+//             sz += priority_buckets[i].size();
+//         }
+//         return sz;
+//     }
 
-    void persist() {
-        for (uint16_t i = 0; i < PRIORITY_BUCKETS; i++) {
-            if (priority_buckets[i].empty()) continue;
+//     void persist() {
+//         for (uint16_t i = 0; i < PRIORITY_BUCKETS; i++) {
+//             if (priority_buckets[i].empty()) continue;
 
-            string path = string::join("", "frontier_", string(worker_id), "_bucket_", string(i), ".txt");
+//             string path = string::join("", "frontier_", string(worker_id), "_bucket_", string(i), ".txt");
 
-            FILE* fd = fopen(path.data(), "ab");
-            if (fd == nullptr) {
-                perror("Error opening bucket file for writing.");
-                continue;
-            }
+//             FILE* fd = fopen(path.data(), "ab");
+//             if (fd == nullptr) {
+//                 perror("Error opening bucket file for writing.");
+//                 continue;
+//             }
 
-            for (auto it = priority_buckets[i].begin(); it != priority_buckets[i].end(); ++it) {
-                const string& url = (*it).url;
-                uint16_t seed_dist = (*it).seed_list_dist;
-                uint32_t sz = url.size();
+//             for (auto it = priority_buckets[i].begin(); it != priority_buckets[i].end(); ++it) {
+//                 const string& url = (*it).url;
+//                 uint16_t seed_dist = (*it).seed_list_dist;
+//                 uint32_t sz = url.size();
 
-                fwrite(&sz, sizeof(uint32_t), 1, fd);
-                fwrite(url.data(), sizeof(char), sz, fd);
-                fwrite(&seed_dist, sizeof(uint16_t), 1, fd);
-            }
+//                 fwrite(&sz, sizeof(uint32_t), 1, fd);
+//                 fwrite(url.data(), sizeof(char), sz, fd);
+//                 fwrite(&seed_dist, sizeof(uint16_t), 1, fd);
+//             }
 
-            fclose(fd);
-            // Clear after persisting?? (if we need to flush here idk)
-            // priority_buckets[i].clear();
-        }
-    }
+//             fclose(fd);
+//             // Clear after persisting?? (if we need to flush here idk)
+//             // priority_buckets[i].clear();
+//         }
+//     }
 
-    void load_from_disk() {
-        for (uint16_t i = 0; i < PRIORITY_BUCKETS; i++) {
-            string path = string::join("", "frontier_", string(worker_id), "_bucket_", string(i), ".txt");
+//     void load_from_disk() {
+//         for (uint16_t i = 0; i < PRIORITY_BUCKETS; i++) {
+//             string path = string::join("", "frontier_", string(worker_id), "_bucket_", string(i), ".txt");
 
-            FILE* fd = fopen(path.data(), "rb");
-            if (fd == nullptr) {
-                continue;
-            }
+//             FILE* fd = fopen(path.data(), "rb");
+//             if (fd == nullptr) {
+//                 continue;
+//             }
 
-            while (true) {
-                uint32_t sz;
+//             while (true) {
+//                 uint32_t sz;
 
-                if (fread(&sz, sizeof(uint32_t), 1, fd) != 1) break;
+//                 if (fread(&sz, sizeof(uint32_t), 1, fd) != 1) break;
 
-                char* buffer = static_cast<char*>(malloc(sz + 1));
-                if (buffer == nullptr) break;
+//                 char* buffer = static_cast<char*>(malloc(sz + 1));
+//                 if (buffer == nullptr) break;
 
-                if (fread(buffer, sizeof(char), sz, fd) != sz) {
-                    free(buffer);
-                    break;
-                }
+//                 if (fread(buffer, sizeof(char), sz, fd) != sz) {
+//                     free(buffer);
+//                     break;
+//                 }
 
-                buffer[sz] = '\0'; 
+//                 buffer[sz] = '\0'; 
 
-                string url(buffer, sz);
+//                 string url(buffer, sz);
 
-                free(buffer);
+//                 free(buffer);
 
-                // Read seed distance
-                uint16_t seed_dist;
-                if (fread(&seed_dist, sizeof(uint16_t), 1, fd) != 1) break;
+//                 // Read seed distance
+//                 uint16_t seed_dist;
+//                 if (fread(&seed_dist, sizeof(uint16_t), 1, fd) != 1) break;
 
-                priority_buckets[i].push_back(UncrawledItem(std::move(url), seed_dist));
-            }
+//                 priority_buckets[i].push_back(UncrawledItem(std::move(url), seed_dist));
+//             }
 
-            fclose(fd);
-        }
-    }
-};
+//             fclose(fd);
+//         }
+//     }
+// };
