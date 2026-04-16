@@ -1,7 +1,7 @@
 common --enable_platform_specific_config
 
 build --cxxopt=-std=c++20
-build:macos --cxxopt=mmacos-version-min=10.14
+build:macos --cxxopt=-mmacos-version-min=10.14
 
 # Define a "shortcut" for AddressSanitizer
 build:asan --copt=-fsanitize=address
