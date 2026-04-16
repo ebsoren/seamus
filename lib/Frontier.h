@@ -21,7 +21,7 @@ inline bool is_digit(char c) {
     return c >= '0' && c <= '9';
 }
 
-unordered_map<string,double> makeTldWeight() {
+inline unordered_map<string,double> makeTldWeight() {
     unordered_map<string, double> m(32);
 
     m.insert(string("gov"),1.2);
