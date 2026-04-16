@@ -8,6 +8,7 @@ cc_library(
         "//index_chunk:chunk_manager",
         "//lib:atomic_vector",
         "//lib:consts",
+        "//lib:joinable_thread_pool",
         "//lib:logger",
         "//lib:chunk_manager_query",
         "//lib:string",

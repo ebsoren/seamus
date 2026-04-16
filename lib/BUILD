@@ -76,6 +76,15 @@ cc_library(
 )
 
 cc_library(
+    name = "joinable_thread_pool",
+    hdrs = ["joinable_thread_pool.h"],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":deque",
+    ],
+)
+
+cc_library(
     name = "unordered_map",
     hdrs = ["unordered_map.h"],
     visibility = ["//visibility:public"],
