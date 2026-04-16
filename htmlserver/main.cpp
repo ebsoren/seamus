@@ -111,11 +111,22 @@ private:
         while (q_pos < path.size() && path[q_pos] != '?') q_pos++;
         string_view base_url = path.substr(0, q_pos);
 
+        fprintf(stderr, "[HTMLSERVER] query term='%.*s' (len=%zu)\n",
+                static_cast<int>(term.size()), term.data(), term.size());
+        fflush(stderr);
+
         auto start_time = std::chrono::high_resolution_clock::now();
-        
+
         vector<LeanPage> results = query_handler->handle_client_req(term);
-        
+
         auto end_time = std::chrono::high_resolution_clock::now();
+
+        fprintf(stderr, "[HTMLSERVER] got %zu results\n", results.size());
+        for (size_t i = 0; i < results.size() && i < 3; ++i) {
+            fprintf(stderr, "[HTMLSERVER]   result[%zu] url='%.*s' score=%.4f\n",
+                    i, static_cast<int>(results[i].url.size()), results[i].url.data(), results[i].score);
+        }
+        fflush(stderr);
         int duration_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
 
         HtmlBuilder html;

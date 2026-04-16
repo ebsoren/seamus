@@ -18,7 +18,13 @@ class IndexServer {
         ThreadPool query_pool;           // thread pool to concurrently handle multiple word queries at once
 
         LeanPageResponse handle_request(const string& query) {
-            return index_manager->handle_query(query);
+            fprintf(stderr, "[INDEX_SERVER] handle_request query='%.*s'\n",
+                    static_cast<int>(query.size()), query.data());
+            fflush(stderr);
+            LeanPageResponse resp = index_manager->handle_query(query);
+            fprintf(stderr, "[INDEX_SERVER] handle_request returning %zu pages\n", resp.pages.size());
+            fflush(stderr);
+            return resp;
         }
 
         void client_handler(int fd) {
