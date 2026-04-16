@@ -8,7 +8,7 @@
 struct NodeInfo {
     string phrase;
     vector<size_t> pos; // word_cnt can be calculated from the size of this
-    size_t freqs;
+    uint64_t freq;
     bool is_phrase;
 };
 
