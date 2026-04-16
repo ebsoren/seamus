@@ -78,7 +78,7 @@ unordered_map<string,double> makeTldWeight() {
 }
 inline unordered_map<string, double> tldWeight = makeTldWeight(); // factory function to avoid having to implement initializer lists lol
 
-inline int calcPriorityScore(const string& u, int seed_list_dist) {
+inline int calcPriorityScore(const string& u, int seed_list_dist, int domains_from_seed) {
     // points for http or https however https > http
     double factor_1;
 
@@ -136,7 +136,7 @@ inline int calcPriorityScore(const string& u, int seed_list_dist) {
     // points for closer to seed list
 
     const double e = 2.718;
-    double factor_3 = max(double_pow(e, -0.04 * seed_list_dist), 0.4);  // NOTE: may need to tune the constant here
+    double factor_3 = max(double_pow(e, -0.02 * seed_list_dist), 0.5);  // NOTE: may need to tune the constant here
 
     // points for shortness of domain title
 
@@ -157,17 +157,19 @@ inline int calcPriorityScore(const string& u, int seed_list_dist) {
     double factor_8 = max(1.0 - 0.1 * path_depth, 0.4);
 
     double factor_9 = (qmarkfound) ? 0.75 : 1.0;
+
+    double factor_10 = max(double_pow(e, -0.1 * domains_from_seed), 0.3);  // NOTE: may need to tune the constant here
     
-    return int((factor_1 * factor_2 * factor_3 * factor_4 * factor_5 * factor_6 * factor_7 * factor_8 * factor_9) * 1000000);
+    return int((factor_1 * factor_2 * factor_3 * factor_4 * factor_5 * factor_6 * factor_7 * factor_8 * factor_9 * factor_10) * 1000000.0);
 }
 
-inline size_t get_priority_bucket(const string& url, int seed_list_dist) {
+inline size_t get_priority_bucket(const string& url, int seed_list_dist, int domains_from_seed) {
     // TODO(Erik): write this function
     // 0 is the index of the highest priority bucket, PRIORITY_BUCKETS - 1 is the index of the lowest priority bucket
     // PRIORITY_BUCKETS defined in ~/lib/consts.h
 
     // CURRENT FUNCTION WRITTEN WITH 8 EXPECTED BUCKETS, WILL NEED TO CHANGE IF THAT IS CHANGED!!
-    int score = calcPriorityScore(url, seed_list_dist);
+    int score = calcPriorityScore(url, seed_list_dist, domains_from_seed);
 
     if      (score >= 450000) return 0;  // elite
     if      (score >= 300000) return 1;
