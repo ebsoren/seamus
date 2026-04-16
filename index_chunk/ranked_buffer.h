@@ -86,3 +86,42 @@ inline void drain_into(atomic_vector<DocInfo> *data, RankedBuffer *buffer) {
     }
 }
 
+
+// Simple k-way merge of already-sorted RankedBuffers. Each buffer holds
+// pages in descending-score order, so we keep one cursor per buffer and
+// at each step pick the cursor whose current head has the highest score,
+// move that page into the result, and advance. Stops when the result
+// hits `cap` pages or every cursor has exhausted its buffer. Drains the
+// buffers via take() — they are empty on return.
+inline vector<LeanPage> merge_top_pages(const vector<RankedBuffer *> &buffers, size_t cap) {
+    size_t k = buffers.size();
+
+    vector<vector<LeanPage>> sources;
+    sources.reserve(k);
+    for (size_t i = 0; i < k; ++i) {
+        sources.push_back(buffers[i]->take());
+    }
+
+    vector<size_t> cursor;
+    cursor.reserve(k);
+    for (size_t i = 0; i < k; ++i) cursor.push_back(0);
+
+    vector<LeanPage> result;
+    result.reserve(cap);
+
+    while (result.size() < cap) {
+        size_t best = k;  // sentinel: no source has anything left
+        for (size_t i = 0; i < k; ++i) {
+            if (cursor[i] >= sources[i].size()) continue;
+            if (best == k || sources[i][cursor[i]].score > sources[best][cursor[best]].score) {
+                best = i;
+            }
+        }
+        if (best == k) break;
+        result.push_back(move(sources[best][cursor[best]]));
+        ++cursor[best];
+    }
+
+    return result;
+}
+

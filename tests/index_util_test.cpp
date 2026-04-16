@@ -759,6 +759,113 @@ void test_ranked_buffer_sorted_order() {
 }
 
 
+// Register `n` fake URLs (prefixed with `prefix`) in `store` and push a
+// matching DocInfo per URL through `buffer` via drain_into. Varying
+// seed_distance per URL is what makes the ranker produce distinct scores.
+static void populate_buffer(UrlStore* store, RankedBuffer* buffer,
+                            const char* prefix, size_t n) {
+    atomic_vector<DocInfo> channel;
+    char url_buf[96];
+    for (size_t i = 0; i < n; ++i) {
+        int m = snprintf(url_buf, sizeof(url_buf), "http://%s/d%zu", prefix, i);
+        string url(url_buf, static_cast<size_t>(m));
+
+        string url_key(url.data(), url.size());
+        vector<string> anchors;
+        anchors.push_back(string("merge_top"));
+        store->updateUrl(url_key, anchors,
+                         static_cast<uint16_t>(i + 1),  // unique seed_distance
+                         1, 1);
+        store->markCrawled(url);
+
+        string title = string::join("", string("title_"),
+                                    string(static_cast<uint32_t>(i)));
+        store->updateTitle(url, title);
+        store->updateTitleLen(url, static_cast<uint16_t>(title.size()));
+        store->updateBodyLen(url, 100);
+
+        NodeInfo ni{string("merge_top"), vector<size_t>(), 100, false};
+        ni.pos.push_back(1);
+        ni.pos.push_back(2);
+
+        vector<NodeInfo> nodes;
+        nodes.push_back(static_cast<NodeInfo&&>(ni));
+
+        DocInfo di{string(url.data(), url.size()),
+                   static_cast<vector<NodeInfo>&&>(nodes)};
+
+        vector<DocInfo> one;
+        one.push_back(static_cast<DocInfo&&>(di));
+        channel.append_move(static_cast<vector<DocInfo>&&>(one));
+    }
+    drain_into(&channel, buffer);
+}
+
+
+// Verify merge_top_pages honors the cap and returns pages in descending
+// score order. Two scenarios: cap < total (result bounded by cap) and
+// cap > total (result bounded by the total pages available across buffers).
+void test_merge_top_pages() {
+    constexpr size_t DOCS_PER_BUFFER = 15;  // > RankedBuffer::CAPACITY
+    constexpr size_t NUM_BUFFERS     = 3;
+
+    // --- cap < total: result must be exactly `cap` pages. ---
+    {
+        UrlStore store(nullptr, 0);
+        Ranker ranker(&store, RANKED_ON_EACH, DEFAULT_DYNAMIC_WEIGHT, false);
+
+        RankedBuffer b0(&ranker, &store), b1(&ranker, &store), b2(&ranker, &store);
+        populate_buffer(&store, &b0, "mt.test/b0", DOCS_PER_BUFFER);
+        populate_buffer(&store, &b1, "mt.test/b1", DOCS_PER_BUFFER);
+        populate_buffer(&store, &b2, "mt.test/b2", DOCS_PER_BUFFER);
+
+        vector<RankedBuffer*> bufs;
+        bufs.push_back(&b0);
+        bufs.push_back(&b1);
+        bufs.push_back(&b2);
+
+        constexpr size_t CAP = 5;
+        vector<LeanPage> got = merge_top_pages(bufs, CAP);
+        assert(got.size() == CAP);
+
+        double prev = std::numeric_limits<double>::infinity();
+        for (const LeanPage& p : got) {
+            assert(p.score <= prev);
+            prev = p.score;
+        }
+    }
+
+    // --- cap >> total: result has every available page (NUM_BUFFERS * CAPACITY),
+    //     still in descending order. ---
+    {
+        UrlStore store(nullptr, 0);
+        Ranker ranker(&store, RANKED_ON_EACH, DEFAULT_DYNAMIC_WEIGHT, false);
+
+        RankedBuffer b0(&ranker, &store), b1(&ranker, &store), b2(&ranker, &store);
+        populate_buffer(&store, &b0, "mt.test/b0", DOCS_PER_BUFFER);
+        populate_buffer(&store, &b1, "mt.test/b1", DOCS_PER_BUFFER);
+        populate_buffer(&store, &b2, "mt.test/b2", DOCS_PER_BUFFER);
+
+        vector<RankedBuffer*> bufs;
+        bufs.push_back(&b0);
+        bufs.push_back(&b1);
+        bufs.push_back(&b2);
+
+        constexpr size_t CAP = 100;
+        vector<LeanPage> got = merge_top_pages(bufs, CAP);
+        assert(got.size() == NUM_BUFFERS * RankedBuffer::CAPACITY);
+
+        double prev = std::numeric_limits<double>::infinity();
+        for (const LeanPage& p : got) {
+            assert(p.score <= prev);
+            prev = p.score;
+        }
+    }
+
+    printf("  merge_top_pages: cap honored, result descending\n");
+}
+
+
 } // namespace
 
 
@@ -769,6 +876,7 @@ int main() {
     test_chunk_manager_queries();
     test_phrase_query();
     test_ranked_buffer_sorted_order();
+    test_merge_top_pages();
 
     printf("\n=== ALL INDEX UTIL TESTS FINISHED ===\n\n");
     return 0;
