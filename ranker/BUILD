@@ -2,20 +2,19 @@ load("@rules_cc//cc:defs.bzl", "cc_library")
 
 cc_library(
     name = "ranker",
-    srcs = ["Ranker.cpp"], # Assuming you have a .cpp file; if header-only, remove this
     hdrs = ["Ranker.h"],
     deps = [
         ":ranker_consts",
-        "//lib:vector",
-        "//lib:string",
-        "//lib:unordered_map",
-        "//lib:priority_queue",
-        "//lib:utils",
+        "//lib:chunk_manager_query",
         "//lib:consts",
         "//lib:logger",
+        "//lib:priority_queue",
         "//lib:rpc_query_handler",
+        "//lib:string",
+        "//lib:unordered_map",
+        "//lib:utils",
+        "//lib:vector",
         "//query:expressions",
-        "//index_chunk:chunk_manager",
         "//url_store:url_store",
     ],
     visibility = ["//visibility:public"],

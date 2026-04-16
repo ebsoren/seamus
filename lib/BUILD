@@ -179,6 +179,6 @@ cc_library(
     name = "rpc_query_handler",
     hdrs = ["rpc_query_handler.h"],
     visibility = ["//visibility:public"],
-    deps = [":string", ":vector", ":rpc_common", "//ranker:ranker"],
+    deps = [":string", ":vector", ":rpc_common"],
     
 )

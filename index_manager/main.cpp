@@ -22,17 +22,12 @@
 
 namespace {
 
-static void print_response(const ChunkQueryInfo& resp) {
+static void print_response(const LeanPageResponse& resp) {
     printf("  %zu matching doc(s)\n", resp.pages.size());
     for (size_t i = 0; i < resp.pages.size(); ++i) {
-        const DocInfo& di = resp.pages[i];
-        printf("    [%zu] %.*s\n", i, static_cast<int>(di.url.size()), di.url.data());
-        for (size_t w = 0; w < di.nodeInfo.size(); ++w) {
-            const NodeInfo& ni = di.nodeInfo[w];
-            printf("        %.*s (%zu hit%s)\n",
-                   static_cast<int>(ni.phrase.size()), ni.phrase.data(),
-                   ni.pos.size(), ni.pos.size() == 1 ? "" : "s");
-        }
+        const LeanPage& lp = resp.pages[i];
+        printf("    [%zu] %.*s  (score %.4f)\n",
+               i, static_cast<int>(lp.url.size()), lp.url.data(), lp.score);
     }
 }
 
@@ -44,7 +39,7 @@ int main(int /*argc*/, char* /*argv*/[]) {
 
     printf("loading index from %s ...\n", INDEX_OUTPUT_DIR);
     auto load_start = clock::now();
-    index_manager im;
+    IndexManager im;
     auto load_ms =
       std::chrono::duration_cast<std::chrono::milliseconds>(clock::now() - load_start).count();
     printf("index loaded in %lld ms\n", static_cast<long long>(load_ms));
@@ -72,7 +67,7 @@ int main(int /*argc*/, char* /*argv*/[]) {
         string query_str(line, len);
 
         auto q_start = clock::now();
-        ChunkQueryInfo resp = im.handle_query(query_str);
+        LeanPageResponse resp = im.handle_query(query_str);
         auto q_ms =
           std::chrono::duration_cast<std::chrono::milliseconds>(clock::now() - q_start).count();
 
