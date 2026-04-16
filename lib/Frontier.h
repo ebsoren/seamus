@@ -163,7 +163,7 @@ inline int calcPriorityScore(const string& u, int seed_list_dist, int domains_fr
     return int((factor_1 * factor_2 * factor_3 * factor_4 * factor_5 * factor_6 * factor_7 * factor_8 * factor_9 * factor_10) * 1000000000.0);
 }
 
-inline size_t get_priority_bucket(const string& url, int seed_list_dist, int domains_from_seed) {
+inline size_t get_priority_bucket(const string& url, int seed_list_dist = 0, int domains_from_seed = 0) {
     // TODO(Erik): write this function
     // 0 is the index of the highest priority bucket, PRIORITY_BUCKETS - 1 is the index of the lowest priority bucket
     // PRIORITY_BUCKETS defined in ~/lib/consts.h
