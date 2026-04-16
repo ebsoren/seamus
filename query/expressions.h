@@ -356,9 +356,22 @@ static void assign_word_ids(QueryNode* node, vector<UniqueTerm>& dict) {
     }
 }
 
+// For use in QueryISR tree - avoids the DNF conversion.
+// Means dedupe needs to happen later. The ASTNode tree
+// will be used to build the query tree. 
+inline ASTNode parse_query_ast(const string_view& query_str) {
+    g_term_id = 0;
+    vector<Token> tokens = tokenize(query_str);
+    if (tokens.empty()) throw ParseError{"Empty query"};
+
+    size_t pos = 0;
+    ASTNode ast = parse_expr(tokens, pos);
+    if (pos < tokens.size()) throw ParseError{"Unexpected trailing tokens"};
+    return ast;
+}
 
 // PUBLIC INTERFACE CHARLIE!!
-ParseResult parse_query_tree(const string_view& query_str) {
+inline ParseResult parse_query_tree(const string_view& query_str) {
     g_term_id = 0;
     ParseResult res;
     res.arena = UniquePtr<QueryArena>(new QueryArena());

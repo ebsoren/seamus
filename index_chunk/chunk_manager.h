@@ -16,6 +16,8 @@
 #include "lib/string.h"
 #include "lib/utils.h"
 #include "lib/vector.h"
+#include "query/expressions.h"
+#include "query_isr.h"
 
 
 class LoadedIndex {
@@ -347,6 +349,43 @@ public:
     // works. LoadedIndex has its own move ctor, so member-wise move is
     // correct.
     chunk_manager(chunk_manager &&) noexcept = default;
+
+    // Phase 1 entry point for the complex query handler. Builds a per-call
+    // ISR tree out of the parsed AST and executes (HERSHEY - THIS NOT DONE)
+    // TODO (Esben) matbe build irs tree in index manager and pass in queryISR root.
+    // Not 100% sure if that will work tho
+    void query(const ASTNode &ast, atomic_vector<DocInfo> *data_channel) {
+        ISRArena arena;
+        QueryISR *root = build_isr_tree(ast, arena);
+        if (root == nullptr) {
+            logger::warn("chunk_manager::query: build_isr_tree returned null");
+            return;
+        }
+
+        // Return if the query is logically impossible
+        if (!root->is_driveable()) {
+            logger::warn("chunk_manager::query: query has no driveable path (all branches negated)");
+            return;
+        }
+
+        // 1. collect positive terms and run them through
+        // default_query. dedupe is already handled by the arena, so the
+        // unique-words invariant on default_query is satisfied.
+        vector<string> positive_words;
+        positive_words.reserve(arena.terms().size());
+        for (size_t i = 0; i < arena.terms().size(); ++i) {
+            const TermISR *t = arena.terms()[i];
+            if (t->is_negated()) continue;
+            positive_words.push_back(string(t->word().data(), t->word().size()));
+        }
+
+        // Return if the query is entirely negations.
+        if (positive_words.size() == 0) {
+            return;
+        }
+
+        default_query(positive_words, data_channel);
+    }
 
     // Run a leapfrog AND across `words` and append all matching docs (with
     // url + per-word positions) into `data_channel`. On deadline, appends

@@ -6,10 +6,12 @@
 #include "index_chunk/chunk_manager.h"
 #include "lib/atomic_vector.h"
 #include "lib/consts.h"
+#include "lib/logger.h"
 #include "lib/query_response.h"
 #include "lib/string.h"
 #include "lib/utils.h"
 #include "lib/vector.h"
+#include "query/expressions.h"
 
 
 class index_manager {
@@ -31,26 +33,35 @@ public:
     index_manager(const index_manager &)            = delete;
     index_manager &operator=(const index_manager &) = delete;
 
-    // Fan `words` out to every chunk's leapfrog query and gather the merged
-    // DocInfos into a QueryResponse. Query parsing (tokenize/dedup/etc.) is
-    // the caller's responsibility — see query/expressions.h. Blocks until
+    // Parse the raw query string once, then fan the resulting AST out to
+    // every chunk's tree-based executor. Each chunk builds its own ISR tree
+    // off the shared AST inside chunk_manager::query — the AST itself is
+    // immutable across chunks so the read-only share is safe. Blocks until
     // every worker has joined, so the lambda captures stay valid.
-    // INVARIANT: words must contain unique elements.
-    QueryResponse handle_query(const vector<string> &words) {
+    QueryResponse handle_query(const string &query_str) {
+        QueryResponse resp;
+
+        ASTNode ast;
+        try {
+            ast = parse_query_ast(string_view(query_str.data(), query_str.size()));
+        } catch (const ParseError &e) {
+            logger::warn("index_manager::handle_query: parse failed: %s", e.message);
+            return resp;
+        }
+
         atomic_vector<DocInfo> collector;
 
         vector<std::thread> threads;
         threads.reserve(chunk_managers.size());
         for (chunk_manager &cm : chunk_managers) {
-            threads.push_back(std::thread([&cm, &words, &collector]() {
-                cm.default_query(words, &collector);
+            threads.push_back(std::thread([&cm, &ast, &collector]() {
+                cm.query(ast, &collector);
             }));
         }
         for (std::thread &t : threads) {
             if (t.joinable()) t.join();
         }
 
-        QueryResponse resp;
         resp.pages = collector.take();
         return resp;
     }
