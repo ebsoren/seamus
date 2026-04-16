@@ -7,6 +7,7 @@ cc_library(
         "chunk_manager.h",
         "isr.h",
         "query_isr.h",
+        "ranked_buffer.h",
     ],
     visibility = ["//visibility:public"],
     deps = [

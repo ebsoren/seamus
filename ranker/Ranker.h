@@ -46,12 +46,6 @@ struct RankedPage {
     size_t doc_len;
 };
 
-struct LeanPage {
-    string url = string("");
-    string title = string("");
-    double score; 
-};
-
 struct RankerNodeInfo {
     string node; // can be single or multi-word
     size_t cnt;
