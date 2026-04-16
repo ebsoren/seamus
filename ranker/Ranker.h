@@ -15,7 +15,8 @@
 #include "../lib/logger.h"
 #include "../lib/rpc_query_handler.h"
 #include "../query/expressions.h"
-#include "../index_chunk/chunk_manager.h"
+#include "../lib/chunk_manager_query.h"
+#include "../lib/rpc_query_handler.h"
 #include "../url_store/url_store.h"
 #include "ranker_consts.h"
 #include <optional>
@@ -53,13 +54,13 @@ struct RankerNodeInfo {
     bool is_phrase;
 };
 
-bool is_digit(char c) {
+inline bool is_digit(char c) {
     return c >= '0' && c <= '9';
 }
 
 
 // These are all the allowed endings that we can rank
-unordered_map<string,double> makeTldWeight() {
+inline unordered_map<string,double> makeTldWeight() {
     unordered_map<string, double> m(32);
 
     m.insert(string("gov"),1.2);
@@ -114,9 +115,9 @@ unordered_map<string,double> makeTldWeight() {
 
     return m;
 }
-unordered_map<string, double> tldWeight = makeTldWeight(); // factory function to avoid having to implement initializer lists lol
+inline unordered_map<string, double> tldWeight = makeTldWeight(); // factory function to avoid having to implement initializer lists lol
 
-double max(double i, double j) {
+inline double max(double i, double j) {
     if(i < j) {
         return j;
     } else {
@@ -124,7 +125,7 @@ double max(double i, double j) {
     }
 }
 
-double min(double i, double j) {
+inline double min(double i, double j) {
     if(i < j) {
         return i;
     } else {
@@ -133,7 +134,7 @@ double min(double i, double j) {
 }
 
 // basically the same function from the frontier. I have modified and added certain things to increase acuracy I think . . .
-double calc_static_score(const RankedPage &p) {
+inline double calc_static_score(const RankedPage &p) {
     
     // domains from seed list is potentially more important that seed list distance itself 
 
@@ -239,7 +240,7 @@ T max_element(vector<T> &v) {
 }
 
 
-double word_pos_score(const vector<vector<size_t>> &positions, size_t doc_len, int unique_words_in_query) {
+inline double word_pos_score(const vector<vector<size_t>> &positions, size_t doc_len, int unique_words_in_query) {
     if (unique_words_in_query == 0 || doc_len == 0) return 0.0;
 
     double score = 0.0;
@@ -425,7 +426,7 @@ private:
         );
     }
 
-        vector<LeanPage> rank(vector<RankedPage> v) {
+        vector<LeanPage> rank(vector<RankedPage> &v) {
         //initialize the pq
         pq = priority_queue<LeanPage, vector<LeanPage>, RankedCompare>(
             RankedCompare(dynamic_weight, unique_query_terms.size()),
