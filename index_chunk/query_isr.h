@@ -42,8 +42,9 @@ public:
 class TermISR : public QueryISR {
 public:
     TermISR(const string_view &w, bool is_negated, LoadedIndex *li)
-        : word_(w.data(), w.size()), is_negated_(is_negated),
-          isr_(string(w.data(), w.size()), li) {}
+        : word_(w.data(), w.size())
+        , is_negated_(is_negated)
+        , isr_(string(w.data(), w.size()), li) {}
 
     const string &word() const { return word_; }
     bool is_negated() const { return is_negated_; }
@@ -79,7 +80,8 @@ private:
 class PhraseISR : public QueryISR {
 public:
     PhraseISR(const string_view &phrase, bool is_negated)
-        : phrase_(phrase.data(), phrase.size()), is_negated_(is_negated) {}
+        : phrase_(phrase.data(), phrase.size())
+        , is_negated_(is_negated) {}
 
     const string &phrase() const { return phrase_; }
     bool is_negated() const { return is_negated_; }
@@ -99,7 +101,14 @@ private:
 // AND over children. Step 3 implements real leapfrog execution.
 class AndOp : public QueryISR {
 public:
-    void add_child(QueryISR *c) { children_.push_back(c); }
+    void add_child(QueryISR *c) {
+        children_.push_back(c);
+        uint32_t s = c->estimated_n_docs;
+        if (!driver_ || c->is_driveable() && s < driver_score_) {
+            driver_ = c;
+            driver_score_ = s;
+        }
+    }
     const vector<QueryISR *> &children() const { return children_; }
 
     bool is_driveable() const override {
@@ -123,11 +132,38 @@ public:
         return any ? best : 0;
     }
 
-    uint32_t next_doc() override { return 0; }
-    bool probe(uint32_t) override { return false; }
+    uint32_t next_doc() override {
+        bool success = false;
+        uint32_t res;
+        while (!success) {
+            success = true;
+            res = driver_->next_doc();
+            if (!res) return 0;
+            for (const auto &child : children_) {
+                if (child == driver_) continue;
+                uint32_t cand = child->probe(res);
+                if (cand == 0) return 0;
+                if (cand != res) {
+                    success = false;
+                    break;
+                }
+            }
+        }
+        return res;
+
+    }
+
+    bool probe(uint32_t doc) override { 
+        for (const auto& child : children_) {
+            if (!child->probe(doc)) return false;
+        }
+        return true;
+    }
 
 private:
     vector<QueryISR *> children_;
+    QueryISR *driver_ = nullptr;
+    size_t driver_score_ = INT_MAX:
 };
 
 

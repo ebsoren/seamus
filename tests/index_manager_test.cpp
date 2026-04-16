@@ -13,7 +13,7 @@
 #include "index_chunk/chunk_manager.h"
 #include "index_manager/index_manager.h"
 #include "lib/consts.h"
-#include "lib/query_response.h"
+#include "lib/chunk_manager_query.h"
 #include "lib/string.h"
 #include "lib/vector.h"
 
@@ -302,7 +302,7 @@ void test_index_manager_discovery_and_query() {
             joined.append(words[i].data(), words[i].size());
         }
         string query_str(joined.data(), joined.size());
-        QueryResponse resp = im.handle_query(query_str);
+        ChunkQueryInfo resp = im.handle_query(query_str);
 
         assert(resp.pages.size() == want.size());
 
@@ -332,9 +332,9 @@ void test_index_manager_discovery_and_query() {
     assert(empty    > 0);
 
     // A missing word must fan out, hit every chunk's short-circuit, and
-    // return an empty QueryResponse.
+    // return an empty ChunkQueryInfo.
     {
-        QueryResponse resp = im.handle_query(string("nonexistentword"));
+        ChunkQueryInfo resp = im.handle_query(string("nonexistentword"));
         assert(resp.pages.size() == 0);
     }
 
@@ -344,7 +344,7 @@ void test_index_manager_discovery_and_query() {
         joined.append(pool[0].data(), pool[0].size());
         joined.push_back(' ');
         joined.append("nonexistentword");
-        QueryResponse resp = im.handle_query(string(joined.data(), joined.size()));
+        ChunkQueryInfo resp = im.handle_query(string(joined.data(), joined.size()));
         assert(resp.pages.size() == 0);
     }
 
@@ -363,7 +363,7 @@ void test_index_manager_empty_dir() {
 
     index_manager im;
 
-    QueryResponse resp = im.handle_query(string("apple"));
+    ChunkQueryInfo resp = im.handle_query(string("apple"));
     assert(resp.pages.size() == 0);
 }
 

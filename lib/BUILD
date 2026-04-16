@@ -39,8 +39,8 @@ cc_library(
 )
 
 cc_library(
-    name = "query_response",
-    hdrs = ["query_response.h"],
+    name = "chunk_manager_query",
+    hdrs = ["chunk_manager_query.h"],
     visibility = ["//visibility:public"],
     deps = [
         ":string",
@@ -173,4 +173,11 @@ cc_library(
     hdrs = ["url_filter.h"],
     visibility = ["//visibility:public"],
     deps = [":string"],
+)
+
+cc_library(
+    name = "rpc_query_handler",
+    hdrs = ["rpc_query_handler.h"],
+    visibility = ["//visibility:public"],
+    deps = [":string", ":vector", ":rpc_common", "//ranker:ranker"],
 )

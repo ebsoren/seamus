@@ -474,13 +474,13 @@ public:
         return rank(candidates);
     }
 
-    double getScore(const DocInfo &di) {
-        const string& url = di.url;
-        const vector<NodeInfo>& phrases = di.nodeInfo;
+    double getScore(const DocInfo &dih) {
+        const string& url = dih.url;
+        const vector<NodeInfo>& phrases = dih.nodeInfo;
         RankedPage page;
         if(!is_query_set) {
             is_query_set = true;
-            set_new_query(di);
+            set_new_query(dih);
         }
         page.url = string(url.data(), url.size());
         auto data = url_store->getUrl(url);
@@ -503,7 +503,7 @@ public:
             page.times_seen = data->num_encountered; 
 
             // TODO: populate word_positions
-            for(NodeInfo &n : di.nodeInfo) {
+            for(NodeInfo &n : dih.nodeInfo) {
                 vector<vector<size_t>> word_positions_init;
                 word_positions_init.push_back(n.pos);
             }

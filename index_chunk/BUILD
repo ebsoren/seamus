@@ -15,11 +15,12 @@ cc_library(
         "//lib:atomic_vector",
         "//lib:consts",
         "//lib:logger",
-        "//lib:query_response",
+        "//lib:chunk_manager_query",
         "//lib:string",
         "//lib:utf8",
         "//lib:utils",
         "//lib:vector",
         "//query:expressions",
+        "//lib:rpc_query_handler",
     ],
 )

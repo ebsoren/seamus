@@ -12,12 +12,13 @@
 #include "lib/atomic_vector.h"
 #include "lib/consts.h"
 #include "lib/logger.h"
-#include "lib/query_response.h"
+#include "lib/chunk_manager_query.h"
 #include "lib/string.h"
 #include "lib/utils.h"
 #include "lib/vector.h"
 #include "query/expressions.h"
 #include "query_isr.h"
+#include "lib/rpc_query_handler.h"
 
 
 class LoadedIndex {
@@ -480,13 +481,13 @@ public:
             // overshoot buffer), so the next advance_to() lands correctly.
             // string is move-only, so we aggregate-init each struct rather
             // than default-constructing and assigning.
-            vector<WordInfo> word_infos;
+            vector<NodeInfo> word_infos;
             word_infos.reserve(order.size());
             for (size_t i = 0; i < order.size(); ++i) {
                 IndexStreamReader &isr = isrs[order[i]];
                 vector<size_t> positions;
                 isr.collect_positions_in_current_doc(positions);
-                word_infos.push_back(WordInfo{
+                word_infos.push_back(NodeInfo{
                     string(isr.word.data(), isr.word.size()),
                     move(positions),
                 });
@@ -579,12 +580,12 @@ public:
                 // ground.loc + i by construction. One DocInfo per doc (we
                 // jump to the next doc below, so later hits in this doc
                 // aren't recorded).
-                vector<WordInfo> word_infos;
+                vector<NodeInfo> word_infos;
                 word_infos.reserve(isr_vec.size());
                 for (size_t i = 0; i < isr_vec.size(); ++i) {
                     vector<size_t> positions;
                     positions.push_back(static_cast<size_t>(ground.loc + i));
-                    word_infos.push_back(WordInfo{
+                    word_infos.push_back(NodeInfo{
                         string(isr_vec[i].word.data(), isr_vec[i].word.size()),
                         move(positions),
                     });

@@ -9,7 +9,7 @@ cc_library(
         "//lib:atomic_vector",
         "//lib:consts",
         "//lib:logger",
-        "//lib:query_response",
+        "//lib:chunk_manager_query",
         "//lib:string",
         "//lib:utils",
         "//lib:vector",
@@ -23,7 +23,7 @@ cc_binary(
     deps = [
         ":index_manager",
         "//lib:consts",
-        "//lib:query_response",
+        "//lib:chunk_manager_query",
         "//lib:string",
     ],
 )
