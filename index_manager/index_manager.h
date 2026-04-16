@@ -14,12 +14,12 @@
 #include "query/expressions.h"
 
 
-class index_manager {
+class IndexManager {
 public:
     // Walk every worker's chunk files in order; stop at the first missing
     // chunk for each worker. Mirrors recover_index_chunks, which targets
     // IndexChunk::get_index_chunk_path's naming.
-    index_manager() {
+    IndexManager() {
         for (uint32_t w = 0; w < NUM_INDEXER_THREADS; ++w) {
             for (uint32_t c = 0; c < 5; ++c) {
                 string path = string::join("", string(INDEX_OUTPUT_DIR), "/index_chunk_", string(w), "_",
@@ -30,8 +30,8 @@ public:
         }
     }
 
-    index_manager(const index_manager &)            = delete;
-    index_manager &operator=(const index_manager &) = delete;
+    IndexManager(const IndexManager &)            = delete;
+    IndexManager &operator=(const IndexManager &) = delete;
 
     // Parse the raw query string once, then fan the resulting AST out to
     // every chunk's tree-based executor. Each chunk builds its own ISR tree

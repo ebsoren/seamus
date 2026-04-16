@@ -51,6 +51,12 @@ struct LeanPage {
     double score; 
 };
 
+struct RankerNodeInfo {
+    string node; // can be single or multi-word
+    size_t cnt;
+    bool is_phrase;
+};
+
 bool is_digit(char c) {
     return c >= '0' && c <= '9';
 }
@@ -418,7 +424,9 @@ public:
         pq.clear();
     }
 
-    void set_new_query(vector<string> s) {
+    void set_new_query(vector<RankerNodeInfo> node_info) {
+        // TODO(erik): retrieve all the unique nodes from the whole query
+        
         unique_query_words = std::move(s);
         if(verbose_mode) {
             logger::debug("Ranker has been changed to serving an amount of %zu unique words in the query", s.size());

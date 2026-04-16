@@ -5,14 +5,16 @@
 
 // Important structs for query return type
 
-struct WordInfo {
-    string word;
-    vector<size_t> pos;
+struct NodeInfo {
+    string phrase;
+    vector<size_t> pos; // word_cnt can be calculated from the size of this
+    size_t freqs;
+    bool is_phrase;
 };
 
 struct DocInfo {
     string url;
-    vector<WordInfo> wordInfo;
+    vector<NodeInfo> nodeInfo;
 };
 
 struct QueryResponse {

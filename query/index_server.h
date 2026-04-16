@@ -6,6 +6,8 @@
 #include "../url_store/url_store.h"
 #include "../lib/thread_pool.h"
 #include "../ranker/Ranker.h"
+#include "../lib/query_response.h"
+#include "../index_manager/index_manager.h"
 
 #include <thread>
 
@@ -21,14 +23,17 @@ class IndexServer {
 
         LeanPageResponse handle_request(const string& query) {
 
+
             LeanPageResponse results;
             vector<RankedPage> candidates;
+            vector<RankerNodeInfo> ranker_info;
             // TODO(charlie): call index_manager to query index chunks and get QueryResponse
             QueryResponse qr;
             // iterate through query response entries urls and retrieve appropriate info from urlStore
                 // construct rankedPages for each docInfo from queryResponse and send THIS back to client as RankedPageResponse obj.
             for (const DocInfo& di : qr.pages) {
                 const string& url = di.url;
+                const vector<NodeInfo>& phrases = di.nodeInfo;
                 RankedPage page;
                 page.url = string(url.data(), url.size());
                 auto data = url_store->getUrl(url);
@@ -38,19 +43,28 @@ class IndexServer {
                     page.domains_from_seed = data->domain_dist;
                     page.num_unique_words_found_anchor = data->anchor_freqs.size();
 
-                    // TODO(charlie): calculate these fields given di.wordInfo
+                    // Work to calculate:
                     // int num_unique_words_found_title;
-                    // int num_unique_words_found_descr;
                     // int num_unique_words_found_url;
+                    for (const NodeInfo& ni : phrases) {
+                        const string& phrase = ni.phrase;
+                        
+                    }
+                    
                     page.doc_len = data->eod;
                     page.times_seen = data->num_encountered; 
 
-                    // populate word_positions
-                    candidates.pages.push_back(std::move(page));;
+                    // TODO: populate word_positions
+
+
+                    candidates.push_back(std::move(page));;
                 }
             }
 
-            return { r->rank(candidates) };
+            ranker->set_new_query(ranker_info);
+            results.pages = r->rank(candidates);
+            ranker->reset();
+            return results;
         }
 
         void client_handler(int fd) {
@@ -62,8 +76,8 @@ class IndexServer {
             }
 
             query_pool.enqueue_task([this, fd, query = std::move(query_opt.value())]() {
-                RankedPageResponse results = handle_request(query);
-                send_word_response(fd, results);
+                LeanPageResponse results = handle_request(query);
+                send_query_response(fd, results);
                 close(fd);
             });  
         }

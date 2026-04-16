@@ -24,7 +24,6 @@
     // or can send these resutls and have the request machine merge
 class QueryHandler {
     private:
-        Ranker *r;
         ThreadPool pool;
         RPCListener rpc_listener;
         IndexServer *index_server;
@@ -33,7 +32,6 @@ class QueryHandler {
             ParseResult result = parse_query_tree(input.str_view(0, input.size()));
             vector<std::future<vector<LeanPage>>> futures;
 
-                        
             // TODO:
                 // - batch the WHOLE string query to each machine instead of 18 rpcs per word
                     // each end machine (index server) should pass this raw string to indexManager, and indexManager should construct the tree
@@ -71,6 +69,11 @@ class QueryHandler {
             return final_results;
         }
 
+        
+
+    public:
+        QueryHandler(IndexServer* index_server, uint16_t port = QUERY_HANDLER_PORT, size_t n_pool_threads = NUM_MACHINES, size_t n_query_threads = QUERY_NUM_LISTENING_THREADS) : pool(n_pool_threads), index_server(index_server), rpc_listener(port, n_query_threads) { };
+
         bool handle_client_req(int client_fd) {
             char buffer[2048] = {0};
             ssize_t bytes_read = read(client_fd, buffer, sizeof(buffer) - 1);
@@ -81,18 +84,7 @@ class QueryHandler {
             }
 
             string raw_request(buffer);
-            vector<LeanPage> results = get_results(raw_request);
-            send_client_response(client_fd, results);
-            r->reset();
-        }
-
-    public:
-        QueryHandler(Ranker* r, IndexServer* index_server, uint16_t port = QUERY_HANDLER_PORT, size_t n_pool_threads = NUM_MACHINES, size_t n_query_threads = QUERY_NUM_LISTENING_THREADS) : pool(n_pool_threads), r(r), index_server(index_server), rpc_listener(port, n_query_threads) { };
-
-        void start() {
-            rpc_listener.listener_loop([this](int client_fd) {
-                this->handle_client_req(client_fd);
-            });
+            send_query_response(client_fd, { get_results(raw_request) });
         }
 
 };

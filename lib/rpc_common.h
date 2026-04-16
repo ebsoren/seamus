@@ -93,6 +93,34 @@ inline bool recv_u32(int fd, uint32_t& out) {
     return true;
 }
 
+bool send_double(int fd, double value) {
+    uint64_t int_representation;
+    std::memcpy(&int_representation, &value, sizeof(value));
+    
+    // 2. Convert to Network Byte Order (Big-Endian)
+    uint64_t network_val = htobe64(int_representation);
+    
+    // 3. Send the 8 bytes
+    ssize_t bytes_written = write(fd, &network_val, sizeof(network_val));
+    return bytes_written == sizeof(network_val);
+}
+
+std::optional<double> recv_double(int fd) {
+    uint64_t network_val;
+    
+    // 1. Read exactly 8 bytes (using your recv_exact helper!)
+    if (!recv_exact(fd, &network_val, sizeof(network_val))) {
+        return std::nullopt; 
+    }
+    
+    // 2. Convert back to Host Byte Order
+    uint64_t int_representation = be64toh(network_val);
+    double value;
+    std::memcpy(&value, &int_representation, sizeof(value));
+    
+    return value;
+}
+
 
 // Read a network byte order uint16_t from fd into out
 inline bool recv_u16(int fd, uint16_t& out) {
