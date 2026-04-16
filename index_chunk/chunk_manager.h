@@ -353,10 +353,14 @@ public:
     // correct.
     chunk_manager(chunk_manager &&) noexcept = default;
 
-    // Builds a per-call ISR tree from the parsed AST, executes the query
-    // via default_query, then ranks results through the Ranker (if a
+    // Builds a per-call ISR tree from the parsed AST, drives it with
+    // next_doc() to find matching documents, collects per-word positions
+    // via separate ISRs, then ranks results through the Ranker (if a
     // UrlStore was provided) and pushes LeanPages to the collector.
     void query(const ASTNode &ast, atomic_vector<LeanPage> *data_channel) {
+        using clock = std::chrono::steady_clock;
+        const auto start_time = clock::now();
+
         ISRArena arena;
         QueryISR *root = build_isr_tree(ast, arena, &li);
         if (root == nullptr) {
@@ -368,29 +372,73 @@ public:
             return;
         }
 
-        // Extract unique positive terms and delegate to default_query.
-        vector<string> positive_words;
+        // Collect unique positive words from term leaves and phrase
+        // constituents. These are used for position collection only —
+        // the ISR tree handles the actual query semantics (AND/OR/NOT/phrase).
+        vector<string> unique_words;
+        auto add_unique_word = [&](const char *data, size_t len) {
+            for (size_t j = 0; j < unique_words.size(); ++j) {
+                if (unique_words[j].size() == len
+                    && memcmp(unique_words[j].data(), data, len) == 0)
+                    return;
+            }
+            unique_words.push_back(string(data, len));
+        };
+
         for (size_t i = 0; i < arena.terms().size(); ++i) {
             const TermISR *t = arena.terms()[i];
             if (t->is_negated()) continue;
-            bool dupe = false;
-            for (size_t j = 0; j < positive_words.size(); ++j) {
-                if (positive_words[j].size() == t->word().size()
-                    && memcmp(positive_words[j].data(), t->word().data(), t->word().size()) == 0) {
-                    dupe = true;
-                    break;
-                }
-            }
-            if (!dupe) {
-                positive_words.push_back(string(t->word().data(), t->word().size()));
+            add_unique_word(t->word().data(), t->word().size());
+        }
+        for (size_t i = 0; i < arena.phrases().size(); ++i) {
+            const PhraseISR *ph = arena.phrases()[i];
+            if (ph->is_negated()) continue;
+            const vector<string> &words = ph->constituent_words();
+            for (size_t w = 0; w < words.size(); ++w) {
+                add_unique_word(words[w].data(), words[w].size());
             }
         }
 
-        if (positive_words.size() == 0) return;
+        if (unique_words.size() == 0) return;
 
-        atomic_vector<DocInfo> doc_collector;
-        default_query(positive_words, &doc_collector);
-        vector<DocInfo> docs = doc_collector.take();
+        // Separate ISRs for position collection — independent of the
+        // tree's cursors so we don't disrupt next_doc() / probe() state.
+        vector<IndexStreamReader> pos_isrs;
+        pos_isrs.reserve(unique_words.size());
+        for (size_t i = 0; i < unique_words.size(); ++i) {
+            pos_isrs.push_back(IndexStreamReader(unique_words[i], &li));
+        }
+
+        vector<DocInfo> docs;
+        uint32_t doc = root->next_doc();
+
+        while (doc != 0) {
+            auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+                clock::now() - start_time).count();
+            if (static_cast<uint32_t>(elapsed) >= deadline_ms) {
+                logger::warn("chunk_manager::query hit %ums deadline after %zu matches",
+                             deadline_ms, docs.size());
+                break;
+            }
+
+            vector<NodeInfo> word_infos;
+            word_infos.reserve(unique_words.size());
+            for (size_t i = 0; i < unique_words.size(); ++i) {
+                vector<size_t> positions;
+                post p = pos_isrs[i].advance_to(doc);
+                if (p.doc == doc) {
+                    pos_isrs[i].collect_positions_in_current_doc(positions);
+                }
+                word_infos.push_back(NodeInfo{
+                    string(unique_words[i].data(), unique_words[i].size()),
+                    move(positions),
+                });
+            }
+            docs.push_back(DocInfo{li.get_url(doc), move(word_infos)});
+
+            doc = root->next_doc();
+        }
+
         if (docs.size() == 0) return;
 
         if (url_store_) {

@@ -86,12 +86,15 @@ public:
             if (i >= phrase.size()) break;
             size_t start = i;
             while (i < phrase.size() && phrase[i] != ' ') i++;
-            streams_.push_back(IndexStreamReader(
-                string(phrase.data() + start, i - start), li));
+            string w(phrase.data() + start, i - start);
+            streams_.push_back(IndexStreamReader(w, li));
+            words_.push_back(string(w.data(), w.size()));
         }
     }
 
     bool is_negated() const { return is_negated_; }
+
+    const vector<string> &constituent_words() const { return words_; }
 
     uint32_t estimated_n_docs() const override {
         if (streams_.size() == 0) return 0;
@@ -152,6 +155,7 @@ private:
 
     bool is_negated_;
     vector<IndexStreamReader> streams_;
+    vector<string> words_;
 };
 
 

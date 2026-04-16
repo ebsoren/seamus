@@ -161,12 +161,6 @@ static void assert_urls(const char* query_str, chunk_manager& cm,
 
 // =================================================================
 // Test 1: chunk_manager::query() returns correct URLs (no UrlStore)
-//
-// NOTE: chunk_manager::query() currently extracts positive terms
-// and delegates to default_query (leapfrog AND).  OR, NOT, and
-// phrase semantics are not yet executed — those need ISR-tree-based
-// execution (tested separately in query_isr_test).  This test
-// covers the queries that the current implementation handles.
 // =================================================================
 
 void test_chunk_manager_query_urls() {
@@ -191,6 +185,24 @@ void test_chunk_manager_query_urls() {
 
     // AND with no overlap
     assert_urls("jade lemon", cm, make_url_set({}));
+
+    // OR
+    assert_urls("jade | lemon", cm, make_url_set({"http://t/2","http://t/3"}));
+    assert_urls("iris | elder", cm, make_url_set({"http://t/1","http://t/2","http://t/3","http://t/4","http://t/6","http://t/7"}));
+
+    // NOT
+    assert_urls("apple -banana", cm, make_url_set({"http://t/3","http://t/7"}));
+    assert_urls("cherry -apple", cm, make_url_set({"http://t/2","http://t/4"}));
+
+    // Phrase
+    assert_urls("\"apple banana\"", cm, make_url_set({"http://t/1","http://t/6"}));
+    assert_urls("\"banana cherry\"", cm, make_url_set({"http://t/1","http://t/2","http://t/6"}));
+
+    // Complex: parenthesized OR + AND
+    assert_urls("(jade | kiwi) grape", cm, make_url_set({"http://t/2","http://t/3","http://t/7"}));
+
+    // Complex: phrase + NOT
+    assert_urls("\"banana cherry\" -apple", cm, make_url_set({"http://t/2"}));
 
     // Nonexistent term
     assert_urls("zzzzz", cm, make_url_set({}));
