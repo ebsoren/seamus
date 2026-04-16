@@ -116,7 +116,7 @@ constexpr const char* SEED_LIST[SEED_LIST_SIZE] = {
     "https://www.britannica.com",
     "https://www.merriam-webster.com",
     "https://www.oed.com",
-    "https://www.wikipedia.org",
+    "https://en.wikipedia.org",
     "https://www.history.com",
     "https://www.nationalgeographic.com",
     "https://www.nature.com",

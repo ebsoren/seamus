@@ -29,7 +29,7 @@ After=network.target
 [Service]
 ExecStart=$BINARY_PATH
 WorkingDirectory=$WORK_DIR
-Restart=always
+Restart=no
 RestartSec=5
 User=$USER
 Environment=MACHINE_ID=$MACHINE_ID
@@ -42,7 +42,7 @@ EOF
 
 echo "Starting service..."
 sudo systemctl daemon-reload
-sudo systemctl enable crawler
+sudo systemctl disable crawler
 sudo systemctl start crawler
 
 echo "Checking status..."
