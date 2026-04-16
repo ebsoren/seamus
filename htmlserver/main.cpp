@@ -13,7 +13,7 @@
 #include "../ranker/Ranker.h"
 #include "html_templates.h"
 
-// --- Custom HTML Builder for dynamic assembly ---
+// HTML Builder
 struct HtmlBuilder {
     char* data;
     size_t len;
@@ -45,7 +45,7 @@ struct HtmlBuilder {
     }
 };
 
-// --- Main Server Class ---
+// Main Server
 class SearchServer {
 public:
     SearchServer() {

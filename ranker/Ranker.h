@@ -13,6 +13,7 @@
 #include "../lib/utils.h"
 #include "../lib/consts.h"
 #include "../lib/logger.h"
+#include "../lib/rpc_query_handler.h"
 #include "../query/expressions.h"
 #include "../index_chunk/chunk_manager.h"
 #include "../url_store/url_store.h"
