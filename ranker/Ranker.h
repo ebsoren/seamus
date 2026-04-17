@@ -362,15 +362,13 @@ private:
     int count_anchor_term_matches(UrlData* data) {
         if (!data || data->anchor_freqs.size() == 0) return 0;
 
-        // Collect anchor texts for this URL
+        // id_to_anchor is immutable during query serving (crawler is not running),
+        // so we can read without locking global_mtx.
         vector<string*> anchor_texts;
-        {
-            std::lock_guard<std::mutex> lock_global(url_store->global_mtx);
-            for (auto it = data->anchor_freqs.begin(); it != data->anchor_freqs.end(); ++it) {
-                uint32_t anchor_id = (*it).key;
-                if (anchor_id < url_store->id_to_anchor.size()) {
-                    anchor_texts.push_back(&url_store->id_to_anchor[anchor_id]);
-                }
+        for (auto it = data->anchor_freqs.begin(); it != data->anchor_freqs.end(); ++it) {
+            uint32_t anchor_id = (*it).key;
+            if (anchor_id < url_store->id_to_anchor.size()) {
+                anchor_texts.push_back(&url_store->id_to_anchor[anchor_id]);
             }
         }
 

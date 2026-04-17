@@ -6,10 +6,6 @@
 #include <ctype.h>
 #include <chrono>
 #include <memory>
-#include <thread>
-#include <future>
-
-#include "../crawler/network_util.h"
 #include "../lib/rpc_listener.h"
 #include "../lib/consts.h"
 #include "../lib/string.h"
@@ -107,36 +103,6 @@ private:
         close(fd);
     }
 
-    string get_accurate_title(const string &url) {
-        if (url.size() < 9) return string("");
-
-        string host = extract_host(url);
-        const char* slash = static_cast<const char*>(memchr(url.data() + 8, '/', url.size() - 8));
-        const char* path_str = slash ? slash + 1 : "";
-
-        auto buf = std::make_unique<char[]>(MAX_HTML_SIZE);
-        ssize_t html_len = https_get(host.data(), path_str, buf.get());
-
-        if (html_len <= 0) return string("");
-
-        const char* p = buf.get();
-        const char* end = buf.get() + html_len;
-
-        while (p + 7 <= end) {
-            if (!strncasecmp(p, "<title>", 7)) {
-                p += 7;
-                const char* title_start = p;
-                while (p + 8 <= end && strncasecmp(p, "</title>", 8)) p++;
-                if (p + 8 <= end) {
-                    return string(title_start, p - title_start);
-                }
-                return string("");
-            }
-            p++;
-        }
-        return string("");
-    }
-
     void serve_search_results(int fd, string_view path) {
         string raw_term = parse_query_term(path);
         string term = remove_special_chars(raw_term);
@@ -176,22 +142,9 @@ private:
         size_t end_idx = min(start_idx + 10, results.size());
 
         if (start_idx < results.size()) {
-            // Fire off all title fetches in parallel
-            size_t count = end_idx - start_idx;
-            std::vector<std::future<string>> title_futures;
-            title_futures.reserve(count);
             for (size_t i = start_idx; i < end_idx; ++i) {
-                const string& url = results[i].url;
-                title_futures.push_back(std::async(std::launch::async, [this, &url]() {
-                    return get_accurate_title(url);
-                }));
-            }
-
-            // Collect results and build HTML
-            for (size_t i = 0; i < count; ++i) {
-                const auto& res = results[start_idx + i];
-                string real_title = title_futures[i].get();
-                const string& display_title = (real_title.size() > 0) ? real_title : res.title;
+                const auto& res = results[i];
+                const string& display_title = (res.title.size() > 0) ? res.title : res.url;
 
                 html.append("<div class=\"result-item\">\n");
                 html.append("<a class=\"result-title\" href=\""); html.append(res.url); html.append("\" target=\"_blank\">");
