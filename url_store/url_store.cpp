@@ -7,6 +7,7 @@
 #include "../lib/logger.h"
 #include "../lib/url_filter.h"
 #include <optional>
+#include <vector>
 
 
 UrlStore::UrlStore(DomainCarousel* dc, const int worker_num) : dc(dc) {
@@ -312,155 +313,176 @@ void UrlStore::persist(bool final_persist) {
     }
 }
 
-void UrlStore::readFromFile() {
-    // 1. FIX: Ensure each worker reads its own specific file to avoid data races
-    // Note: Make sure your custom string::join supports this, or use std::to_string
-    string fileName = string::join("", URL_STORE_OUTPUT_DIR_STR, "/urlstore.txt");
-    
-    string read_mode("rb");
-    FILE* fd = fopen(fileName.data(), read_mode.data());
+// Temporary record used during parallel urlstore load. Points into the
+// file buffer — no copies until the actual shard insertion.
+struct UrlRecord {
+    const char* url;  uint32_t url_len;
+    uint32_t num_encountered;
+    uint16_t seed_distance, eot, eod, domain_dist;
+    const char* title; size_t title_len;
+    bool crawled;
+    const uint8_t* anchor_freq_data; uint32_t num_anchor_freqs;
+};
 
+void UrlStore::readFromFile() {
+    string fileName = string::join("", URL_STORE_OUTPUT_DIR_STR, "/urlstore.txt");
+
+    FILE* fd = fopen(fileName.data(), "rb");
     if (fd == nullptr) {
-        logger::error("url_store: FAILED to open %s for reading", fileName.data());
+        logger::error("[URL_STORE] FAILED to open %s for reading", fileName.data());
         return;
     }
 
-    uint32_t num_anchor_texts;
-    if (fread(&num_anchor_texts, sizeof(uint32_t), 1, fd) != 1) {
-        fclose(fd);
-        return; // handle empty file gracefully
+    // Read entire file into memory in one shot
+    fseek(fd, 0, SEEK_END);
+    size_t file_size = ftell(fd);
+    fseek(fd, 0, SEEK_SET);
+
+    uint8_t* buf = new uint8_t[file_size];
+    size_t rd = fread(buf, 1, file_size, fd);
+    fclose(fd);
+    if (rd != file_size) {
+        logger::error("[URL_STORE] short read: got %zu / %zu bytes", rd, file_size);
+        delete[] buf;
+        return;
     }
-    logger::error("[URL_STORE] reading %u anchor texts from %s", num_anchor_texts, fileName.data());
+    logger::error("[URL_STORE] read %zu bytes into memory from %s", file_size, fileName.data());
+
+    const uint8_t* p = buf;
+    const uint8_t* end = buf + file_size;
+
+    // --- Parse anchors (sequential, fast) ---
+    if (p + sizeof(uint32_t) > end) { delete[] buf; return; }
+    uint32_t num_anchor_texts;
+    memcpy(&num_anchor_texts, p, sizeof(uint32_t)); p += sizeof(uint32_t);
+    logger::error("[URL_STORE] reading %u anchor texts", num_anchor_texts);
 
     size_t oversized_anchors = 0;
-    size_t expected_bytes = 0;
-    long pos_before_anchors = ftell(fd);
-    char anchor_text_buff[URL_STORE_MAX_ANCHOR_TEXT_LEN];
     for (uint32_t i = 0; i < num_anchor_texts; i++) {
-        uint32_t anchor_text_len;
-        size_t r = fread(&anchor_text_len, sizeof(uint32_t), 1, fd);
-        if (r != 1) {
-            logger::warn("[URL_STORE] anchor[%u]: fread of len failed (r=%zu), pos=%ld", i, r, ftell(fd));
-            break;
-        }
-        expected_bytes += 4 + anchor_text_len;
+        if (p + sizeof(uint32_t) > end) break;
+        uint32_t anchor_len;
+        memcpy(&anchor_len, p, sizeof(uint32_t)); p += sizeof(uint32_t);
 
-        // Guard against file corruption causing buffer overflow
-        if (anchor_text_len > URL_STORE_MAX_ANCHOR_TEXT_LEN) {
+        uint32_t actual_len = anchor_len;
+        if (anchor_len > URL_STORE_MAX_ANCHOR_TEXT_LEN) {
+            actual_len = URL_STORE_MAX_ANCHOR_TEXT_LEN;
             oversized_anchors++;
-            fread(anchor_text_buff, sizeof(char), URL_STORE_MAX_ANCHOR_TEXT_LEN, fd);
-            fseek(fd, anchor_text_len - URL_STORE_MAX_ANCHOR_TEXT_LEN, SEEK_CUR);
-            anchor_text_len = URL_STORE_MAX_ANCHOR_TEXT_LEN;
-        } else {
-            size_t rd = fread(anchor_text_buff, sizeof(char), anchor_text_len, fd);
-            if (rd != anchor_text_len) {
-                logger::warn("[URL_STORE] anchor[%u]: short read! expected %u got %zu, pos=%ld",
-                        i, anchor_text_len, rd, ftell(fd));
-            }
         }
-        id_to_anchor.push_back(string(anchor_text_buff, anchor_text_len));
-        anchor_to_id[string(anchor_text_buff, anchor_text_len)] = id_to_anchor.size() - 1;
-    }
-    long pos_after_anchors = ftell(fd);
-    long actual_bytes = pos_after_anchors - pos_before_anchors;
-    logger::warn("[URL_STORE] anchor byte accounting: expected=%zu actual=%ld delta=%ld",
-            expected_bytes, actual_bytes, actual_bytes - (long)expected_bytes);
-    // Log the last few anchors to see if they look sane at the boundary
-    if (id_to_anchor.size() >= 2) {
-        const string& last = id_to_anchor[id_to_anchor.size() - 1];
-        const string& second_last = id_to_anchor[id_to_anchor.size() - 2];
-        logger::warn("[URL_STORE] last anchor[%zu] len=%zu: '%.*s'",
-                id_to_anchor.size()-1, last.size(),
-                static_cast<int>(last.size() > 80 ? 80 : last.size()), last.data());
-        logger::warn("[URL_STORE] anchor[%zu] len=%zu: '%.*s'",
-                id_to_anchor.size()-2, second_last.size(),
-                static_cast<int>(second_last.size() > 80 ? 80 : second_last.size()), second_last.data());
-    }
-
-    // Peek at raw bytes at the boundary to see what's actually there
-    long boundary_pos = ftell(fd);
-    unsigned char peek[16];
-    size_t peeked = fread(peek, 1, 16, fd);
-    fseek(fd, boundary_pos, SEEK_SET);  // seek back
-    char hex_buf[16 * 3 + 1];
-    size_t hex_pos = 0;
-    for (size_t pi = 0; pi < peeked; pi++) {
-        hex_pos += snprintf(hex_buf + hex_pos, sizeof(hex_buf) - hex_pos, "%02x ", peek[pi]);
+        if (p + anchor_len > end) break;
+        id_to_anchor.push_back(string((const char*)p, actual_len));
+        anchor_to_id[string((const char*)p, actual_len)] = id_to_anchor.size() - 1;
+        p += anchor_len;
     }
     logger::error("[URL_STORE] anchors loaded: %zu total, %zu oversized", id_to_anchor.size(), oversized_anchors);
 
-    uint32_t url_len;
-    char url_buff[URL_STORE_MAX_URL_LEN];
+    // --- Parse URL records into per-shard buckets (sequential scan) ---
+    std::vector<std::vector<UrlRecord>> shard_buckets(URL_NUM_SHARDS);
     size_t url_count = 0;
-    while (fread(&url_len, sizeof(uint32_t), 1, fd) == 1) {
-        if (url_len > URL_STORE_MAX_URL_LEN) {
-            fread(url_buff, sizeof(char), URL_STORE_MAX_URL_LEN, fd);
-            fseek(fd, url_len - URL_STORE_MAX_URL_LEN, SEEK_CUR);
-            url_len = URL_STORE_MAX_URL_LEN;
-        } else {
-            fread(url_buff, sizeof(char), url_len, fd);
+
+    while (p + sizeof(uint32_t) <= end) {
+        uint32_t url_len;
+        memcpy(&url_len, p, sizeof(uint32_t)); p += sizeof(uint32_t);
+        uint32_t actual_url_len = url_len > URL_STORE_MAX_URL_LEN ? URL_STORE_MAX_URL_LEN : url_len;
+        if (p + url_len > end) break;
+
+        // Lowercase in-place in the buffer (safe, we own it)
+        char* url_ptr = (char*)p;
+        for (uint32_t ci = 0; ci < actual_url_len; ci++) {
+            if (url_ptr[ci] >= 'A' && url_ptr[ci] <= 'Z') url_ptr[ci] += 32;
         }
-        
-        url_count++;
-        // Lowercase URL to match index format
-        for (uint32_t ci = 0; ci < url_len; ci++) {
-            char c = url_buff[ci];
-            if (c >= 'A' && c <= 'Z') url_buff[ci] = c + 32;
-        }
-        string url(url_buff, url_len);
+        p += url_len;
 
-        if (url_count <= 5) {
-            logger::warn("[URL_STORE] url[%zu] len=%u: '%.*s'",
-                    url_count, url_len, static_cast<int>(url_len > 120 ? 120 : url_len), url_buff);
-        }
+        UrlRecord rec;
+        rec.url = url_ptr;
+        rec.url_len = actual_url_len;
 
-        UrlShard& shard = get_shard(url);
-
-        auto& url_data = shard.url_data;
-        unique_url_count.fetch_add(1, std::memory_order_relaxed);
-
-        fread(&url_data[url].num_encountered, sizeof(uint32_t), 1, fd);
-        fread(&url_data[url].seed_distance, sizeof(uint16_t), 1, fd);
-        fread(&url_data[url].eot, sizeof(uint16_t), 1, fd);
+        if (p + sizeof(uint32_t) + sizeof(uint16_t) + sizeof(uint16_t) + sizeof(size_t) > end) break;
+        memcpy(&rec.num_encountered, p, sizeof(uint32_t)); p += sizeof(uint32_t);
+        memcpy(&rec.seed_distance, p, sizeof(uint16_t));   p += sizeof(uint16_t);
+        memcpy(&rec.eot, p, sizeof(uint16_t));              p += sizeof(uint16_t);
 
         size_t title_len;
-        fread(&title_len, sizeof(size_t), 1, fd);
+        memcpy(&title_len, p, sizeof(size_t)); p += sizeof(size_t);
 
+        if (p + title_len > end) break;
         if (title_len > MAX_TITLELEN_MEMORY) {
-            logger::warn("[URL_STORE] oversized title at url[%zu]: title_len=%zu, url='%.*s', file pos=%ld -- skipping title",
-                    url_count, title_len,
-                    static_cast<int>(url.size() > 120 ? 120 : url.size()), url.data(),
-                    ftell(fd));
-            fseek(fd, title_len, SEEK_CUR);
+            rec.title = nullptr;
+            rec.title_len = 0;
         } else {
-            char* title_buf = new char[title_len];
-            fread(title_buf, sizeof(char), title_len, fd);
-            url_data[url].title = string(title_buf, title_len);
-            delete[] title_buf;
+            rec.title = (const char*)p;
+            rec.title_len = title_len;
         }
-        
-        fread(&url_data[url].eod, sizeof(uint16_t), 1, fd);
-        fread(&url_data[url].domain_dist, sizeof(uint16_t), 1, fd);
-        fread(&url_data[url].crawled, sizeof(bool), 1, fd);
+        p += title_len;
 
-        uint32_t num_anchor_freqs;
-        fread(&num_anchor_freqs, sizeof(uint32_t), 1, fd);
+        if (p + sizeof(uint16_t) + sizeof(uint16_t) + sizeof(bool) + sizeof(uint32_t) > end) break;
+        memcpy(&rec.eod, p, sizeof(uint16_t));          p += sizeof(uint16_t);
+        memcpy(&rec.domain_dist, p, sizeof(uint16_t));   p += sizeof(uint16_t);
+        memcpy(&rec.crawled, p, sizeof(bool));            p += sizeof(bool);
 
-        if (url_count <= 5) {
-            logger::warn("[URL_STORE]   url[%zu] title_len=%zu, num_anchor_freqs=%u, file pos=%ld",
-                    url_count, title_len, num_anchor_freqs, ftell(fd));
-        }
+        memcpy(&rec.num_anchor_freqs, p, sizeof(uint32_t)); p += sizeof(uint32_t);
 
-        for (uint32_t i = 0; i < num_anchor_freqs; i++) {
-            uint32_t anchor_id, freq;
-            fread(&anchor_id, sizeof(uint32_t), 1, fd);
-            fread(&freq, sizeof(uint32_t), 1, fd);
-            url_data[url].anchor_freqs[anchor_id] = freq;
+        size_t anchor_bytes = rec.num_anchor_freqs * 2 * sizeof(uint32_t);
+        if (p + anchor_bytes > end) break;
+        rec.anchor_freq_data = p;
+        p += anchor_bytes;
+
+        // Hash to shard
+        size_t shard_id = hasher(string(rec.url, rec.url_len)) % URL_NUM_SHARDS;
+        shard_buckets[shard_id].push_back(rec);
+        url_count++;
+        if (url_count % 1000000 == 0) {
+            logger::error("[URL_STORE] parsed %zu URLs so far...", url_count);
         }
     }
+    logger::error("[URL_STORE] parsed %zu URL records, inserting into shards with %u threads",
+            url_count, URL_STORE_NUM_THREADS);
 
-    fclose(fd);
-    size_t loaded = unique_url_count.load(std::memory_order_relaxed);
+    // --- Parallel shard insertion: each thread owns exclusive shards ---
+    size_t num_threads = URL_STORE_NUM_THREADS;
+    if (num_threads > URL_NUM_SHARDS) num_threads = URL_NUM_SHARDS;
+    size_t shards_per_thread = URL_NUM_SHARDS / num_threads;
+
+    std::vector<std::thread> threads;
+    for (size_t t = 0; t < num_threads; t++) {
+        size_t shard_start = t * shards_per_thread;
+        size_t shard_end = (t == num_threads - 1) ? URL_NUM_SHARDS : shard_start + shards_per_thread;
+
+        threads.emplace_back([this, &shard_buckets, shard_start, shard_end, t]() {
+            size_t thread_total = 0;
+            for (size_t s = shard_start; s < shard_end; s++) {
+                auto& bucket = shard_buckets[s];
+                auto& url_data = shards[s].url_data;
+                thread_total += bucket.size();
+                for (const UrlRecord& rec : bucket) {
+                    string url(rec.url, rec.url_len);
+                    UrlData& data = url_data[url];
+                    data.num_encountered = rec.num_encountered;
+                    data.seed_distance = rec.seed_distance;
+                    data.eot = rec.eot;
+                    data.eod = rec.eod;
+                    data.domain_dist = rec.domain_dist;
+                    data.crawled = rec.crawled;
+                    if (rec.title != nullptr) {
+                        data.title = string(rec.title, rec.title_len);
+                    }
+                    const uint8_t* ap = rec.anchor_freq_data;
+                    for (uint32_t i = 0; i < rec.num_anchor_freqs; i++) {
+                        uint32_t anchor_id, freq;
+                        memcpy(&anchor_id, ap, sizeof(uint32_t)); ap += sizeof(uint32_t);
+                        memcpy(&freq, ap, sizeof(uint32_t));      ap += sizeof(uint32_t);
+                        data.anchor_freqs[anchor_id] = freq;
+                    }
+                }
+            }
+            logger::error("[URL_STORE] thread %zu done: shards %zu-%zu, %zu URLs inserted",
+                    t, shard_start, shard_end - 1, thread_total);
+        });
+    }
+    for (auto& t : threads) t.join();
+
+    unique_url_count.store(url_count, std::memory_order_relaxed);
     logger::error("[URL_STORE] readFromFile complete: loaded %zu URLs, %zu anchors from %s",
-            loaded, id_to_anchor.size(), fileName.data());
+            url_count, id_to_anchor.size(), fileName.data());
+
+    delete[] buf;
 }
