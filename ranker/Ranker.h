@@ -288,6 +288,26 @@ struct RankedCompare {
 
 
 class Ranker {
+public:
+    // Global accumulators across all chunks for a single query.
+    // Reset before fan-out, read after join.
+    static inline std::atomic<size_t> s_miss_count{0};
+    static inline std::atomic<size_t> s_total_count{0};
+
+    static void reset_stats() {
+        s_miss_count.store(0, std::memory_order_relaxed);
+        s_total_count.store(0, std::memory_order_relaxed);
+    }
+
+    static void print_stats() {
+        size_t misses = s_miss_count.load(std::memory_order_relaxed);
+        size_t total  = s_total_count.load(std::memory_order_relaxed);
+        double pct = total > 0 ? 100.0 * misses / total : 0.0;
+        fprintf(stderr, "[RANKER] GLOBAL: %zu/%zu docs missed urlstore (%.1f%%)\n",
+                misses, total, pct);
+        fflush(stderr);
+    }
+
 private:
     priority_queue<LeanPage, vector<LeanPage>, RankedCompare> pq;
     double dynamic_weight;
@@ -430,7 +450,6 @@ public:
         if (cqi.pages.size() == 0) return {};
         init_query(cqi.pages[0]);
 
-        size_t miss_count = 0;
         for (DocInfo& di : cqi.pages) {
             const string& url = di.url;
             const vector<NodeInfo>& phrases = di.nodeInfo;
@@ -445,10 +464,11 @@ public:
             }
 
             UrlData* data = url_store ? url_store->getUrl(url) : nullptr;
+            s_total_count.fetch_add(1, std::memory_order_relaxed);
             if (!data) {
                 fprintf(stderr, "[RANKER] url NOT in urlstore (len=%zu): '%.*s'\n",
                         url.size(), static_cast<int>(url.size()), url.data());
-                miss_count++;
+                s_miss_count.fetch_add(1, std::memory_order_relaxed);
             }
             if (data) {
                 page.title = string(data->title.data(), data->title.size());
@@ -490,12 +510,6 @@ public:
 
             candidates.push_back(std::move(page));
         }
-
-        size_t total = cqi.pages.size();
-        double miss_pct = total > 0 ? 100.0 * miss_count / total : 0.0;
-        fprintf(stderr, "[RANKER] %zu/%zu docs missed urlstore (%.1f%%), %zu candidates ranked\n",
-                miss_count, total, miss_pct, candidates.size());
-        fflush(stderr);
 
         return rank(candidates);
     }

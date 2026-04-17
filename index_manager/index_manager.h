@@ -75,6 +75,8 @@ public:
 
         atomic_vector<LeanPage> collector;
 
+        Ranker::reset_stats();
+
         int qid = next_query_id.fetch_add(1);
 
         for (chunk_manager &cm : chunk_managers) {
@@ -83,6 +85,8 @@ public:
             });
         }
         pool.join(qid);
+
+        Ranker::print_stats();
 
         resp.pages = collector.take();
         fprintf(stderr, "[INDEX_MANAGER] query complete, collected %zu pages\n", resp.pages.size());
