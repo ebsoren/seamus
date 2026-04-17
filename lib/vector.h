@@ -24,6 +24,15 @@ public:
         }
     }
 
+    vector& operator=(std::initializer_list<T> init) {
+    clear();
+    reserve(init.size());
+    for (const T& val : init) {
+        push_back(val);
+    }
+    return *this;
+}
+
 
     // Destructor
     // REQUIRES: Nothing
@@ -54,6 +63,73 @@ public:
             new (alloc_region + i) T();
             ++vec_size;
         }
+    }
+
+    // Insert Function (Copy)
+    // REQUIRES: 0 <= index <= size()
+    // MODIFIES: this, size(), capacity()
+    // EFFECTS: Inserts x at the specified index, shifting subsequent elements right
+    void insert(size_t index, const T &x) {
+        assert(index <= vec_size);
+
+        if (index == vec_size) {
+            push_back(x);
+            return;
+        }
+
+        // Check capacity
+        if (vec_size == alloc_capacity) {
+            size_t new_alloc_capacity = (vec_size == 0) ? 1 : vec_size * REALLOC_FACTOR;
+            realloc_(new_alloc_capacity);
+        }
+
+        new (alloc_region + vec_size) T(::move(alloc_region[vec_size - 1]));
+
+        for (size_t i = vec_size - 1; i > index; --i) {
+            alloc_region[i] = ::move(alloc_region[i - 1]);
+        }
+
+        alloc_region[index] = x;
+        vec_size++;
+    }
+
+
+    void insert(size_t index, T &&x) {
+        assert(index <= vec_size);
+
+        if (index == vec_size) {
+            push_back(::move(x));
+            return;
+        }
+
+        if (vec_size == alloc_capacity) {
+            size_t new_alloc_capacity = (vec_size == 0) ? 1 : vec_size * REALLOC_FACTOR;
+            realloc_(new_alloc_capacity);
+        }
+
+        new (alloc_region + vec_size) T(::move(alloc_region[vec_size - 1]));
+
+        for (size_t i = vec_size - 1; i > index; --i) {
+            alloc_region[i] = ::move(alloc_region[i - 1]);
+        }
+
+        alloc_region[index] = ::move(x);
+        vec_size++;
+    }
+
+
+    T* insert(const T* pos, const T& x) {
+        assert(pos >= begin() && pos <= end());
+        size_t index = pos - begin();
+        insert(index, x);
+        return begin() + index;
+    }
+
+    T* insert(const T* pos, T&& x) {
+        assert(pos >= begin() && pos <= end());
+        size_t index = pos - begin();
+        insert(index, ::move(x));
+        return begin() + index;
     }
 
 

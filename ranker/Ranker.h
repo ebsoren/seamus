@@ -268,6 +268,8 @@ inline double proximity_score(const vector<vector<size_t>>& positions, int num_t
                 size_t dist = (p > posB[b]) ? (p - posB[b]) : (posB[b] - p);
                 score += 1.0 / (1.0 + dist);
             }
+            
+            proximity_score += log(1.0 + current_pair_score);
         }
     }
     return score;
@@ -278,6 +280,44 @@ struct QueryTerm {
     string phrase;
     uint64_t freq; // global corpus frequency (n_posts or n_docs)
     bool is_phrase;
+
+    QueryInfo(const QueryInfo& other)
+        : phrase(other.phrase.data(), other.phrase.size()), freq(other.freq), is_phrase(other.is_phrase) {} 
+
+    QueryInfo(string phrase = string(""), uint64_t freq = 0, bool is_phrase = false)
+        : phrase(phrase.data(), phrase.size()), freq(freq), is_phrase(is_phrase) {} 
+};
+
+
+class SmallPQ {
+private:
+    vector<LeanPage> v;
+    size_t max_size;
+
+public:
+    SmallPQ(size_t max_size_init = RANKED_ON_EACH) : max_size(max_size_init) { }
+
+    void push(LeanPage l) {
+        
+        if (v.size() == max_size && l.score <= v.back().score) {
+            return;
+        }
+
+        size_t insert_pos = 0;
+        while (insert_pos < v.size() && v[insert_pos].score > l.score) {
+            insert_pos++;
+        }
+
+        v.insert(insert_pos, std::move(l));
+
+        if (v.size() > max_size) {
+            v.pop_back();
+        }
+    }
+
+    vector<LeanPage> getResults() {
+        return std::move(v);
+    }
 };
 
 struct RankedCompare {
@@ -308,7 +348,7 @@ public:
     }
 
 private:
-    priority_queue<LeanPage, vector<LeanPage>, RankedCompare> pq;
+    SmallPQ pq; 
     double dynamic_weight;
     vector<QueryTerm> query_terms;
     int num_pages_returned;
@@ -424,6 +464,9 @@ private:
                 pq.push(LeanPage{std::move(v[i].url), std::move(v[i].title), r_score});
                 pq.pop();
             }
+            
+            // Push directly to SmallPQ. It handles bounded limits and sorting automatically!
+            pq.push(LeanPage{std::move(v[i].url), std::move(v[i].title), r_score});
         }
 
         vector<LeanPage> results;

@@ -290,6 +290,10 @@ void test_contains() {
     // 8. Long string contains (heap-allocated haystack and needle)
     assert(long_s.contains(string("the lazy dog")));
     assert(!long_s.contains(string("the lazy cat")));
+
+    string w("https://rhymes.org/woodchuck");
+    assert(w.contains(string("woodchuck")));
+
 }
 
 void test_join() {
