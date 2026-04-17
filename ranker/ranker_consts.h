@@ -8,9 +8,9 @@
 constexpr double e = 2.718; 
 constexpr double k = 0.06; // this controls sharpness of the graph
 constexpr double n_0 = 40; // this is where it equals 0.5
-constexpr double Gamma_url = 0.05; 
+constexpr double Gamma_url = 0.01; 
 constexpr double Gamma_desc = 0.0005; 
-constexpr double Gamma_title = 0.2; 
+constexpr double Gamma_title = 0.01; 
 constexpr double factor_1_weight = 7.0;
 constexpr double factor_2_weight = 4.0;
 constexpr double factor_3_weight = 4.0;
