@@ -373,7 +373,7 @@ void UrlStore::readFromFile() {
     fprintf(stderr, "\n");
     fflush(stderr);
 
-    uint32_t url_len;
+    size_t url_len;
     char url_buff[URL_STORE_MAX_URL_LEN];
     size_t url_count = 0;
     while (fread(&url_len, sizeof(uint32_t), 1, fd) == 1) {
