@@ -52,7 +52,7 @@ public:
     SearchServer() {
         // Initialize components here
         url_store = new UrlStore(nullptr, 0);
-        index_manager = new IndexManager();
+        index_manager = new IndexManager(url_store);
         index_server = new IndexServer(index_manager);
         query_handler = new QueryHandler(index_server);
     }

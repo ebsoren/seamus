@@ -26,7 +26,7 @@ public:
     // Walk every worker's chunk files in order; stop at the first missing
     // chunk for each worker. Mirrors recover_index_chunks, which targets
     // IndexChunk::get_index_chunk_path's naming.
-    IndexManager() : pool(POOL_THREADS) {
+    explicit IndexManager(UrlStore *url_store = nullptr) : pool(POOL_THREADS) {
         for (uint32_t w = 0; w < NUM_INDEXER_THREADS; ++w) {
             for (uint32_t c = 0;; ++c) {
                 string path = string::join("", string(INDEX_OUTPUT_DIR), "/index_chunk_", string(w), "_",
@@ -34,7 +34,7 @@ public:
                 if (!file_exists(path)) break;
                 fprintf(stderr, "[INDEX_MANAGER] loaded chunk: %.*s\n",
                         static_cast<int>(path.size()), path.data());
-                chunk_managers.emplace_back(path);
+                chunk_managers.emplace_back(path, url_store);
             }
         }
         fprintf(stderr, "[INDEX_MANAGER] init complete: %zu chunks loaded from %s\n",
