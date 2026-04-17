@@ -168,7 +168,8 @@ constexpr const char* SEED_LIST[SEED_LIST_SIZE] = {
 
 
 // Parser
-static constexpr size_t MAX_PARSED_PAGES = (3*1e8)/18; // 300M/18
+/* static constexpr size_t MAX_PARSED_PAGES = (3*1e8)/18; // 300M/18 */
+static constexpr size_t MAX_PARSED_PAGES = 1600000;
 static constexpr const char* PARSER_OUTPUT_DIR = "/var/seamus/parser_output";
 static constexpr int MAX_CONSECUTIVE_NON_ALNUM = 100;
 static constexpr char RETURN_DELIM = '\r';
