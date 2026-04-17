@@ -117,6 +117,14 @@ static const char RESULTS_PART_3[] = R"raw(
     </div>
     <img src="/htmlserver/images/sirtophamhatt.png" class="bottom-right-hatt" alt="Sir Topham Hatt">
   </div>
+  <script>
+    function submit(){
+      var v=document.getElementById('q').value.trim();
+      if(!v)return;
+      window.location.href='/'+encodeURIComponent(v);
+    }
+    document.getElementById('q').addEventListener('keydown',function(e){ if(e.key==='Enter') submit(); });
+  </script>
 </body>
 </html>
 )raw";

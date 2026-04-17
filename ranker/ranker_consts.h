@@ -17,8 +17,9 @@ constexpr double factor_3_weight = 6.0;
 constexpr double factor_4_weight = 4.0;
 constexpr double factor_5_weight = 4.0;
 constexpr double factor_6_weight = 7.0;
-constexpr double dynamic_weight_sum = factor_1_weight + factor_2_weight + factor_3_weight + factor_4_weight + factor_5_weight + 
-    factor_6_weight;
+constexpr double factor_7_weight = 8.0;  // exact phrase adjacency bonus
+constexpr double dynamic_weight_sum = factor_1_weight + factor_2_weight + factor_3_weight + factor_4_weight + factor_5_weight +
+    factor_6_weight + factor_7_weight;
 
 // PARAMETERS FOR THE STATIC WEIGHTING FUNCTION. TUNE TO MAKE IT BETTER.
 constexpr double static_1_weight = 7.0;

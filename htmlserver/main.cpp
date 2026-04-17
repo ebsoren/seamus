@@ -165,9 +165,9 @@ private:
         HtmlBuilder html;
         html.append(RESULTS_PART_1);
         
-        html.append("<input type=\"text\" class=\"search-box\" value=\"");
+        html.append("<input id=\"q\" type=\"text\" class=\"search-box\" value=\"");
         html.append(html_escape(term));
-        html.append("\" readonly>\n<a href=\"/\" class=\"back-btn\">BACK</a>\n");
+        html.append("\">\n<a href=\"/\" class=\"back-btn\">BACK</a>\n");
         html.append("<h1 class=\"header-title\">Seamus the Search Engine</h1>\n</div>\n");
 
         html.append("<div class=\"results-container\">\n");
