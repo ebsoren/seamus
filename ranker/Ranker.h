@@ -39,14 +39,14 @@ void reverse(vector<T>& vec) {
 struct RankedPage {
     string url = string("");
     string title = string("");
-    int seed_list_dist;
-    int domains_from_seed; // unsure if we have infra in place for this 
-    int num_unique_words_found_anchor; // number of unique words in the query found
-    int num_unique_words_found_title;
-    int num_unique_words_found_url;
-    int times_seen;
-    vector<vector<size_t>> word_positions; // this is just anywhere on the doc page
-    size_t doc_len;
+    int seed_list_dist = 0;
+    int domains_from_seed = 0;
+    int num_unique_words_found_anchor = 0;
+    int num_unique_words_found_title = 0;
+    int num_unique_words_found_url = 0;
+    int times_seen = 0;
+    vector<vector<size_t>> word_positions;
+    size_t doc_len = 0;
 };
 
 struct RankerNodeInfo {
@@ -221,8 +221,9 @@ inline double calc_static_score(const RankedPage &p) {
 
 template <typename T>
 T min_element(vector<T> &v) {
+    if (v.size() == 0) return T{};
     T min_elt = v[0];
-    for(int i = 1; i < v.size(); i++) {
+    for(size_t i = 1; i < v.size(); i++) {
         if(v[i] < min_elt) {
             min_elt = v[i];
         }
@@ -231,8 +232,9 @@ T min_element(vector<T> &v) {
 }
 template <typename T>
 T max_element(vector<T> &v) {
+    if (v.size() == 0) return T{};
     T max_elt = v[0];
-    for(int i = 1; i < v.size(); i++) {
+    for(size_t i = 1; i < v.size(); i++) {
         if(v[i] > max_elt) {
             max_elt = v[i];
         }
@@ -376,7 +378,7 @@ private:
 
     double calc_dynamic_score(RankedPage &r) {
         // This factor checks frequency of unique words and proximity scores of the unique words to other unique words in the query 
-        double factor_1 = word_pos_score(r.word_positions, unique_query_terms.size(), r.doc_len); // this score should be given extra weight in calculations
+        double factor_1 = word_pos_score(r.word_positions, r.doc_len, unique_query_terms.size());
 
         // This factor scores based on number of times the link was seen during crawling
         double factor_2 = max(1.0 / (1.0 + double_pow(e, -k * (r.times_seen - n_0))), 0.2);
