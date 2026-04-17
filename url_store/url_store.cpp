@@ -267,8 +267,7 @@ void UrlStore::persist(bool final_persist) {
             const string& url = slot.key;
             if (url.size() > URL_STORE_MAX_URL_LEN) { urls_skipped_oversized++; continue; }
             if (!slot.value.crawled) urls_skipped_not_crawled++;
-            // NOTE: removed final_persist filter — persist all URLs regardless
-            // if (final_persist && !slot.value.crawled) continue;
+            if (final_persist && !slot.value.crawled) continue;
             urls_written++;
 
             UrlData& data = slot.value;
