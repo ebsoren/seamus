@@ -519,11 +519,13 @@ private:
                                         while (s < s_end && *s != '/') s++;
                                         size_t host_len = s - url.data();
 
-                                        size_t full_size = host_len + (p - a_start);
-                                        char full_link[full_size];
+                                        size_t href_len = p - a_start;
+                                        size_t full_size = host_len + href_len;
+                                        char* full_link = new char[full_size];
                                         memcpy(full_link, url.data(), host_len);
-                                        memcpy(full_link + host_len, a_start, p - a_start);
+                                        memcpy(full_link + host_len, a_start, href_len);
                                         links.push_back(full_link, full_size);
+                                        delete[] full_link;
                                     } else {
                                         links.push_back(a_start, p - a_start);
                                     }
