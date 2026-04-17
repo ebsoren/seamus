@@ -225,7 +225,7 @@ For each URL:
         For each list: <anchor_text id (32 bits)> <times seen (32 bits)>\n
 */
 void UrlStore::persist(bool final_persist) {
-    logger::warn("[URL_STORE] persist(final=%d) starting, unique_url_count=%zu",
+    logger::error("[URL_STORE] persist(final=%d) starting, unique_url_count=%zu",
             final_persist ? 1 : 0,
             unique_url_count.load(std::memory_order_relaxed));
     logger::info("Persisting UrlStore to disk...");
@@ -300,7 +300,7 @@ void UrlStore::persist(bool final_persist) {
         }
     }
 
-    logger::warn("[URL_STORE] persist(final=%d) done: total=%zu crawled=%zu written=%zu skipped_not_crawled=%zu skipped_oversized=%zu file_size=%ld",
+    logger::error("[URL_STORE] persist(final=%d) done: total=%zu crawled=%zu written=%zu skipped_not_crawled=%zu skipped_oversized=%zu file_size=%ld",
             final_persist ? 1 : 0, urls_total, crawled_count, urls_written,
             urls_skipped_not_crawled, urls_skipped_oversized, ftell(fd));
     fclose(fd);
@@ -330,8 +330,7 @@ void UrlStore::readFromFile() {
         fclose(fd);
         return; // handle empty file gracefully
     }
-    logger::warn("[URL_STORE] reading %u anchor texts, file pos after header: %ld",
-            num_anchor_texts, ftell(fd));
+    logger::error("[URL_STORE] reading %u anchor texts from %s", num_anchor_texts, fileName.data());
 
     size_t oversized_anchors = 0;
     size_t expected_bytes = 0;
@@ -388,8 +387,7 @@ void UrlStore::readFromFile() {
     for (size_t pi = 0; pi < peeked; pi++) {
         hex_pos += snprintf(hex_buf + hex_pos, sizeof(hex_buf) - hex_pos, "%02x ", peek[pi]);
     }
-    logger::warn("[URL_STORE] anchors done, oversized=%zu, file pos: %ld, next 16 bytes: %s",
-            oversized_anchors, boundary_pos, hex_buf);
+    logger::error("[URL_STORE] anchors loaded: %zu total, %zu oversized", id_to_anchor.size(), oversized_anchors);
 
     uint32_t url_len;
     char url_buff[URL_STORE_MAX_URL_LEN];
@@ -463,6 +461,6 @@ void UrlStore::readFromFile() {
 
     fclose(fd);
     size_t loaded = unique_url_count.load(std::memory_order_relaxed);
-    logger::warn("[URL_STORE] readFromFile complete: loaded %zu URLs, %zu anchors from %s",
+    logger::error("[URL_STORE] readFromFile complete: loaded %zu URLs, %zu anchors from %s",
             loaded, id_to_anchor.size(), fileName.data());
 }
