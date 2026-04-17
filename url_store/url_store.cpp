@@ -428,16 +428,17 @@ void UrlStore::readFromFile() {
         fread(&title_len, sizeof(size_t), 1, fd);
 
         if (title_len > MAX_TITLELEN_MEMORY) {
-            fprintf(stderr, "[URL_STORE] CORRUPT at url[%zu]: title_len=%zu, url='%.*s', file pos=%ld\n",
+            fprintf(stderr, "[URL_STORE] oversized title at url[%zu]: title_len=%zu, url='%.*s', file pos=%ld — skipping title\n",
                     url_count, title_len,
                     static_cast<int>(url.size() > 120 ? 120 : url.size()), url.data(),
                     ftell(fd));
-            break;
+            fseek(fd, title_len, SEEK_CUR);
+        } else {
+            char* title_buf = new char[title_len];
+            fread(title_buf, sizeof(char), title_len, fd);
+            url_data[url].title = string(title_buf, title_len);
+            delete[] title_buf;
         }
-        char* title_buf = new char[title_len];
-        fread(title_buf, sizeof(char), title_len, fd);
-        url_data[url].title = string(title_buf, title_len);
-        delete[] title_buf;
         
         fread(&url_data[url].eod, sizeof(uint16_t), 1, fd);
         fread(&url_data[url].domain_dist, sizeof(uint16_t), 1, fd);

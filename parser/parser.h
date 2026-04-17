@@ -68,6 +68,7 @@ public:
         hops_ = hops;
         domain_hops_ = domain_hops;
         url = string(link);
+        title = string("");
 
         killed_ = false;
         non_alnum_run_ = 0;

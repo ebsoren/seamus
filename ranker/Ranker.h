@@ -468,10 +468,6 @@ public:
             if (!data) {
                 fprintf(stderr, "[RANKER] url NOT in urlstore (len=%zu): '%.*s'\n",
                         url.size(), static_cast<int>(url.size()), url.data());
-                fprintf(stderr, "[RANKER] hex: ");
-                for (size_t bi = 0; bi < url.size(); bi++)
-                    fprintf(stderr, "%02x ", (unsigned char)url.data()[bi]);
-                fprintf(stderr, "\n");
                 s_miss_count.fetch_add(1, std::memory_order_relaxed);
             }
             if (data) {
