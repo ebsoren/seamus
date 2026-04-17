@@ -273,7 +273,7 @@ private:
                     i += 2; continue;
                 }
             }
-            tmp[out_len++] = s[i];
+            tmp[out_len++] = (s[i] == '+') ? ' ' : s[i];
         }
         string out(tmp, out_len);
         free(tmp);
@@ -300,13 +300,14 @@ private:
                 c += ('a' - 'A');
             }
             
-            // Strictly keep only a-z, 0-9, and the specified special characters
-            if ((c >= 'a' && c <= 'z') || 
-                (c >= '0' && c <= '9') || 
-                c == '"' || 
-                c == '|' || 
-                c == '-' || 
-                c == '(' || 
+            // Strictly keep only a-z, 0-9, spaces, and the specified special characters
+            if ((c >= 'a' && c <= 'z') ||
+                (c >= '0' && c <= '9') ||
+                c == ' ' ||
+                c == '"' ||
+                c == '|' ||
+                c == '-' ||
+                c == '(' ||
                 c == ')') {
                 tmp[out_len++] = c;
             }
