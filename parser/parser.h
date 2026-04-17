@@ -346,7 +346,7 @@ private:
                     // If a comma in between two ints, treat the whole number as a single word
                     !comma_in_number(p, buffer, end) ? words.push_back(word_start, word_len)
                                                      : words.push_back(word_start, word_len, NULL_DELIM);
-                    if (in_title_ && done_with_title_) {
+                    if (in_title_ && !done_with_title_) {
                         title = string::join(" ", title, string(word_start, word_len));
                     }
                     num_words++;
@@ -387,7 +387,7 @@ private:
                         }
 
                         words.push_back(word_start, word_len);
-                        if (in_title_ && done_with_title_) {
+                        if (in_title_ && !done_with_title_) {
                             title = string::join(" ", title, string(word_start, word_len));
                         }
                         num_words++;
@@ -407,7 +407,7 @@ private:
                         }
 
                         words.push_back(word_start, word_len);
-                        if (in_title_ && done_with_title_) {
+                        if (in_title_ && !done_with_title_) {
                             title = string::join(" ", title, string(word_start, word_len));
                         }
                         num_words++;
@@ -587,7 +587,7 @@ private:
                             links.case_convert(links.size() - (word_len + 1), links.size());
                         }
                         words.push_back(word_start, word_len);
-                        if (in_title_ && done_with_title_) {
+                        if (in_title_ && !done_with_title_) {
                             title = string::join(" ", title, string(word_start, word_len));
                         }
                         num_words++;
@@ -622,7 +622,7 @@ private:
                         links.push_back(word_start, p - word_start, SPACE_DELIM);
                         links.case_convert(links.size() - ((p - word_start) + 1), links.size());
                     }
-                    if (in_title_ && done_with_title_) {
+                    if (in_title_ && !done_with_title_) {
                         title = string::join(" ", title, string(word_start, p - word_start));
                     }
                     num_words++;
