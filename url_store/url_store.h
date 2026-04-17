@@ -56,6 +56,17 @@ private:
     std::condition_variable shutdown_cv;
     std::thread persist_thread;
 
+    static string lowercase_url(const string& url) {
+        char* buf = new char[url.size()];
+        for (size_t i = 0; i < url.size(); i++) {
+            char c = url.data()[i];
+            buf[i] = (c >= 'A' && c <= 'Z') ? c + 32 : c;
+        }
+        string lower(buf, url.size());
+        delete[] buf;
+        return lower;
+    }
+
     UrlShard& get_shard(const string& url) {
         return shards[hasher(url) % URL_NUM_SHARDS];
     }
@@ -117,10 +128,11 @@ public:
     int findAnchorId(string& anchor_text, UrlData* url);
 
     vector<UrlAnchorData> getUrlAnchorInfo(const string& url) {
-        UrlShard& us = get_shard(url);
+        string lurl = lowercase_url(url);
+        UrlShard& us = get_shard(lurl);
         std::lock_guard<std::mutex> lock(us.mtx);
         std::lock_guard<std::mutex> lock_global(global_mtx);
-        UrlData* it = us.findUrlData(url);
+        UrlData* it = us.findUrlData(lurl);
         if (it == nullptr) return {};
         if (it->anchor_freqs.size() == 0) return {};
 
@@ -136,54 +148,61 @@ public:
 
 
     bool hasUrl(const string& url) {
-        UrlShard& us = get_shard(url);
+        string lurl = lowercase_url(url);
+        UrlShard& us = get_shard(lurl);
         std::lock_guard<std::mutex> lock(us.mtx);
-        return us.findUrlData(url) != nullptr;
+        return us.findUrlData(lurl) != nullptr;
     }
 
     UrlData* getUrl(const string& url) {
-        UrlShard& us = get_shard(url);
+        string lurl = lowercase_url(url);
+        UrlShard& us = get_shard(lurl);
         std::lock_guard<std::mutex> lock(us.mtx);
-        return us.findUrlData(url);
+        return us.findUrlData(lurl);
     }
 
     bool hasCrawled(const string& url) {
-        UrlShard& us = get_shard(url);
+        string lurl = lowercase_url(url);
+        UrlShard& us = get_shard(lurl);
         std::lock_guard<std::mutex> lock(us.mtx);
-        const UrlData* data = us.findUrlData(url);
+        const UrlData* data = us.findUrlData(lurl);
         return data && data->crawled;
     }
 
 
     void markCrawled(const string& url) {
-        UrlShard& us = get_shard(url);
+        string lurl = lowercase_url(url);
+        UrlShard& us = get_shard(lurl);
         std::lock_guard<std::mutex> lock(us.mtx);
-        UrlData* data = us.findUrlData(url);
+        UrlData* data = us.findUrlData(lurl);
         if (data) data->crawled = true;
     }
 
 
     uint32_t getUrlNumEncountered(const string& url) {
-        UrlShard& us = get_shard(url);
+        string lurl = lowercase_url(url);
+        UrlShard& us = get_shard(lurl);
         std::lock_guard<std::mutex> lock(us.mtx);
-        const UrlData* it = us.findUrlData(url);
+        const UrlData* it = us.findUrlData(lurl);
         if (it == nullptr) return 0;
         return it->num_encountered;
     }
 
 
     uint16_t getUrlSeedDistance(const string& url) {
-        UrlShard& us = get_shard(url);
+        string lurl = lowercase_url(url);
+        UrlShard& us = get_shard(lurl);
         std::lock_guard<std::mutex> lock(us.mtx);
-        const UrlData* it = us.findUrlData(url);
+        const UrlData* it = us.findUrlData(lurl);
         return it ? it->seed_distance : UINT16_MAX;
     }
 
 
     const string& getTitle(const string& url) {
-        UrlShard& us = get_shard(url);
+        string lurl = lowercase_url(url);
+        UrlShard& us = get_shard(lurl);
         std::lock_guard<std::mutex> lock(us.mtx);
-        const UrlData* it = us.findUrlData(url);
+        const UrlData* it = us.findUrlData(lurl);
         static const string empty("", 0);
         if (!it) return empty;
         return it->title;

@@ -146,25 +146,26 @@ bool UrlStore::addUrl_unlocked(string& url, vector<string>& anchor_texts, const 
 // returns whether or not the url was new to the url_store
 bool UrlStore::updateUrl(string& url, vector<string>& anchor_texts, const uint16_t seed_distance, const uint16_t domain_distance, const uint32_t num_encountered, size_t priority) {
     total_url_count.fetch_add(1, std::memory_order_relaxed);
-    UrlShard& us = get_shard(url);
+    string lurl = lowercase_url(url);
+    UrlShard& us = get_shard(lurl);
     std::lock_guard<std::mutex> lg(us.mtx);
-    UrlData* url_data_ptr = us.findUrlData(url);
+    UrlData* url_data_ptr = us.findUrlData(lurl);
     if (url_data_ptr == nullptr) {
         // If URL priority is low enough that link will never be crawled, don't
         // add to URLStore
         if (priority >= PRIORITY_BUCKETS) {
-            logger::debug("updateUrl: dropping url due to low priority (priority=%zu): %s", priority, url.data());
+            logger::debug("updateUrl: dropping url due to low priority (priority=%zu): %s", priority, lurl.data());
             return false;
         }
-        if (is_nsfw_url(url)) {
-            logger::debug("updateUrl: dropping nsfw url: %s", url.data());
+        if (is_nsfw_url(lurl)) {
+            logger::debug("updateUrl: dropping nsfw url: %s", lurl.data());
             return false;
         }
         if (unique_url_count.load(std::memory_order_relaxed) >= MAX_STORE_URLS) {
-            logger::warn("UrlStore has reached max capacity, not adding new URL: %s", url.data());
+            logger::warn("UrlStore has reached max capacity, not adding new URL: %s", lurl.data());
             return false;
         }
-        return addUrl_unlocked(url, anchor_texts, seed_distance, domain_distance, num_encountered);
+        return addUrl_unlocked(lurl, anchor_texts, seed_distance, domain_distance, num_encountered);
     }
 
     url_data_ptr->num_encountered += num_encountered;
@@ -181,9 +182,10 @@ bool UrlStore::updateUrl(string& url, vector<string>& anchor_texts, const uint16
 }
 
 bool UrlStore::updateTitleLen(const string& url, const uint16_t eot) {
-    UrlShard& us = get_shard(url);
+    string lurl = lowercase_url(url);
+    UrlShard& us = get_shard(lurl);
     std::lock_guard<std::mutex> lg(us.mtx);
-    UrlData* url_data_ptr = us.findUrlData(url);
+    UrlData* url_data_ptr = us.findUrlData(lurl);
     if (!url_data_ptr) return false;
 
     url_data_ptr->eot = eot;
@@ -191,9 +193,10 @@ bool UrlStore::updateTitleLen(const string& url, const uint16_t eot) {
 }
 
 bool UrlStore::updateTitle(const string& url, string& title) {
-    UrlShard& us = get_shard(url);
+    string lurl = lowercase_url(url);
+    UrlShard& us = get_shard(lurl);
     std::lock_guard<std::mutex> lg(us.mtx);
-    UrlData* url_data_ptr = us.findUrlData(url);
+    UrlData* url_data_ptr = us.findUrlData(lurl);
     if (!url_data_ptr) return false;
 
     url_data_ptr->title = ::move(title);
@@ -202,9 +205,10 @@ bool UrlStore::updateTitle(const string& url, string& title) {
 
 
 bool UrlStore::updateBodyLen(const string& url, const uint16_t eod) {
-    UrlShard& us = get_shard(url);
+    string lurl = lowercase_url(url);
+    UrlShard& us = get_shard(lurl);
     std::lock_guard<std::mutex> lg(us.mtx);
-    UrlData* url_data_ptr = us.findUrlData(url);
+    UrlData* url_data_ptr = us.findUrlData(lurl);
     if (!url_data_ptr) return false;
 
     url_data_ptr->eod = eod;
@@ -400,6 +404,11 @@ void UrlStore::readFromFile() {
         }
         
         url_count++;
+        // Lowercase URL to match index format
+        for (uint32_t ci = 0; ci < url_len; ci++) {
+            char c = url_buff[ci];
+            if (c >= 'A' && c <= 'Z') url_buff[ci] = c + 32;
+        }
         string url(url_buff, url_len);
 
         if (url_count <= 5) {
