@@ -44,6 +44,12 @@ cc_test(
 )
 
 cc_test(
+    name = "joinable_thread_pool_test",
+    srcs = ["joinable_thread_pool_test.cpp"],
+    deps = ["//lib:joinable_thread_pool"],
+)
+
+cc_test(
     name = "deque_benchmark",
     srcs = ["deque_benchmark.cpp"],
     deps = ["//lib:deque"],

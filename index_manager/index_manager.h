@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <cstdint>
 
 #include "index_chunk/chunk_manager.h"
@@ -20,7 +21,7 @@ public:
     // so we pay the pthread_create cost once at startup instead of per
     // query. 300 lets a single fan-out overlap dozens of chunk queries
     // while leaving headroom for I/O-heavy ISR scans.
-    static constexpr size_t POOL_THREADS = 300;
+    static constexpr size_t POOL_THREADS = 10;
 
     // Walk every worker's chunk files in order; stop at the first missing
     // chunk for each worker. Mirrors recover_index_chunks, which targets
@@ -51,8 +52,8 @@ public:
     // so the read-only share is safe. Blocks in pool.join() until every
     // submitted task has finished, so the lambda captures stay valid.
     //
-    // Assumes a single-threaded dispatcher: pool.join() waits for every
-    // currently pending task, not just the tasks this call submitted.
+    // Each call gets a unique query ID so concurrent handle_query calls
+    // only join on their own fan-out, not on each other's tasks.
     LeanPageResponse handle_query(const string &query_str) {
         fprintf(stderr, "[INDEX_MANAGER] handle_query query='%.*s' num_chunks=%zu\n",
                 static_cast<int>(query_str.size()), query_str.data(), chunk_managers.size());
@@ -74,12 +75,15 @@ public:
 
         atomic_vector<LeanPage> collector;
 
+        static std::atomic<int> next_query_id{0};
+        int qid = next_query_id.fetch_add(1);
+
         for (chunk_manager &cm : chunk_managers) {
-            pool.submit([&cm, &ast, &collector]() {
+            pool.submit(qid, [&cm, &ast, &collector]() {
                 cm.query(ast, &collector);
             });
         }
-        pool.join();
+        pool.join(qid);
 
         resp.pages = collector.take();
         fprintf(stderr, "[INDEX_MANAGER] query complete, collected %zu pages\n", resp.pages.size());
