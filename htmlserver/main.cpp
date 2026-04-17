@@ -259,14 +259,19 @@ private:
         for (size_t i = 0; i < len; ++i) {
             char c = s[i];
             
-            // Standard URL encoding behavior: '+' represents a space
-            if (c == '+') {
-                tmp[out_len++] = ' ';
+            // Convert uppercase letters to lowercase
+            if (c >= 'A' && c <= 'Z') {
+                c += ('a' - 'A');
             }
-            // Allow all standard printable characters (including punctuation)
-            // EXCEPT characters that can break your HTML structure and cause XSS
-            else if (isprint((unsigned char)c) && 
-                     c != '<' && c != '>' && c != '&' && c != '\'') {
+            
+            // Strictly keep only a-z, 0-9, and the specified special characters
+            if ((c >= 'a' && c <= 'z') || 
+                (c >= '0' && c <= '9') || 
+                c == '"' || 
+                c == '|' || 
+                c == '-' || 
+                c == '(' || 
+                c == ')') {
                 tmp[out_len++] = c;
             }
         }
