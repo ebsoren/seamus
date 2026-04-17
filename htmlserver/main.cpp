@@ -152,15 +152,12 @@ private:
 
         vector<LeanPage> results = query_handler->handle_client_req(term);
 
-        auto end_time = std::chrono::high_resolution_clock::now();
-
         fprintf(stderr, "[HTMLSERVER] got %zu results\n", results.size());
         for (size_t i = 0; i < results.size() && i < 3; ++i) {
             fprintf(stderr, "[HTMLSERVER]   result[%zu] url='%.*s' score=%.4f\n",
                     i, static_cast<int>(results[i].url.size()), results[i].url.data(), results[i].score);
         }
         fflush(stderr);
-        int duration_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
 
         HtmlBuilder html;
         html.append(RESULTS_PART_1);
@@ -201,6 +198,10 @@ private:
             html.append("?p="); html.append(current_page + 1); html.append("\">Next &raquo;</a>\n");
         }
         html.append("</div>\n");
+
+        // Calculate the duration right before returning to user
+        auto end_time = std::chrono::high_resolution_clock::now();
+        int duration_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
 
         html.append(RESULTS_PART_2);
         html.append(duration_ms);
