@@ -109,6 +109,7 @@ public:
         words.case_convert();
         words.flush();
 
+
         // Pass the links buffer to local URL buffer to disseminate
         /**
          * NOTE: This currently blocks. We discussed in 3/16 meeting whether we like that.
@@ -651,5 +652,7 @@ private:
                 p++;
             }
         }
+
+        urlStore->updateBodyLen(string(url.data(), url.size()), num_words);
     }
 };

@@ -76,7 +76,7 @@ private:
 
     bool addUrl_unlocked(string& url, vector<string>& anchor_texts, const uint16_t seed_distance, const uint16_t domain_distance, const uint32_t num_encountered);
     // to read urlStore from disk after a crash, each worker thread will read from its corresponding files and update it's urlstore object accordingly
-    void readFromFile(const int worker_number);
+    void readFromFile();
 
     void persist_store_thread() {
         while (running) {
@@ -187,22 +187,6 @@ public:
         static const string empty("", 0);
         if (!it) return empty;
         return it->title;
-    }
-
-
-    bool inTitle(const string& url, uint16_t word_pos) {
-        UrlShard& us = get_shard(url);
-        std::lock_guard<std::mutex> lock(us.mtx);
-        const UrlData* it = us.findUrlData(url);
-        return it ? word_pos < it->eot : false;
-    }
-
-
-    bool inDescription(const string& url, uint16_t word_pos) {
-        UrlShard& us = get_shard(url);
-        std::lock_guard<std::mutex> lock(us.mtx);
-        const UrlData* it = us.findUrlData(url);
-        return it ? it->eot <= word_pos && word_pos < it->eod : false;
     }
 
     size_t distinct_urls() const { return unique_url_count.load(std::memory_order_relaxed); }

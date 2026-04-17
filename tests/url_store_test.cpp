@@ -21,6 +21,7 @@ void cleanup_test_file(int worker_number) {
 // Tests getters, setters for class data structures as well as content title and body detection
 void test_url_store_basic() {
     cout << string("Running test_url_store_basic...") << endl;
+    cleanup_test_file(URL_STORE_WORKER_NUMBER);
     UrlStore store(nullptr, URL_STORE_WORKER_NUMBER);
     
     string umich_url("https://umich.edu");
@@ -45,10 +46,6 @@ void test_url_store_basic() {
     assert(store.getUrlSeedDistance(umich_url) == 2);
     
     // Verify text positioning
-    assert(store.inTitle(umich_url, 3) == true);   
-    assert(store.inTitle(umich_url, 6) == false);  
-    assert(store.inDescription(umich_url, 10) == true); 
-    assert(store.inDescription(umich_url, 20) == false); 
     assert(store.getTitle(umich_url) == "test_title");
 
     // Test 2: Updating an existing URL
@@ -119,8 +116,6 @@ void test_url_store_recover() {
 
     assert(store.getUrlNumEncountered(persist_url) == 42);
     assert(store.getUrlSeedDistance(persist_url) == 5);
-    assert(store.inTitle(persist_url, 5) == true);
-    assert(store.inDescription(persist_url, 15) == true);
     
     auto anchor_info = store.getUrlAnchorInfo(persist_url);
     assert(anchor_info.size() == 1);
