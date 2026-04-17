@@ -536,7 +536,7 @@ public:
 
                 candidates.push_back(std::move(page));;
             } else {
-                logger::error("from ranker -- url not found: %s", url);
+                logger::error("from ranker -- url not found: %s", url.data());
             }
         }
         return rank(candidates);
