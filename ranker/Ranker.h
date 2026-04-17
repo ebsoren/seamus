@@ -527,6 +527,8 @@ public:
                 page.word_positions = word_positions_init;
 
                 candidates.push_back(std::move(page));;
+            } else {
+                logger::error("from ranker -- url not found");
             }
         }
         return rank(candidates);
