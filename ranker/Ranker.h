@@ -303,7 +303,7 @@ public:
         size_t misses = s_miss_count.load(std::memory_order_relaxed);
         size_t total  = s_total_count.load(std::memory_order_relaxed);
         double pct = total > 0 ? 100.0 * misses / total : 0.0;
-        logger::warn("[RANKER] GLOBAL: %zu/%zu docs missed urlstore (%.1f%%)",
+        logger::error("[RANKER] GLOBAL: %zu/%zu docs missed urlstore (%.1f%%)",
                 misses, total, pct);
     }
 
