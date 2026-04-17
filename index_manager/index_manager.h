@@ -2,6 +2,8 @@
 
 #include <atomic>
 #include <cstdint>
+#include <mutex>
+#include <thread>
 
 #include "index_chunk/chunk_manager.h"
 #include "lib/atomic_vector.h"
@@ -27,17 +29,44 @@ public:
     // chunk for each worker. Mirrors recover_index_chunks, which targets
     // IndexChunk::get_index_chunk_path's naming.
     explicit IndexManager(UrlStore *url_store = nullptr) : pool(POOL_THREADS) {
+        // 1. Discover all chunk paths (fast, single-threaded)
+        vector<string> paths;
         for (uint32_t w = 0; w < NUM_INDEXER_THREADS; ++w) {
             for (uint32_t c = 0;; ++c) {
                 string path = string::join("", string(INDEX_OUTPUT_DIR), "/index_chunk_", string(w), "_",
                                            string(c), ".txt");
                 if (!file_exists(path)) break;
-                logger::warn("[INDEX_MANAGER] loaded chunk: %.*s",
-                        static_cast<int>(path.size()), path.data());
-                chunk_managers.emplace_back(path, url_store);
+                paths.push_back(std::move(path));
             }
         }
-        logger::warn("[INDEX_MANAGER] init complete: %zu chunks loaded from %s",
+
+        size_t n = paths.size();
+        logger::error("[INDEX_MANAGER] found %zu chunks, loading with %zu threads",
+                n, (size_t)NUM_INDEXER_THREADS);
+
+        // 2. Load chunks in parallel — each fread is independent
+        std::mutex mtx;
+        std::atomic<size_t> next{0};
+
+        auto loader = [&]() {
+            while (true) {
+                size_t i = next.fetch_add(1, std::memory_order_relaxed);
+                if (i >= n) break;
+                chunk_manager cm(paths[i], url_store);
+                logger::error("[INDEX_MANAGER] loaded chunk [%zu/%zu]: %.*s",
+                        i + 1, n, static_cast<int>(paths[i].size()), paths[i].data());
+                std::lock_guard<std::mutex> lock(mtx);
+                chunk_managers.push_back(std::move(cm));
+            }
+        };
+
+        size_t num_loaders = n < NUM_INDEXER_THREADS ? n : NUM_INDEXER_THREADS;
+        std::vector<std::thread> threads;
+        for (size_t t = 0; t < num_loaders; ++t)
+            threads.emplace_back(loader);
+        for (auto& t : threads) t.join();
+
+        logger::error("[INDEX_MANAGER] init complete: %zu chunks loaded from %s",
                 chunk_managers.size(), INDEX_OUTPUT_DIR);
     }
 
