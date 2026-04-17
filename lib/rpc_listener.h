@@ -3,6 +3,7 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <unistd.h>
+#include <poll.h>
 #include <cstdint>
 #include <cstddef>
 #include <functional>
@@ -50,15 +51,20 @@ public:
     // The handler is responsible for reading/writing to the fd and closing it when done.
     void listener_loop(std::function<void(int)> handler) {
         while (!stopped) {
-            struct sockaddr_in client_addr{};
-            socklen_t client_len = sizeof(client_addr);
-
             int fd = listen_fd.load();
             if (fd < 0) break;
+
+            struct pollfd pfd{fd, POLLIN, 0};
+            if (poll(&pfd, 1, 1000) <= 0) continue;
+
+            struct sockaddr_in client_addr{};
+            socklen_t client_len = sizeof(client_addr);
             int client_fd = accept(fd, (struct sockaddr*)&client_addr, &client_len);
             if (client_fd < 0) continue;
 
-            // Enqueue ephemeral socket handler as a task to the thread pool
+            struct timeval tv{30, 0};
+            setsockopt(client_fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+
             pool.enqueue_task([handler, client_fd]{ handler(client_fd); });
         }
     }
