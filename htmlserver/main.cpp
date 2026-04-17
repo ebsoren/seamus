@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <ctype.h>
 #include <chrono>
+#include <memory>
 
 #include "../crawler/network_util.h"
 #include "../lib/rpc_listener.h"
@@ -105,29 +106,33 @@ private:
     }
 
     string get_accurate_title(const string &url) {
+        if (url.size() < 9) return string("");
+
         string host = extract_host(url);
         const char* slash = static_cast<const char*>(memchr(url.data() + 8, '/', url.size() - 8));
-        const char* path = slash ? slash + 1 : "";
+        const char* path_str = slash ? slash + 1 : "";
 
-        char html[MAX_HTML_SIZE];
-        ssize_t html_len = https_get(host.data(), path, html);
+        auto buf = std::make_unique<char[]>(MAX_HTML_SIZE);
+        ssize_t html_len = https_get(host.data(), path_str, buf.get());
 
-        // TODO: Finish this
-        const char* p = html;
-        const char* end = html + html_len;
-        const char* title_start;
+        if (html_len <= 0) return string("");
 
-        while (p < end) {
+        const char* p = buf.get();
+        const char* end = buf.get() + html_len;
+
+        while (p + 7 <= end) {
             if (!strncasecmp(p, "<title>", 7)) {
                 p += 7;
-                title_start = p;
-                while (strncasecmp(p, "</title>", 8)) p++;
+                const char* title_start = p;
+                while (p + 8 <= end && strncasecmp(p, "</title>", 8)) p++;
+                if (p + 8 <= end) {
+                    return string(title_start, p - title_start);
+                }
+                return string("");
             }
+            p++;
         }
-
-        if (p == end) return string("");
-
-        return string(title_start, p - title_start);
+        return string("");
     }
 
     void serve_search_results(int fd, string_view path) {
@@ -175,8 +180,7 @@ private:
             for (size_t i = start_idx; i < end_idx; ++i) {
                 const auto& res = results[i];
 
-                // NEED TO TEST THIS
-                string real_title = get_accurate_title(res.title);
+                string real_title = get_accurate_title(res.url);
 
                 html.append("<div class=\"result-item\">\n");
                 html.append("<a class=\"result-title\" href=\""); html.append(res.url); html.append("\" target=\"_blank\">");
@@ -206,7 +210,7 @@ private:
     }
 
     bool is_static_asset(string_view path) {
-        return (path.substr(path.size() - 4, 4) == ".png" || path == "/favicon.ico");
+        return (path.size() >= 4 && path.substr(path.size() - 4, 4) == ".png") || path == "/favicon.ico";
     }
 
     string read_request(int fd) {
