@@ -73,7 +73,7 @@ template <class T, class Compare>
 inline size_t partition(vector<T> &vec, size_t low, size_t high, Compare comp) {
     // std::sort often uses "Median-of-Three" for the pivot, but 
     // for now, we'll pick the middle element to avoid O(N^2) on sorted data.
-    T pivot = move(vec[low + (high - low) / 2]);
+    T pivot(vec[low + (high - low) / 2]);
     size_t i = low - 1;
     size_t j = high + 1;
 
