@@ -454,14 +454,49 @@ private:
         // This factor scores based on number of times the link was seen during crawling
         double factor_2 = max(1.0 / (1.0 + exp(-k * (r.times_seen - n_0))), 0.0);
 
-        // This factor scores based on how many unique words in the query were found in the title but penalized on length of the title
-        double factor_3 = ((double)r.num_unique_words_found_title / unique_query_terms.size()) * exp((-Gamma_title * r.title.size()));
+        // PRE-CALCULATE RARITY WEIGHTS FOR FACTORS 3 & 5
+        double total_rarity_weight = 0.0;
+        double matched_title_weight = 0.0;
+        double matched_url_weight = 0.0;
 
-        // This factor checks unique words in the query found in the anchor texts pointing to the link
-        double factor_4 = ((double)r.num_unique_words_found_anchor / unique_query_terms.size()); 
+        for (size_t i = 0; i < unique_query_terms.size(); ++i) {
+            // Rarer words (low freq) yield high weights. Common words (high freq) get squashed.
+            double rarity_weight = 1.0 / (1.0 + log(1.0 + (double)unique_query_terms[i].freq));
+            total_rarity_weight += rarity_weight;
 
-        // This factor checks the URL for keywords in it
-        double factor_5 = ((double)r.num_unique_words_found_url / unique_query_terms.size()) * exp((-Gamma_url * r.url.size()));
+            if (r.title_words_found[i]) {
+                matched_title_weight += rarity_weight;
+            }
+            if (r.url_words_found[i]) {
+                matched_url_weight += rarity_weight;
+            }
+        }
+
+        // Base scores are guaranteed to be between 0.0 and 1.0
+        double title_base_score = (total_rarity_weight > 0.0) ? (matched_title_weight / total_rarity_weight) : 0.0;
+        double url_base_score   = (total_rarity_weight > 0.0) ? (matched_url_weight / total_rarity_weight) : 0.0;
+
+        // FACTOR 3: Title Rarity Match + Length Penalty (Range: 0.0 - 1.0)
+        double factor_3 = title_base_score * exp(-Gamma_title * r.title.size());
+
+        // FACTOR 5: URL Rarity Match + Length Penalty (Range: 0.0 - 1.0)
+        double factor_5 = url_base_score * exp(-Gamma_url * r.url.size());
+
+        // FACTOR 4: Anchor Text Diversity + Bounded Volume (Range: 0.0 - 1.0)
+        double factor_4 = 0.0;
+        if (r.total_link_frequency_anchor > 0 && r.unique_phrases_matched_anchor > 0) {
+            
+            // 1. Bounded Volume: log(1+F) / (log(1+F) + 2.0)
+            // Even if F = 1,000,000, this curve safely asymptotes just under 1.0
+            double log_f = log(1.0 + (double)r.total_link_frequency_anchor);
+            double volume_score = log_f / (log_f + 2.0); 
+
+            // 2. Diversity Multiplier: U / (U + K)
+            const double K = 2.0; // Strictness tuning constant
+            double diversity_multiplier = (double)r.unique_phrases_matched_anchor / ((double)r.unique_phrases_matched_anchor + K);
+
+            factor_4 = volume_score * diversity_multiplier;
+        };
 
         // This factor scores based on the rarity of each word combined with its frequency
         vector<int> counts(r.word_positions.size());
@@ -479,7 +514,7 @@ private:
             / dynamic_weight_sum;
 
         if (verbose_mode) {
-            printf("Unique words found URL: %d", r.num_unique_words_found_url);
+            // printf("Unique words found URL: %d", r.num_unique_words_found_url);
             printf("\n--- DYNAMIC SCORING [%.*s] ---\n", (int)r.url.size(), r.url.data());
             printf("F1 (Proximity)  : %.6f * %.2f = %.6f\n", factor_1, factor_1_weight, factor_1 * factor_1_weight);
             printf("F2 (Times Seen) : %.6f * %.2f = %.6f\n", factor_2, factor_2_weight, factor_2 * factor_2_weight);
