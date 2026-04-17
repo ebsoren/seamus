@@ -71,35 +71,26 @@ inline constexpr const T& max(const T& a, const T& b) {
 
 template <class T, class Compare>
 inline size_t partition(vector<T> &vec, size_t low, size_t high, Compare comp) {
-    // std::sort often uses "Median-of-Three" for the pivot, but 
-    // for now, we'll pick the middle element to avoid O(N^2) on sorted data.
     size_t mid = low + (high - low) / 2;
-    double pivot_score = vec[mid].score;
-    auto comp_score = [&](const T& a) { return comp(a, vec[mid]); };
-    auto score_comp = [&](const T& a) { return comp(vec[mid], a); };
-    size_t i = low - 1;
-    size_t j = high + 1;
+    { T tmp = move(vec[mid]); vec[mid] = move(vec[high]); vec[high] = move(tmp); }
 
-    while (true) {
-        do { i++; } while (comp(vec[i], pivot));
-        do { j--; } while (comp(pivot, vec[j]));
-
-        if (i >= j) return j;
-        
-        // Swap elements to their correct sides
-        T temp = move(vec[i]);
-        vec[i] = move(vec[j]);
-        vec[j] = move(temp);
+    size_t store = low;
+    for (size_t j = low; j < high; ++j) {
+        if (comp(vec[j], vec[high])) {
+            T tmp = move(vec[store]); vec[store] = move(vec[j]); vec[j] = move(tmp);
+            ++store;
+        }
     }
+    { T tmp = move(vec[store]); vec[store] = move(vec[high]); vec[high] = move(tmp); }
+    return store;
 }
 
 template <class T, class Compare>
 inline void quickSort(vector<T> &vec, size_t low, size_t high, Compare comp) {
-    if (low < high) {
-        size_t p = partition(vec, low, high, comp);
-        quickSort(vec, low, p, comp);
-        quickSort(vec, p + 1, high, comp);
-    }
+    if (low >= high) return;
+    size_t p = partition(vec, low, high, comp);
+    if (p > low) quickSort(vec, low, p - 1, comp);
+    if (p < high) quickSort(vec, p + 1, high, comp);
 }
 
 // Unused std::vector overload — kept here for reference but commented out
