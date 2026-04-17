@@ -479,9 +479,6 @@ private:
         // FACTOR 3: Title Rarity Match + Length Penalty (Range: 0.0 - 1.0)
         double factor_3 = title_base_score * exp(-Gamma_title * r.title.size());
 
-        // FACTOR 5: URL Rarity Match + Length Penalty (Range: 0.0 - 1.0)
-        double factor_5 = url_base_score * exp(-Gamma_url * r.url.size());
-
         // FACTOR 4: Anchor Text Diversity + Bounded Volume (Range: 0.0 - 1.0)
         double factor_4 = 0.0;
         if (r.total_link_frequency_anchor > 0 && r.unique_phrases_matched_anchor > 0) {
@@ -497,6 +494,9 @@ private:
 
             factor_4 = volume_score * diversity_multiplier;
         };
+
+        // FACTOR 5: URL Rarity Match + Length Penalty (Range: 0.0 - 1.0)
+        double factor_5 = url_base_score * exp(-Gamma_url * r.url.size());
 
         // This factor scores based on the rarity of each word combined with its frequency
         vector<int> counts(r.word_positions.size());
