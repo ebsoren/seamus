@@ -75,7 +75,6 @@ public:
 
         atomic_vector<LeanPage> collector;
 
-        static std::atomic<int> next_query_id{0};
         int qid = next_query_id.fetch_add(1);
 
         for (chunk_manager &cm : chunk_managers) {
@@ -93,5 +92,6 @@ public:
 
 private:
     JoinableThreadPool pool;
+    std::atomic<int> next_query_id{0};
     vector<chunk_manager> chunk_managers;
 };
