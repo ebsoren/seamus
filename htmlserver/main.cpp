@@ -6,6 +6,8 @@
 #include <ctype.h>
 #include <chrono>
 #include <memory>
+#include <thread>
+#include <future>
 
 #include "../crawler/network_util.h"
 #include "../lib/rpc_listener.h"
@@ -174,10 +176,21 @@ private:
         size_t end_idx = min(start_idx + 10, results.size());
 
         if (start_idx < results.size()) {
+            // Fire off all title fetches in parallel
+            size_t count = end_idx - start_idx;
+            std::vector<std::future<string>> title_futures;
+            title_futures.reserve(count);
             for (size_t i = start_idx; i < end_idx; ++i) {
-                const auto& res = results[i];
+                const string& url = results[i].url;
+                title_futures.push_back(std::async(std::launch::async, [this, &url]() {
+                    return get_accurate_title(url);
+                }));
+            }
 
-                string real_title = get_accurate_title(res.url);
+            // Collect results and build HTML
+            for (size_t i = 0; i < count; ++i) {
+                const auto& res = results[start_idx + i];
+                string real_title = title_futures[i].get();
                 const string& display_title = (real_title.size() > 0) ? real_title : res.title;
 
                 html.append("<div class=\"result-item\">\n");
