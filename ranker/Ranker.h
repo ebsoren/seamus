@@ -471,6 +471,8 @@ public:
                 s_miss_count.fetch_add(1, std::memory_order_relaxed);
             }
             if (data) {
+                fprintf(stderr, "[RANKER] url IN urlstore (len=%zu): '%.*s'\n",
+                        url.size(), static_cast<int>(url.size()), url.data());
                 page.title = string(data->title.data(), data->title.size());
                 page.seed_list_dist = data->seed_distance;
                 page.domains_from_seed = data->domain_dist;
