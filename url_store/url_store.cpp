@@ -221,6 +221,9 @@ For each URL:
         For each list: <anchor_text id (32 bits)> <times seen (32 bits)>\n
 */
 void UrlStore::persist(bool final_persist) {
+    fprintf(stderr, "[URL_STORE] persist(final=%d) starting, unique_url_count=%zu\n",
+            final_persist ? 1 : 0,
+            unique_url_count.load(std::memory_order_relaxed));
     logger::info("Persisting UrlStore to disk...");
     string fileName = string::join("", URL_STORE_OUTPUT_DIR_STR, "/urlstore_tmp.txt");
     string write_mode("wb");
@@ -233,7 +236,7 @@ void UrlStore::persist(bool final_persist) {
         std::lock_guard<std::mutex> lock(global_mtx);
         // maybe check here if size constraint is met to persist, and exit early if not?
         anchor_snapshot.reserve(id_to_anchor.size());
-        
+
         for (const string& anchor_text : id_to_anchor) {
             anchor_snapshot.push_back(string(anchor_text.data(), anchor_text.size()));
         }
@@ -247,16 +250,21 @@ void UrlStore::persist(bool final_persist) {
         fwrite(&anchor_len, sizeof(uint32_t), 1, fd);
         fwrite(anchor_text.data(), sizeof(char), anchor_len, fd);
     }
-    
+
+    size_t urls_written = 0, urls_skipped_oversized = 0, urls_skipped_not_crawled = 0, urls_total = 0;
+    size_t crawled_count = 0;
     for (size_t i = 0; i < URL_NUM_SHARDS; i++) {
         auto& curr_shard = *(shards + i);
         std::lock_guard<std::mutex> lock(curr_shard.mtx);
         auto& url_data = curr_shard.url_data;
         for (const auto& slot : url_data) {
+            urls_total++;
+            if (slot.value.crawled) crawled_count++;
             const string& url = slot.key;
-            if (url.size() > URL_STORE_MAX_URL_LEN) continue;
-            if (final_persist && !slot.value.crawled) continue; // if final persist, only persist urls that have been crawled (parsed)
-            
+            if (url.size() > URL_STORE_MAX_URL_LEN) { urls_skipped_oversized++; continue; }
+            if (final_persist && !slot.value.crawled) { urls_skipped_not_crawled++; continue; }
+            urls_written++;
+
             UrlData& data = slot.value;
             
             uint32_t url_len = static_cast<uint32_t>(url.size());
@@ -287,6 +295,10 @@ void UrlStore::persist(bool final_persist) {
         }
     }
 
+    fprintf(stderr, "[URL_STORE] persist(final=%d) done: total=%zu crawled=%zu written=%zu skipped_not_crawled=%zu skipped_oversized=%zu file_size=%ld\n",
+            final_persist ? 1 : 0, urls_total, crawled_count, urls_written,
+            urls_skipped_not_crawled, urls_skipped_oversized, ftell(fd));
+    fflush(stderr);
     fclose(fd);
 
     string final_file = string::join("", URL_STORE_OUTPUT_DIR_STR, "/urlstore.txt");
@@ -373,7 +385,7 @@ void UrlStore::readFromFile() {
     fprintf(stderr, "\n");
     fflush(stderr);
 
-    size_t url_len;
+    uint32_t url_len;
     char url_buff[URL_STORE_MAX_URL_LEN];
     size_t url_count = 0;
     while (fread(&url_len, sizeof(uint32_t), 1, fd) == 1) {
