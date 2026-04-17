@@ -268,9 +268,40 @@ inline double proximity_score(const vector<vector<size_t>>& positions, int num_t
                 size_t dist = (p > posB[b]) ? (p - posB[b]) : (posB[b] - p);
                 score += 1.0 / (1.0 + dist);
             }
+            b = 0; // reset for next pair
         }
     }
     return score;
+}
+
+
+// ---------------------------------------------------------------------------
+// Exact phrase bonus: reward consecutive query terms appearing in order
+// ---------------------------------------------------------------------------
+inline double phrase_bonus(const vector<vector<size_t>>& positions, int num_terms) {
+    if (num_terms < 2) return 0.0;
+
+    int adjacent_pairs = 0;
+    int total_pairs = num_terms - 1;
+
+    for (int i = 0; i < num_terms - 1; i++) {
+        const auto& posA = positions[i];
+        const auto& posB = positions[i + 1];
+        if (posA.size() == 0 || posB.size() == 0) continue;
+
+        // Check if any occurrence of term[i] is immediately followed by term[i+1]
+        size_t b = 0;
+        for (size_t a = 0; a < posA.size(); ++a) {
+            size_t target = posA[a] + 1;
+            while (b < posB.size() && posB[b] < target) b++;
+            if (b < posB.size() && posB[b] == target) {
+                adjacent_pairs++;
+                break;
+            }
+        }
+    }
+
+    return (double)adjacent_pairs / total_pairs;
 }
 
 
@@ -380,7 +411,7 @@ private:
 
         // Factor 1: BM25 score (term frequency + IDF)
         // Normalize to roughly [0, 1] with a sigmoid
-        double raw_bm25 = bm25_score(r.word_positions, effective_doc_len, term_freqs, 100000);
+        double raw_bm25 = bm25_score(r.word_positions, effective_doc_len, term_freqs, DOCS_PER_INDEX_CHUNK);
         double factor_1 = 1.0 - 1.0 / (1.0 + 0.1 * raw_bm25);
 
         // Factor 2: Popularity (times seen during crawl)
@@ -400,12 +431,16 @@ private:
         double prox = proximity_score(r.word_positions, n);
         double factor_6 = 1.0 - 1.0 / (1.0 + LAMBDA_POS * prox);
 
+        // Factor 7: Exact phrase adjacency bonus
+        double factor_7 = phrase_bonus(r.word_positions, n);
+
         return ((factor_1 * factor_1_weight) +
                 (factor_2 * factor_2_weight) +
                 (factor_3 * factor_3_weight) +
                 (factor_4 * factor_4_weight) +
                 (factor_5 * factor_5_weight) +
-                (factor_6 * factor_6_weight))
+                (factor_6 * factor_6_weight) +
+                (factor_7 * factor_7_weight))
                / dynamic_weight_sum;
     }
 

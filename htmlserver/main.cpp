@@ -162,9 +162,9 @@ private:
         HtmlBuilder html;
         html.append(RESULTS_PART_1);
         
-        html.append("<input type=\"text\" class=\"search-box\" value=\"");
-        html.append(term);
-        html.append("\" readonly>\n<a href=\"/\" class=\"back-btn\">BACK</a>\n");
+        html.append("<input id=\"q\" type=\"text\" class=\"search-box\" value=\"");
+        html.append(html_escape(term));
+        html.append("\">\n<a href=\"/\" class=\"back-btn\">BACK</a>\n");
         html.append("<h1 class=\"header-title\">Seamus the Search Engine</h1>\n</div>\n");
 
         html.append("<div class=\"results-container\">\n");
@@ -178,10 +178,11 @@ private:
                 const auto& res = results[i];
 
                 string real_title = get_accurate_title(res.url);
+                const string& display_title = (real_title.size() > 0) ? real_title : res.title;
 
                 html.append("<div class=\"result-item\">\n");
                 html.append("<a class=\"result-title\" href=\""); html.append(res.url); html.append("\" target=\"_blank\">");
-                html.append(real_title); html.append("</a>\n"); // If this doesn't work, set this back to res.title
+                html.append(display_title); html.append("</a>\n");
                 html.append("<a class=\"result-url\" href=\""); html.append(res.url); html.append("\" target=\"_blank\">");
                 html.append(res.url); html.append("</a>\n</div>\n");
             }
@@ -292,16 +293,17 @@ private:
         size_t len = s.size();
         char* tmp = static_cast<char*>(malloc(len));
         size_t out_len = 0;
-        
+
         for (size_t i = 0; i < len; ++i) {
             char c = s[i];
-            
+            if (c == '\0') continue;
+
             // Convert uppercase letters to lowercase
             if (c >= 'A' && c <= 'Z') {
                 c += ('a' - 'A');
             }
-            
-            // Strictly keep only a-z, 0-9, spaces, and the specified special characters
+
+            // Strictly keep only a-z, 0-9, spaces, and query syntax characters
             if ((c >= 'a' && c <= 'z') ||
                 (c >= '0' && c <= '9') ||
                 c == ' ' ||
@@ -313,7 +315,30 @@ private:
                 tmp[out_len++] = c;
             }
         }
-        
+
+        string out(tmp, out_len);
+        free(tmp);
+        return out;
+    }
+
+    string html_escape(const string& s) {
+        size_t len = s.size();
+        char* tmp = static_cast<char*>(malloc(len * 6));
+        size_t out_len = 0;
+        for (size_t i = 0; i < len; i++) {
+            char c = s.data()[i];
+            if (c == '"') {
+                memcpy(tmp + out_len, "&quot;", 6); out_len += 6;
+            } else if (c == '&') {
+                memcpy(tmp + out_len, "&amp;", 5); out_len += 5;
+            } else if (c == '<') {
+                memcpy(tmp + out_len, "&lt;", 4); out_len += 4;
+            } else if (c == '>') {
+                memcpy(tmp + out_len, "&gt;", 4); out_len += 4;
+            } else {
+                tmp[out_len++] = c;
+            }
+        }
         string out(tmp, out_len);
         free(tmp);
         return out;
