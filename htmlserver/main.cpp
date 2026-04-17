@@ -1,9 +1,10 @@
 #include <unistd.h>
 #include <sys/socket.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <ctype.h>
-#include <chrono> 
+#include <chrono>
 
 #include "../lib/rpc_listener.h"
 #include "../lib/consts.h"
@@ -331,6 +332,7 @@ private:
 };
 
 int main() {
+    signal(SIGPIPE, SIG_IGN);
     SearchServer engine;
     engine.run(HTMLSERVER_PORT, HTMLSERVER_THREADS);
     return 0;
