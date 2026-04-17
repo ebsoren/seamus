@@ -17,6 +17,7 @@
 #include "HtmlTags.h"
 #include "lib/logger.h"
 #include "url_buffers.h"
+#include "english_dict.h"
 #include "word_array.h"
 
 class HtmlParser {
@@ -70,6 +71,7 @@ public:
 
         killed_ = false;
         non_alnum_run_ = 0;
+        non_english_run_ = 0;
         in_a_ = false;
         in_title_ = false;
         done_with_title_ = false;
@@ -293,7 +295,8 @@ private:
     // set to true if found MAX_CONSECUTIVE_NON_ALNUM non-alphanumeric characters in a row. Abort mission under the
     // assumption the page is not english or is at minimum low-quality junk
     bool killed_ = false;
-    int non_alnum_run_ = 0;   // Flag to track how many non-alnums we have seen in a row
+    int non_alnum_run_ = 0;
+    int non_english_run_ = 0;
 
     // Needed for multi-chunk comments and discard sections
     bool in_comment_ = false;
@@ -313,6 +316,21 @@ private:
     static bool comma_in_number(const char *p, const char *start, const char *end) {
         return (*p == ',' || *p == '.') && (p + 1 < end && *(p + 1) >= '0' && *(p + 1) <= '9')
             && (p > start && *(p - 1) >= '0' && *(p - 1) <= '9');
+    }
+
+    inline bool check_english(const char* word, size_t len) {
+        if (len <= 2) return true;
+        if (is_common_english_word(word, len)) {
+            non_english_run_ = 0;
+        } else {
+            non_english_run_++;
+            if (non_english_run_ >= MAX_CONSECUTIVE_NON_ENGLISH) {
+                logger::warn("parse_chunk: killed parser %zu — hit %d consecutive non-English words", parser_id_, non_english_run_);
+                killed_ = true;
+                return false;
+            }
+        }
+        return true;
     }
 
     // Core parsing logic, man i'm glad David did most of this
@@ -350,6 +368,7 @@ private:
                         title = string::join(" ", title, string(word_start, word_len));
                     }
                     num_words++;
+                    if (!check_english(word_start, word_len)) return;
                     word_start = ++p;
                 } else {   // Not tracking a word, just continue
                     p++;
@@ -391,6 +410,7 @@ private:
                             title = string::join(" ", title, string(word_start, word_len));
                         }
                         num_words++;
+                        if (!check_english(word_start, word_len)) return;
                     }
                 }
 
@@ -411,6 +431,7 @@ private:
                             title = string::join(" ", title, string(word_start, word_len));
                         }
                         num_words++;
+                        if (!check_english(word_start, word_len)) return;
                         word_start = ++p;
                     } else if (p < end)
                         p++;
@@ -591,6 +612,7 @@ private:
                             title = string::join(" ", title, string(word_start, word_len));
                         }
                         num_words++;
+                        if (!check_english(word_start, word_len)) return;
                     }
                 }
                 // Skip past the ';' or until space/tag
@@ -626,6 +648,7 @@ private:
                         title = string::join(" ", title, string(word_start, p - word_start));
                     }
                     num_words++;
+                    if (!check_english(word_start, p - word_start)) return;
                 }
                 p += 2;
                 word_start = p;

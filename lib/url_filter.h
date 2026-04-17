@@ -424,7 +424,7 @@ inline string normalize_url(const string& url) {
     if (exceeds_path_depth(in, path_start, query_start)) return string("", 0);
 
     // Build normalized output into scratch buffer.
-    char buf[2048];
+    char buf[2056];
     size_t out_len = 0;
 
     if (is_https) { memcpy(buf, "https://", 8); out_len = 8; }

@@ -24,10 +24,14 @@
     #error "Platform not supported for 64-bit endianness conversion."
 #endif
 
-// Spin up a socket and connect. Returns the connected socket fd, or -1 on failure.
+// Spin up a socket and connect with a 5-second timeout. Returns the connected socket fd, or -1 on failure.
 inline int connect_to_host(const string& host, uint16_t port) {
     int sockfd = socket(AF_INET, SOCK_STREAM, 0);
     if (sockfd < 0) return -1;
+
+    struct timeval tv{5, 0};
+    setsockopt(sockfd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
+    setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
 
     struct sockaddr_in addr{};
     addr.sin_family = AF_INET;
@@ -142,6 +146,7 @@ inline std::optional<bool> recv_bool(int fd) {
 inline std::optional<string> recv_string(int fd) {
     uint32_t len;
     if (!recv_u32(fd, len)) return std::nullopt;
+    if (len > 16 * 1024 * 1024) return std::nullopt;
     char* buf = new char[len + 1];
     buf[len] = '\0';
     if (!recv_exact(fd, buf, len)) {
