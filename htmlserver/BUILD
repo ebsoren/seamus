@@ -7,6 +7,7 @@ cc_binary(
         "html_templates.h",  
     ],
     deps = [
+        "//crawler:network_util",
         "//lib:rpc_listener",
         "//lib:algorithm",
         "//ranker:ranker",
