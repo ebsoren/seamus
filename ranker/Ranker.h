@@ -430,6 +430,7 @@ public:
         if (cqi.pages.size() == 0) return {};
         init_query(cqi.pages[0]);
 
+        size_t miss_count = 0;
         for (DocInfo& di : cqi.pages) {
             const string& url = di.url;
             const vector<NodeInfo>& phrases = di.nodeInfo;
@@ -444,6 +445,11 @@ public:
             }
 
             UrlData* data = url_store ? url_store->getUrl(url) : nullptr;
+            if (!data) {
+                fprintf(stderr, "[RANKER] url NOT in urlstore (len=%zu): '%.*s'\n",
+                        url.size(), static_cast<int>(url.size()), url.data());
+                miss_count++;
+            }
             if (data) {
                 page.title = string(data->title.data(), data->title.size());
                 page.seed_list_dist = data->seed_distance;
@@ -484,6 +490,12 @@ public:
 
             candidates.push_back(std::move(page));
         }
+
+        size_t total = cqi.pages.size();
+        double miss_pct = total > 0 ? 100.0 * miss_count / total : 0.0;
+        fprintf(stderr, "[RANKER] %zu/%zu docs missed urlstore (%.1f%%), %zu candidates ranked\n",
+                miss_count, total, miss_pct, candidates.size());
+        fflush(stderr);
 
         return rank(candidates);
     }
