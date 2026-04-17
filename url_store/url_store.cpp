@@ -335,8 +335,28 @@ void UrlStore::readFromFile() {
         id_to_anchor.push_back(string(anchor_text_buff, anchor_text_len));
         anchor_to_id[string(anchor_text_buff, anchor_text_len)] = id_to_anchor.size() - 1;
     }
-    fprintf(stderr, "[URL_STORE] anchors done, oversized=%zu, file pos: %ld\n",
-            oversized_anchors, ftell(fd));
+    // Log the last few anchors to see if they look sane at the boundary
+    if (id_to_anchor.size() >= 2) {
+        const string& last = id_to_anchor[id_to_anchor.size() - 1];
+        const string& second_last = id_to_anchor[id_to_anchor.size() - 2];
+        fprintf(stderr, "[URL_STORE] last anchor[%zu] len=%zu: '%.*s'\n",
+                id_to_anchor.size()-1, last.size(),
+                static_cast<int>(last.size() > 80 ? 80 : last.size()), last.data());
+        fprintf(stderr, "[URL_STORE] anchor[%zu] len=%zu: '%.*s'\n",
+                id_to_anchor.size()-2, second_last.size(),
+                static_cast<int>(second_last.size() > 80 ? 80 : second_last.size()), second_last.data());
+    }
+
+    // Peek at raw bytes at the boundary to see what's actually there
+    long boundary_pos = ftell(fd);
+    unsigned char peek[16];
+    size_t peeked = fread(peek, 1, 16, fd);
+    fseek(fd, boundary_pos, SEEK_SET);  // seek back
+    fprintf(stderr, "[URL_STORE] anchors done, oversized=%zu, file pos: %ld, next 16 bytes: ",
+            oversized_anchors, boundary_pos);
+    for (size_t pi = 0; pi < peeked; pi++) fprintf(stderr, "%02x ", peek[pi]);
+    fprintf(stderr, "\n");
+    fflush(stderr);
 
     uint32_t url_len;
     char url_buff[URL_STORE_MAX_URL_LEN];
