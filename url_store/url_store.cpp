@@ -318,10 +318,17 @@ void UrlStore::readFromFile() {
             num_anchor_texts, ftell(fd));
 
     size_t oversized_anchors = 0;
+    size_t expected_bytes = 0;
+    long pos_before_anchors = ftell(fd);
     char anchor_text_buff[URL_STORE_MAX_ANCHOR_TEXT_LEN];
     for (uint32_t i = 0; i < num_anchor_texts; i++) {
         uint32_t anchor_text_len;
-        fread(&anchor_text_len, sizeof(uint32_t), 1, fd);
+        size_t r = fread(&anchor_text_len, sizeof(uint32_t), 1, fd);
+        if (r != 1) {
+            fprintf(stderr, "[URL_STORE] anchor[%u]: fread of len failed (r=%zu), pos=%ld\n", i, r, ftell(fd));
+            break;
+        }
+        expected_bytes += 4 + anchor_text_len;
 
         // Guard against file corruption causing buffer overflow
         if (anchor_text_len > URL_STORE_MAX_ANCHOR_TEXT_LEN) {
@@ -330,11 +337,19 @@ void UrlStore::readFromFile() {
             fseek(fd, anchor_text_len - URL_STORE_MAX_ANCHOR_TEXT_LEN, SEEK_CUR);
             anchor_text_len = URL_STORE_MAX_ANCHOR_TEXT_LEN;
         } else {
-            fread(anchor_text_buff, sizeof(char), anchor_text_len, fd);
+            size_t rd = fread(anchor_text_buff, sizeof(char), anchor_text_len, fd);
+            if (rd != anchor_text_len) {
+                fprintf(stderr, "[URL_STORE] anchor[%u]: short read! expected %u got %zu, pos=%ld\n",
+                        i, anchor_text_len, rd, ftell(fd));
+            }
         }
         id_to_anchor.push_back(string(anchor_text_buff, anchor_text_len));
         anchor_to_id[string(anchor_text_buff, anchor_text_len)] = id_to_anchor.size() - 1;
     }
+    long pos_after_anchors = ftell(fd);
+    long actual_bytes = pos_after_anchors - pos_before_anchors;
+    fprintf(stderr, "[URL_STORE] anchor byte accounting: expected=%zu actual=%ld delta=%ld\n",
+            expected_bytes, actual_bytes, actual_bytes - (long)expected_bytes);
     // Log the last few anchors to see if they look sane at the boundary
     if (id_to_anchor.size() >= 2) {
         const string& last = id_to_anchor[id_to_anchor.size() - 1];
