@@ -314,14 +314,18 @@ void UrlStore::readFromFile() {
         fclose(fd);
         return; // handle empty file gracefully
     }
+    fprintf(stderr, "[URL_STORE] reading %u anchor texts, file pos after header: %ld\n",
+            num_anchor_texts, ftell(fd));
 
+    size_t oversized_anchors = 0;
     char anchor_text_buff[URL_STORE_MAX_ANCHOR_TEXT_LEN];
     for (uint32_t i = 0; i < num_anchor_texts; i++) {
         uint32_t anchor_text_len;
         fread(&anchor_text_len, sizeof(uint32_t), 1, fd);
-        
+
         // Guard against file corruption causing buffer overflow
         if (anchor_text_len > URL_STORE_MAX_ANCHOR_TEXT_LEN) {
+            oversized_anchors++;
             fread(anchor_text_buff, sizeof(char), URL_STORE_MAX_ANCHOR_TEXT_LEN, fd);
             fseek(fd, anchor_text_len - URL_STORE_MAX_ANCHOR_TEXT_LEN, SEEK_CUR);
             anchor_text_len = URL_STORE_MAX_ANCHOR_TEXT_LEN;
@@ -331,9 +335,12 @@ void UrlStore::readFromFile() {
         id_to_anchor.push_back(string(anchor_text_buff, anchor_text_len));
         anchor_to_id[string(anchor_text_buff, anchor_text_len)] = id_to_anchor.size() - 1;
     }
+    fprintf(stderr, "[URL_STORE] anchors done, oversized=%zu, file pos: %ld\n",
+            oversized_anchors, ftell(fd));
 
     uint32_t url_len;
     char url_buff[URL_STORE_MAX_URL_LEN];
+    size_t url_count = 0;
     while (fread(&url_len, sizeof(uint32_t), 1, fd) == 1) {
         if (url_len > URL_STORE_MAX_URL_LEN) {
             fread(url_buff, sizeof(char), URL_STORE_MAX_URL_LEN, fd);
@@ -343,16 +350,16 @@ void UrlStore::readFromFile() {
             fread(url_buff, sizeof(char), url_len, fd);
         }
         
+        url_count++;
         string url(url_buff, url_len);
 
+        if (url_count <= 5) {
+            fprintf(stderr, "[URL_STORE] url[%zu] len=%u: '%.*s'\n",
+                    url_count, url_len, static_cast<int>(url_len > 120 ? 120 : url_len), url_buff);
+        }
+
         UrlShard& shard = get_shard(url);
-        
-        // --- THREAD SAFETY NOTE ---
-        // If your workers are strictly partitioned and never hit the same shard, this is fine.
-        // If multiple workers can hit the same shard concurrently, you MUST lock a mutex here
-        // before inserting into shard.url_data to prevent a rehashing Segfault!
-        // std::lock_guard<std::mutex> lock(shard.mtx); 
-        
+
         auto& url_data = shard.url_data;
         unique_url_count.fetch_add(1, std::memory_order_relaxed);
 
@@ -364,7 +371,10 @@ void UrlStore::readFromFile() {
         fread(&title_len, sizeof(size_t), 1, fd);
 
         if (title_len > MAX_TITLELEN_MEMORY) {
-            logger::error("url_store: corrupt title_len=%zu for url=%s — file may be corrupt or wrong format", title_len, url.data());
+            fprintf(stderr, "[URL_STORE] CORRUPT at url[%zu]: title_len=%zu, url='%.*s', file pos=%ld\n",
+                    url_count, title_len,
+                    static_cast<int>(url.size() > 120 ? 120 : url.size()), url.data(),
+                    ftell(fd));
             break;
         }
         char* title_buf = new char[title_len];
@@ -378,6 +388,11 @@ void UrlStore::readFromFile() {
 
         uint32_t num_anchor_freqs;
         fread(&num_anchor_freqs, sizeof(uint32_t), 1, fd);
+
+        if (url_count <= 5) {
+            fprintf(stderr, "[URL_STORE]   url[%zu] title_len=%zu, num_anchor_freqs=%u, file pos=%ld\n",
+                    url_count, title_len, num_anchor_freqs, ftell(fd));
+        }
 
         for (uint32_t i = 0; i < num_anchor_freqs; i++) {
             uint32_t anchor_id, freq;
