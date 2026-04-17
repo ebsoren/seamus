@@ -111,7 +111,7 @@ inline void crawler_worker(DomainCarousel& dc, size_t carousel_left, size_t caro
                     batch_page_priority = 0;
 
                     if (instrumentation->get_documents_crawled() > MAX_PARSED_PAGES) {
-                        logger::info("Worker [%zu-%zu] reached max parsed pages limit, returning early", carousel_left, carousel_right);
+                        logger::instr("Worker [%zu-%zu] reached max parsed pages limit, returning early", carousel_left, carousel_right);
                         return;
                     }
                 }
