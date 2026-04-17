@@ -47,4 +47,4 @@ constexpr double DEFAULT_DYNAMIC_WEIGHT = 0.72;
 constexpr int RANKED_ON_EACH = 10;
 
 // Define the maximum distance to be considered "in close proximity" (e.g., ~1 sentence)
-constexpr size_t SENTENCE_WINDOW = 20; 
+constexpr size_t SENTENCE_WINDOW = 20;
