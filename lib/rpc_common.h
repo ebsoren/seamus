@@ -29,7 +29,7 @@ inline int connect_to_host(const string& host, uint16_t port) {
     int sockfd = socket(AF_INET, SOCK_STREAM, 0);
     if (sockfd < 0) return -1;
 
-    struct timeval tv{5, 0};
+    struct timeval tv{0, 500000}; // 0.5s timeout
     setsockopt(sockfd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
     setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
 
