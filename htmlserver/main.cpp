@@ -255,12 +255,22 @@ private:
         size_t len = s.size();
         char* tmp = static_cast<char*>(malloc(len));
         size_t out_len = 0;
+        
         for (size_t i = 0; i < len; ++i) {
             char c = s[i];
-            if (isalnum((unsigned char)c) || c == ' ' || c == '/' || c == '-' || c == '.') {
+            
+            // Standard URL encoding behavior: '+' represents a space
+            if (c == '+') {
+                tmp[out_len++] = ' ';
+            }
+            // Allow all standard printable characters (including punctuation)
+            // EXCEPT characters that can break your HTML structure and cause XSS
+            else if (isprint((unsigned char)c) && 
+                     c != '<' && c != '>' && c != '&' && c != '\'') {
                 tmp[out_len++] = c;
             }
         }
+        
         string out(tmp, out_len);
         free(tmp);
         return out;
