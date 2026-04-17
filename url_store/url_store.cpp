@@ -321,9 +321,13 @@ void UrlStore::readFromFile() {
         fread(&anchor_text_len, sizeof(uint32_t), 1, fd);
         
         // Guard against file corruption causing buffer overflow
-        if (anchor_text_len > URL_STORE_MAX_ANCHOR_TEXT_LEN) anchor_text_len = URL_STORE_MAX_ANCHOR_TEXT_LEN; 
-        
-        fread(anchor_text_buff, sizeof(char), anchor_text_len, fd);
+        if (anchor_text_len > URL_STORE_MAX_ANCHOR_TEXT_LEN) {
+            fread(anchor_text_buff, sizeof(char), URL_STORE_MAX_ANCHOR_TEXT_LEN, fd);
+            fseek(fd, anchor_text_len - URL_STORE_MAX_ANCHOR_TEXT_LEN, SEEK_CUR);
+            anchor_text_len = URL_STORE_MAX_ANCHOR_TEXT_LEN;
+        } else {
+            fread(anchor_text_buff, sizeof(char), anchor_text_len, fd);
+        }
         id_to_anchor.push_back(string(anchor_text_buff, anchor_text_len));
         anchor_to_id[string(anchor_text_buff, anchor_text_len)] = id_to_anchor.size() - 1;
     }
@@ -331,8 +335,13 @@ void UrlStore::readFromFile() {
     uint32_t url_len;
     char url_buff[URL_STORE_MAX_URL_LEN];
     while (fread(&url_len, sizeof(uint32_t), 1, fd) == 1) {
-        if (url_len > URL_STORE_MAX_URL_LEN) url_len = URL_STORE_MAX_URL_LEN;
-        fread(url_buff, sizeof(char), url_len, fd);
+        if (url_len > URL_STORE_MAX_URL_LEN) {
+            fread(url_buff, sizeof(char), URL_STORE_MAX_URL_LEN, fd);
+            fseek(fd, url_len - URL_STORE_MAX_URL_LEN, SEEK_CUR);
+            url_len = URL_STORE_MAX_URL_LEN;
+        } else {
+            fread(url_buff, sizeof(char), url_len, fd);
+        }
         
         string url(url_buff, url_len);
 
