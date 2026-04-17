@@ -267,8 +267,8 @@ void UrlStore::persist(bool final_persist) {
             fwrite(&data.seed_distance, sizeof(uint16_t), 1, fd);
             fwrite(&data.eot, sizeof(uint16_t), 1, fd);
 
-            uint32_t title_len = static_cast<uint32_t>(data.title.size());
-            fwrite(&title_len, sizeof(uint32_t), 1, fd);
+            size_t title_len = data.title.size();
+            fwrite(&title_len, sizeof(size_t), 1, fd);
             fwrite(data.title.data(), sizeof(char), title_len, fd);
 
             fwrite(&data.eod, sizeof(uint16_t), 1, fd);
@@ -351,12 +351,8 @@ void UrlStore::readFromFile() {
         fread(&url_data[url].seed_distance, sizeof(uint16_t), 1, fd);
         fread(&url_data[url].eot, sizeof(uint16_t), 1, fd);
 
-        uint32_t title_len; 
-        fread(&title_len, sizeof(uint32_t), 1, fd);
-        
-        // 3. FIX: Prevent VLA Stack Overflow!
-        // Cap the max size against file corruption (e.g., 10MB limit)
-        if (title_len > 10000000) title_len = 10000000; 
+        size_t title_len; 
+        fread(&title_len, sizeof(size_t), 1, fd);
         
         // Allocate safely on the HEAP, not the stack
         char* title_buf = new char[title_len];

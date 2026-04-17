@@ -21,6 +21,7 @@ void cleanup_test_file(int worker_number) {
 // Tests getters, setters for class data structures as well as content title and body detection
 void test_url_store_basic() {
     cout << string("Running test_url_store_basic...") << endl;
+    cleanup_test_file(URL_STORE_WORKER_NUMBER);
     UrlStore store(nullptr, URL_STORE_WORKER_NUMBER);
     
     string umich_url("https://umich.edu");
