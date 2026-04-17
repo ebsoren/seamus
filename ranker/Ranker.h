@@ -495,12 +495,20 @@ public:
             is_query_set = true;
             set_new_query(cqi.pages[0]);
         }
+        size_t miss_count = 0;
         for (DocInfo& di : cqi.pages) {
             const string& url = di.url;
             const vector<NodeInfo>& phrases = di.nodeInfo;
             RankedPage page;
             page.url = string(url.data(), url.size());
             auto data = url_store->getUrl(url);
+            if (!data) {
+                if (miss_count < 3) {
+                    fprintf(stderr, "[RANKER] url NOT in urlstore (len=%zu): '%.*s'\n",
+                            url.size(), static_cast<int>(url.size()), url.data());
+                }
+                miss_count++;
+            }
             if (data) {
                 page.title = string(data->title.data(), data->title.size());
                 page.seed_list_dist = data->seed_distance;

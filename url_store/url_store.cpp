@@ -305,7 +305,7 @@ void UrlStore::readFromFile() {
     FILE* fd = fopen(fileName.data(), read_mode.data());
 
     if (fd == nullptr) {
-        logger::debug("Error opening urlstore file for reading.");
+        logger::error("url_store: FAILED to open %s for reading", fileName.data());
         return;
     }
 
@@ -354,15 +354,14 @@ void UrlStore::readFromFile() {
         size_t title_len;
         fread(&title_len, sizeof(size_t), 1, fd);
 
-        try {
-            char* title_buf = new char[title_len];
-            fread(title_buf, sizeof(char), title_len, fd);
-            url_data[url].title = string(title_buf, title_len);
-            delete[] title_buf;
-        } catch (const std::bad_alloc&) {
-            logger::error("url_store: bad_alloc on title_len=%zu for url=%s, skipping entry", title_len, url.data());
+        if (title_len > MAX_TITLELEN_MEMORY) {
+            logger::error("url_store: corrupt title_len=%zu for url=%s — file may be corrupt or wrong format", title_len, url.data());
             break;
         }
+        char* title_buf = new char[title_len];
+        fread(title_buf, sizeof(char), title_len, fd);
+        url_data[url].title = string(title_buf, title_len);
+        delete[] title_buf;
         
         fread(&url_data[url].eod, sizeof(uint16_t), 1, fd);
         fread(&url_data[url].domain_dist, sizeof(uint16_t), 1, fd);
@@ -380,4 +379,8 @@ void UrlStore::readFromFile() {
     }
 
     fclose(fd);
+    size_t loaded = unique_url_count.load(std::memory_order_relaxed);
+    fprintf(stderr, "[URL_STORE] readFromFile complete: loaded %zu URLs, %zu anchors from %s\n",
+            loaded, id_to_anchor.size(), fileName.data());
+    fflush(stderr);
 }
