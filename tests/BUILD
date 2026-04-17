@@ -181,6 +181,16 @@ cc_test (
 )
 
 cc_test (
+    name = "ranker_test",
+    srcs = ["ranker_test.cpp"],
+    deps = [
+        "//ranker:ranker",
+        "//lib:vector",
+        "//lib:string",
+    ],
+)
+
+cc_test (
     name = "query_isr_test",
     srcs = ["query_isr_test.cpp"],
     tags = ["no-sandbox", "local", "exclusive"],

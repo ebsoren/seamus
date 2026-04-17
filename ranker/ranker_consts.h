@@ -6,9 +6,9 @@
 
 // PARAMETERS FOR THE DYNAMIC WEIGHTING FUNCTION. TUNE TO MAKE IT BETTER.
 constexpr double e = 2.718; 
-constexpr double k = 0.25; // this controls sharpness of the graph
-constexpr double n_0 = 5; // this is where it equals 0.5
-constexpr double Gamma_url = 0.1; 
+constexpr double k = 0.06; // this controls sharpness of the graph
+constexpr double n_0 = 40; // this is where it equals 0.5
+constexpr double Gamma_url = 0.05; 
 constexpr double Gamma_desc = 0.0005; 
 constexpr double Gamma_title = 0.2; 
 constexpr double factor_1_weight = 7.0;
@@ -38,10 +38,13 @@ constexpr double static_weight_sum = static_1_weight + static_2_weight + static_
 constexpr double LAMBDA_POS = 1.0; // modify this factor during tuning
 
 // PARAMS FOR WORD FREQ AND RARITY SCORE
-constexpr double LAMBDA_FREQ = 0.5;
+constexpr double LAMBDA_FREQ = 0.2;
 
 // PARAM FOR DYNAMIC VS STATIC WEIGHTING
 constexpr double DEFAULT_DYNAMIC_WEIGHT = 0.72;
 
 // PARAM FOR AMOUNT OF RESULTS WE WANT TO RETURN ON EACH MACHINE
 constexpr int RANKED_ON_EACH = 10;
+
+// Define the maximum distance to be considered "in close proximity" (e.g., ~1 sentence)
+constexpr size_t SENTENCE_WINDOW = 20; 
