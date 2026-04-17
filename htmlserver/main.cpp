@@ -6,6 +6,7 @@
 #include <ctype.h>
 #include <chrono>
 
+#include "../crawler/network_util.h"
 #include "../lib/rpc_listener.h"
 #include "../lib/consts.h"
 #include "../lib/string.h"
@@ -103,6 +104,32 @@ private:
         close(fd);
     }
 
+    string get_accurate_title(const string &url) {
+        string host = extract_host(url);
+        const char* slash = static_cast<const char*>(memchr(url.data() + 8, '/', url.size() - 8));
+        const char* path = slash ? slash + 1 : "";
+
+        char html[MAX_HTML_SIZE];
+        ssize_t html_len = https_get(host.data(), path, html);
+
+        // TODO: Finish this
+        const char* p = html;
+        const char* end = html + html_len;
+        const char* title_start;
+
+        while (p < end) {
+            if (!strncasecmp(p, "<title>", 7)) {
+                p += 7;
+                title_start = p;
+                while (strncasecmp(p, "</title>", 8)) p++;
+            }
+        }
+
+        if (p == end) return string("");
+
+        return string(title_start, p - title_start);
+    }
+
     void serve_search_results(int fd, string_view path) {
         string raw_term = parse_query_term(path);
         string term = remove_special_chars(raw_term);
@@ -147,9 +174,13 @@ private:
         if (start_idx < results.size()) {
             for (size_t i = start_idx; i < end_idx; ++i) {
                 const auto& res = results[i];
+
+                // NEED TO TEST THIS
+                string real_title = get_accurate_title(res.title);
+
                 html.append("<div class=\"result-item\">\n");
                 html.append("<a class=\"result-title\" href=\""); html.append(res.url); html.append("\" target=\"_blank\">");
-                html.append(res.title); html.append("</a>\n");
+                html.append(real_title); html.append("</a>\n"); // If this doesn't work, set this back to res.title
                 html.append("<a class=\"result-url\" href=\""); html.append(res.url); html.append("\" target=\"_blank\">");
                 html.append(res.url); html.append("</a>\n</div>\n");
             }
