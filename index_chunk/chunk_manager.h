@@ -432,6 +432,8 @@ public:
                 word_infos.push_back(NodeInfo{
                     string(unique_words[i].data(), unique_words[i].size()),
                     move(positions),
+                    pos_isrs[i].n_docs,
+                    false,
                 });
             }
             docs.push_back(DocInfo{li.get_url(doc), move(word_infos)});

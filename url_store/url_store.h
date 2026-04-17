@@ -32,7 +32,10 @@ struct UrlShard {
     }
 };
 
+class Ranker;
+
 class UrlStore {
+    friend class Ranker;
 private:
     std::mutex global_mtx; // used when reading/modifying data like anchor_to_id
     std::atomic<size_t> unique_url_count{0};
