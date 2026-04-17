@@ -303,9 +303,8 @@ public:
         size_t misses = s_miss_count.load(std::memory_order_relaxed);
         size_t total  = s_total_count.load(std::memory_order_relaxed);
         double pct = total > 0 ? 100.0 * misses / total : 0.0;
-        fprintf(stderr, "[RANKER] GLOBAL: %zu/%zu docs missed urlstore (%.1f%%)\n",
+        logger::warn("[RANKER] GLOBAL: %zu/%zu docs missed urlstore (%.1f%%)",
                 misses, total, pct);
-        fflush(stderr);
     }
 
 private:
@@ -466,12 +465,12 @@ public:
             UrlData* data = url_store ? url_store->getUrl(url) : nullptr;
             s_total_count.fetch_add(1, std::memory_order_relaxed);
             if (!data) {
-                fprintf(stderr, "[RANKER] url NOT in urlstore (len=%zu): '%.*s'\n",
+                logger::warn("[RANKER] url NOT in urlstore (len=%zu): '%.*s'",
                         url.size(), static_cast<int>(url.size()), url.data());
                 s_miss_count.fetch_add(1, std::memory_order_relaxed);
             }
             if (data) {
-                fprintf(stderr, "[RANKER] url IN urlstore (len=%zu): '%.*s'\n",
+                logger::warn("[RANKER] url IN urlstore (len=%zu): '%.*s'",
                         url.size(), static_cast<int>(url.size()), url.data());
                 page.title = string(data->title.data(), data->title.size());
                 page.seed_list_dist = data->seed_distance;

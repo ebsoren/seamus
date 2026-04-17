@@ -32,14 +32,13 @@ public:
                 string path = string::join("", string(INDEX_OUTPUT_DIR), "/index_chunk_", string(w), "_",
                                            string(c), ".txt");
                 if (!file_exists(path)) break;
-                fprintf(stderr, "[INDEX_MANAGER] loaded chunk: %.*s\n",
+                logger::warn("[INDEX_MANAGER] loaded chunk: %.*s",
                         static_cast<int>(path.size()), path.data());
                 chunk_managers.emplace_back(path, url_store);
             }
         }
-        fprintf(stderr, "[INDEX_MANAGER] init complete: %zu chunks loaded from %s\n",
+        logger::warn("[INDEX_MANAGER] init complete: %zu chunks loaded from %s",
                 chunk_managers.size(), INDEX_OUTPUT_DIR);
-        fflush(stderr);
     }
 
     IndexManager(const IndexManager &)            = delete;
@@ -55,9 +54,8 @@ public:
     // Each call gets a unique query ID so concurrent handle_query calls
     // only join on their own fan-out, not on each other's tasks.
     LeanPageResponse handle_query(const string &query_str) {
-        fprintf(stderr, "[INDEX_MANAGER] handle_query query='%.*s' num_chunks=%zu\n",
+        logger::warn("[INDEX_MANAGER] handle_query query='%.*s' num_chunks=%zu",
                 static_cast<int>(query_str.size()), query_str.data(), chunk_managers.size());
-        fflush(stderr);
 
         LeanPageResponse resp;
 
@@ -65,13 +63,11 @@ public:
         try {
             ast = parse_query_ast(string_view(query_str.data(), query_str.size()));
         } catch (const ParseError &e) {
-            fprintf(stderr, "[INDEX_MANAGER] parse failed: %s\n", e.message);
-            fflush(stderr);
+            logger::warn("[INDEX_MANAGER] parse failed: %s", e.message);
             return resp;
         }
 
-        fprintf(stderr, "[INDEX_MANAGER] AST parsed OK, fanning out to %zu chunks\n", chunk_managers.size());
-        fflush(stderr);
+        logger::warn("[INDEX_MANAGER] AST parsed OK, fanning out to %zu chunks", chunk_managers.size());
 
         atomic_vector<LeanPage> collector;
 
@@ -89,8 +85,7 @@ public:
         Ranker::print_stats();
 
         resp.pages = collector.take();
-        fprintf(stderr, "[INDEX_MANAGER] query complete, collected %zu pages\n", resp.pages.size());
-        fflush(stderr);
+        logger::warn("[INDEX_MANAGER] query complete, collected %zu pages", resp.pages.size());
         return resp;
     }
 
