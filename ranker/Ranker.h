@@ -27,27 +27,35 @@ template <typename T>
 void reverse(vector<T>& vec) {
     size_t n = vec.size();
     for (size_t i = 0; i < n / 2; ++i) {
+        // Swap element i with its mirror at the end
         T temp = std::move(vec[i]);
         vec[i] = std::move(vec[n - 1 - i]);
         vec[n - 1 - i] = std::move(temp);
     }
 }
 
+// "two words"
+// for phrase words in word_positions, simply store the location of the start of the phrase
 struct RankedPage {
     string url = string("");
     string title = string("");
-    int seed_list_dist = 0;
-    int domains_from_seed = 0;
-    int num_unique_words_found_anchor = 0;
-    int num_unique_words_found_title = 0;
-    int num_unique_words_found_url = 0;
-    int times_seen = 0;
-    vector<vector<size_t>> word_positions;
-    size_t doc_len = 0;
+    int seed_list_dist;
+    int domains_from_seed; // unsure if we have infra in place for this 
+    // int num_unique_words_found_anchor; // number of unique words in the query found
+    // int num_unique_words_found_title;
+    // int num_unique_words_found_url;
+    int unique_phrases_matched_anchor;
+    int total_link_frequency_anchor;
+    vector<bool> anchor_words_found;
+    vector<bool> title_words_found;
+    vector<bool> url_words_found;
+    int times_seen;
+    vector<vector<size_t>> word_positions; // this is just anywhere on the doc page
+    size_t doc_len; // max for this is 100 KB
 };
 
 struct RankerNodeInfo {
-    string node;
+    string node; // can be single or multi-word
     size_t cnt;
     bool is_phrase;
 };
@@ -57,7 +65,7 @@ inline bool is_digit(char c) {
 }
 
 
-// TLD quality weights
+// These are all the allowed endings that we can rank
 inline unordered_map<string,double> makeTldWeight() {
     unordered_map<string, double> m(32);
 
@@ -113,480 +121,722 @@ inline unordered_map<string,double> makeTldWeight() {
 
     return m;
 }
-inline unordered_map<string, double> tldWeight = makeTldWeight();
+inline unordered_map<string, double> tldWeight = makeTldWeight(); // factory function to avoid having to implement initializer lists lol
 
-inline double max(double i, double j) { return i < j ? j : i; }
-inline double min(double i, double j) { return i < j ? i : j; }
-
-template <typename T>
-T min_element(vector<T> &v) {
-    if (v.size() == 0) return T{};
-    T m = v[0];
-    for (size_t i = 1; i < v.size(); i++) if (v[i] < m) m = v[i];
-    return m;
-}
-template <typename T>
-T max_element(vector<T> &v) {
-    if (v.size() == 0) return T{};
-    T m = v[0];
-    for (size_t i = 1; i < v.size(); i++) if (v[i] > m) m = v[i];
-    return m;
+inline double max(double i, double j) {
+    if(i < j) {
+        return j;
+    } else {
+        return i;
+    }
 }
 
-// ---------------------------------------------------------------------------
-// Static score: URL quality signals independent of the query
-// ---------------------------------------------------------------------------
-inline double calc_static_score(const RankedPage &p) {
+inline double min(double i, double j) {
+    if(i < j) {
+        return i;
+    } else {
+        return j;
+    }
+}
+
+// basically the same function from the frontier. I have modified and added certain things to increase acuracy I think . . .
+inline double calc_static_score(const RankedPage &p, bool verbose = false) {
+    
+    // domains from seed list is potentially more important that seed list distance itself 
+    double factor_1 = max(exp(-0.08 * (p.domains_from_seed + 1)), 0.05);  // NOTE: may need to tune the constant here
 
     string_view url = p.url.str_view(0, p.url.size());
-    size_t start_pos = 8; // skip "https://"
-    if (url.size() >= 7 && url[4] != 's') start_pos = 7; // "http://"
+    
+    // points for certain desirable domains
+    size_t start_pos = (factor_1 == 0.6) ? 7 : 8;
 
     int subdomain_count = 0;
     int digit_count_domain = 0;
     double domain_size = 0.0;
     int path_depth = 0;
     bool qmarkfound = false;
-    size_t ext_start = 0;
-    size_t ext_len = 0;
-
-    for (size_t i = start_pos; i < url.size(); i++) {
-        char c = url[i];
-        if (c == '/' || c == '?' || c == '#' || c == ':') {
-            for (; i < url.size(); i++) {
-                if (url[i] == '/') path_depth++;
-                else if (url[i] == '?') qmarkfound = true;
+    size_t start = 0;
+    size_t len_ext = 0;
+    
+    for(int i = start_pos; i < url.size(); i++) {
+        if(url[i] == '/' || url[i] == '?' || url[i] == '#' || url[i] == ':') {
+            while(i < url.size()) {
+                if(url[i] == '/') { 
+                    path_depth++;
+                } else if(url[i] == '?') {
+                    qmarkfound = true;
+                }
+                i++;
             }
             break;
-        } else if (c == '.') {
+        } else if(url[i] == '.') {
             subdomain_count++;
-            ext_start = i + 1;
-            ext_len = 0;
+            start = i+1;
+            len_ext = 0;
         } else {
-            ext_len++;
-            if (is_digit(c)) digit_count_domain++;
+            len_ext += 1;
+            if(is_digit(url[i])) {
+                digit_count_domain++;
+            }
         }
         domain_size += 1.0;
     }
-
-    string_view extension = url.substr(ext_start, ext_len);
+    
+    string_view extension = (url.substr(start, len_ext));
     auto slot = tldWeight.find(extension);
-    double tld_score = (slot == tldWeight.end()) ? 0.2 : (*slot).value;
+    double factor_2 = (slot == tldWeight.end()) ? 0.2 : (*slot).value; 
 
-    // Domain distance from seed (crawl graph depth)
-    double domain_dist_score = max(double_pow(e, -0.08 * p.domains_from_seed), 0.2);
+    // points for closer to seed list
+    double factor_3 = max(exp(factor_3_const * (p.seed_list_dist+1)), 0.05);  // NOTE: may need to tune the constant here
 
-    // Seed list distance
-    double seed_score = max(double_pow(e, factor_3_const * p.seed_list_dist), 0.1);
+    // points for shortness of domain title
+    double factor_4 = max((50.0 - domain_size) / 50.0, 0.2);
 
-    // Domain length penalty
-    double domain_len_score = max((50.0 - domain_size) / 50.0, 0.2);
+    // points for less subdomains
+    double factor_5 = 1.0 / (1.0 + 0.1 * subdomain_count);
 
-    // Subdomain penalty
-    double subdomain_score = 1.0 / (1.0 + 0.1 * subdomain_count);
+    // digit count in domain name hurts the score
+    double factor_6 = 1.0 / (1.0 + 0.15 * digit_count_domain);
 
-    // Digits in domain penalty
-    double digit_score = 1.0 / (1.0 + 0.15 * digit_count_domain);
+    // points for shortness of overall url
+    double factor_7 = max((150.0 - url.size()) / 100.0, 0.2);
 
-    // URL length penalty
-    double url_len_score = max((150.0 - (double)url.size()) / 100.0, 0.2);
+    // penalizes the path depth of the link based on something like x.com/this/that/these/those
+    double factor_8 = max(1.0 - 0.1 * path_depth, 0.2);
 
-    // Path depth penalty
-    double path_score = max(1.0 - 0.1 * path_depth, 0.2);
+    // apparently a question mark in a link is kind of a bad thing? 
+    double factor_9 = (qmarkfound) ? 0.0 : 1.0;
+    
+    // Calculate final score
+    double final_score = ((factor_1 * static_1_weight) + 
+                          (factor_2 * static_2_weight) + 
+                          (factor_3 * static_3_weight) + 
+                          (factor_4 * static_4_weight) + 
+                          (factor_5 * static_5_weight) +
+                          (factor_6 * static_6_weight) + 
+                          (factor_7 * static_7_weight) + 
+                          (factor_8 * static_8_weight) + 
+                          (factor_9 * static_9_weight)) 
+                          / static_weight_sum;
 
-    // Query string penalty (reduced, not eliminated)
-    double query_score = qmarkfound ? 0.4 : 1.0;
-
-    return ((domain_dist_score * static_1_weight) +
-            (tld_score * static_2_weight) +
-            (seed_score * static_3_weight) +
-            (domain_len_score * static_4_weight) +
-            (subdomain_score * static_5_weight) +
-            (digit_score * static_6_weight) +
-            (url_len_score * static_7_weight) +
-            (path_score * static_8_weight) +
-            (query_score * static_9_weight))
-           / static_weight_sum;
-}
-
-
-// ---------------------------------------------------------------------------
-// BM25-inspired term frequency score
-// ---------------------------------------------------------------------------
-inline double bm25_score(const vector<vector<size_t>>& positions, size_t doc_len,
-                         const vector<uint64_t>& term_freqs, size_t total_docs) {
-    if (doc_len == 0 || positions.size() == 0) return 0.0;
-
-    constexpr double k1 = 1.2;
-    constexpr double b = 0.75;
-    constexpr double avg_dl = 500.0; // rough average doc length estimate
-
-    double score = 0.0;
-    for (size_t i = 0; i < positions.size(); i++) {
-        double tf = (double)positions[i].size();
-        if (tf == 0.0) continue;
-
-        // IDF: log((N - df + 0.5) / (df + 0.5) + 1)
-        double df = (double)term_freqs[i];
-        if (df < 1.0) df = 1.0;
-        double N = (double)total_docs;
-        if (N < df) N = df;
-        double idf = log((N - df + 0.5) / (df + 0.5) + 1.0);
-
-        // BM25 TF saturation
-        double dl = (double)doc_len;
-        double tf_norm = (tf * (k1 + 1.0)) / (tf + k1 * (1.0 - b + b * (dl / avg_dl)));
-
-        score += idf * tf_norm;
+    if (verbose) {
+        printf("\n--- STATIC SCORING [%.*s] ---\n", (int)p.url.size(), p.url.data());
+        printf("F1 (Domain Dist) : %.6f * %.2f = %.6f\n", factor_1, static_1_weight, factor_1 * static_1_weight);
+        printf("F2 (TLD Weight)  : %.6f * %.2f = %.6f\n", factor_2, static_2_weight, factor_2 * static_2_weight);
+        printf("F3 (Seed Dist)   : %.6f * %.2f = %.6f\n", factor_3, static_3_weight, factor_3 * static_3_weight);
+        printf("F4 (Domain Len)  : %.6f * %.2f = %.6f\n", factor_4, static_4_weight, factor_4 * static_4_weight);
+        printf("F5 (Subdomains)  : %.6f * %.2f = %.6f\n", factor_5, static_5_weight, factor_5 * static_5_weight);
+        printf("F6 (Domain Digits): %.6f * %.2f = %.6f\n", factor_6, static_6_weight, factor_6 * static_6_weight);
+        printf("F7 (URL Length)  : %.6f * %.2f = %.6f\n", factor_7, static_7_weight, factor_7 * static_7_weight);
+        printf("F8 (Path Depth)  : %.6f * %.2f = %.6f\n", factor_8, static_8_weight, factor_8 * static_8_weight);
+        printf("F9 (No Queries)  : %.6f * %.2f = %.6f\n", factor_9, static_9_weight, factor_9 * static_9_weight);
+        printf("FINAL STATIC SCORE: %.6f\n", final_score);
+        printf("--------------------------------------\n");
+        fflush(stdout);
     }
-    return score;
+
+    return final_score;
+}
+
+template <typename T>
+T min_element(vector<T> &v) {
+    if (v.size() == 0) return T(0);  // safe fallback
+    T min_elt = v[0];
+    for(size_t i = 1; i < v.size(); i++) {
+        if(v[i] < min_elt) {
+            min_elt = v[i];
+        }
+    }
+    return min_elt;
+}
+
+template <typename T>
+T max_element(vector<T> &v) {
+    if (v.size() == 0) return T(0);  // safe fallback
+    T max_elt = v[0];
+    for(size_t i = 1; i < v.size(); i++) {
+        if(v[i] > max_elt) {
+            max_elt = v[i];
+        }
+    }
+    return max_elt;
+}
+
+inline double bm25_score(const vector<vector<size_t>>& pos, size_t dl, const vector<uint64_t>& tf, size_t N) { 
+    if (dl == 0 || pos.size() == 0 || tf.size() == 0 || N == 0)
+        return 0.0;
+
+    double score = 0.0;
+
+    size_t safe_n = min(pos.size(), tf.size());
+
+    for (size_t i = 0; i < safe_n; i++) { 
+        double t = pos[i].size(); 
+        if (t == 0) continue; 
+
+        double df = tf[i];
+        if (df <= 0) continue;
+
+        double idf = log((N - df + 0.5)/(df + 0.5) + 1.0); 
+        double norm = (t*(1.2+1))/(t + 1.2*(1 - 0.75 + 0.75*(dl/500.0))); 
+        score += idf * norm; 
+    } 
+
+    return score; 
+}
+
+inline double phrase_bonus(const vector<vector<size_t>>& pos) { 
+    if (pos.size() < 2) return 0.0; int hits = 0; 
+    
+    for (size_t i = 0; i+1 < pos.size(); i++) { 
+        for (auto a : pos[i]) { 
+            for (auto b : pos[i+1]) { 
+                if (b == a+1) { 
+                    hits++; 
+                    break; 
+                } 
+            } 
+        } 
+    } 
+    return (double)hits / (pos.size()-1); 
 }
 
 
-// ---------------------------------------------------------------------------
-// Proximity score: reward query terms appearing near each other
-// ---------------------------------------------------------------------------
-inline double proximity_score(const vector<vector<size_t>>& positions, int num_terms) {
-    if (num_terms < 2) return 0.0;
+inline double word_pos_score(const vector<vector<size_t>> &positions, size_t doc_len, int unique_words_in_query) {
+    if (unique_words_in_query == 0 || doc_len == 0 || positions.size() == 0)
+        return 0.0;
 
-    double score = 0.0;
-    for (int i = 0; i < num_terms; i++) {
-        for (int j = i + 1; j < num_terms; j++) {
+    if (positions.size() < (size_t)unique_words_in_query)
+        return 0.0;
+
+    double proximity_score = 0.0;
+    double max_possible_prox = 0.0;
+
+    const size_t SENTENCE_WINDOW = 20;
+
+    for (int i = 0; i < unique_words_in_query; i++) {
+        for (int j = i + 1; j < unique_words_in_query; j++) {
+
+            if (i >= (int)positions.size() || j >= (int)positions.size())
+                continue;
+
             const auto& posA = positions[i];
             const auto& posB = positions[j];
-            if (posA.size() == 0 || posB.size() == 0) continue;
+
+            if (posA.size() == 0 || posB.size() == 0)
+                continue;
+
+            double max_pair_occurrences = (double)min(posA.size(), posB.size());
+            double perfect_dist = (double)(j - i);
+
+            if (perfect_dist == 0) continue;
+
+            max_possible_prox += log(1.0 + (max_pair_occurrences / perfect_dist));
 
             size_t b = 0;
+            double current_pair_score = 0.0;
+
             for (size_t a = 0; a < posA.size(); ++a) {
                 size_t p = posA[a];
+
                 while (b + 1 < posB.size()) {
-                    size_t cur = (p > posB[b]) ? (p - posB[b]) : (posB[b] - p);
-                    size_t nxt = (p > posB[b+1]) ? (p - posB[b+1]) : (posB[b+1] - p);
-                    if (nxt <= cur) b++;
+                    size_t current_dist = abs((long)p - (long)posB[b]);
+                    size_t next_dist = abs((long)p - (long)posB[b+1]);
+
+                    if (next_dist <= current_dist) b++;
                     else break;
                 }
-                size_t dist = (p > posB[b]) ? (p - posB[b]) : (posB[b] - p);
-                score += 1.0 / (1.0 + dist);
+
+                size_t best_dist = abs((long)p - (long)posB[b]);
+
+                if (best_dist <= SENTENCE_WINDOW && best_dist > 0) {
+                    current_pair_score += (1.0 / (double)best_dist);
+                }
             }
-            b = 0; // reset for next pair
-        }
-    }
-    return score;
-}
 
-
-// ---------------------------------------------------------------------------
-// Exact phrase bonus: reward consecutive query terms appearing in order
-// ---------------------------------------------------------------------------
-inline double phrase_bonus(const vector<vector<size_t>>& positions, int num_terms) {
-    if (num_terms < 2) return 0.0;
-
-    int adjacent_pairs = 0;
-    int total_pairs = num_terms - 1;
-
-    for (int i = 0; i < num_terms - 1; i++) {
-        const auto& posA = positions[i];
-        const auto& posB = positions[i + 1];
-        if (posA.size() == 0 || posB.size() == 0) continue;
-
-        // Check if any occurrence of term[i] is immediately followed by term[i+1]
-        size_t b = 0;
-        for (size_t a = 0; a < posA.size(); ++a) {
-            size_t target = posA[a] + 1;
-            while (b < posB.size() && posB[b] < target) b++;
-            if (b < posB.size() && posB[b] == target) {
-                adjacent_pairs++;
-                break;
-            }
+            proximity_score += log(1.0 + current_pair_score);
         }
     }
 
-    return (double)adjacent_pairs / total_pairs;
+    if (max_possible_prox <= 0.0) return 0.0;
+
+    double normalized_prox = proximity_score / max_possible_prox;
+
+    if (std::isnan(normalized_prox) || std::isinf(normalized_prox))
+        return 0.0;
+
+    double final_score = LAMBDA_POS * normalized_prox;
+
+    if (final_score > 1.0) final_score = 1.0;
+    if (final_score < 0.0) final_score = 0.0;
+
+    return final_score;
 }
 
-
-struct QueryTerm {
-    string phrase;
-    uint64_t freq; // global corpus frequency (n_posts or n_docs)
-    bool is_phrase;
-};
+// LeanPage input_total_score(RankedPage r, double dynamic_weight, size_t unique_words_in_query) {
+//     double r_score = calc_static_score(r.url, r.seed_list_dist) * (1-dynamic_weight) + calc_dynamic_score(r, unique_words_in_query) * dynamic_weight;
+//     return(LeanPage{std::move(r.url), std::move(r.title), r_score});
+// }
 
 struct RankedCompare {
+    double dynamic_weight;
+    size_t unique_words_in_query;
+
+    RankedCompare(double f = DEFAULT_DYNAMIC_WEIGHT, size_t s = 10) : dynamic_weight(f), unique_words_in_query(s) {}
+
     bool operator()(const LeanPage& a, const LeanPage& b) const {
-        return a.score > b.score;
+        return a.score > b.score; 
     }
 };
 
+struct QueryInfo {
+    string phrase;
+    uint64_t freq;
+    bool is_phrase;
+
+    QueryInfo& operator=(const QueryInfo& other) {
+        if (this != &other) {
+            phrase = string(other.phrase.data(), other.phrase.size());
+            freq = other.freq;
+            is_phrase = other.is_phrase;
+        }
+        return *this;
+    }
+
+    QueryInfo(const QueryInfo& other)
+        : phrase(other.phrase.data(), other.phrase.size()),
+        freq(other.freq),
+        is_phrase(other.is_phrase) {}
+
+    QueryInfo(string phrase = string(""), uint64_t freq = 0, bool is_phrase = false)
+        : phrase(phrase.data(), phrase.size()), freq(freq), is_phrase(is_phrase) {} 
+};
+
+
+class SmallPQ {
+private:
+    vector<LeanPage> v;
+    size_t max_size;
+
+public:
+    SmallPQ(size_t max_size_init = RANKED_ON_EACH) : max_size(max_size_init) { }
+
+    void push(LeanPage l) {
+        
+        if (v.size() == max_size && l.score <= v.back().score) {
+            return;
+        }
+
+        size_t insert_pos = 0;
+        while (insert_pos < v.size() && v[insert_pos].score > l.score) {
+            insert_pos++;
+        }
+
+        v.insert(insert_pos, std::move(l));
+
+        if (v.size() > max_size) {
+            v.pop_back();
+        }
+    }
+
+    vector<LeanPage> getResults() {
+        return std::move(v);
+    }
+};
 
 class Ranker {
-public:
-    // Global accumulators across all chunks for a single query.
-    // Reset before fan-out, read after join.
-    static inline std::atomic<size_t> s_miss_count{0};
-    static inline std::atomic<size_t> s_total_count{0};
-
-    static void reset_stats() {
-        s_miss_count.store(0, std::memory_order_relaxed);
-        s_total_count.store(0, std::memory_order_relaxed);
-    }
-
-    static void print_stats() {
-        size_t misses = s_miss_count.load(std::memory_order_relaxed);
-        size_t total  = s_total_count.load(std::memory_order_relaxed);
-        double pct = total > 0 ? 100.0 * misses / total : 0.0;
-        logger::error("[RANKER] GLOBAL: %zu/%zu docs missed urlstore (%.1f%%)",
-                misses, total, pct);
-    }
-
 private:
-    priority_queue<LeanPage, vector<LeanPage>, RankedCompare> pq;
+    SmallPQ pq; 
     double dynamic_weight;
-    vector<QueryTerm> query_terms;
+    vector<QueryInfo> unique_query_terms; 
+    QueryInfo rarestTerm;
     int num_pages_returned;
+    bool verbose_mode;
+    bool is_query_set;
     UrlStore* url_store;
-    bool query_set = false;
 
-    void init_query(DocInfo& di) {
-        if (query_set) return;
-        query_set = true;
-        for (NodeInfo& n : di.nodeInfo) {
-            query_terms.push_back(QueryTerm{
-                string(n.phrase.data(), n.phrase.size()),
-                n.freq,
-                n.is_phrase
-            });
-        }
-    }
+    double word_rarity_freq_score(RankedPage &r) {
 
-    // Count how many query terms appear in the anchor texts pointing to this URL
-    int count_anchor_term_matches(UrlData* data) {
-        if (!data || data->anchor_freqs.size() == 0) return 0;
-
-        // id_to_anchor is immutable during query serving (crawler is not running),
-        // so we can read without locking global_mtx.
-        vector<string*> anchor_texts;
-        for (auto it = data->anchor_freqs.begin(); it != data->anchor_freqs.end(); ++it) {
-            uint32_t anchor_id = (*it).key;
-            if (anchor_id < url_store->id_to_anchor.size()) {
-                anchor_texts.push_back(&url_store->id_to_anchor[anchor_id]);
-            }
-        }
-
-        int matches = 0;
-        for (size_t i = 0; i < query_terms.size(); i++) {
-            for (size_t j = 0; j < anchor_texts.size(); j++) {
-                if (anchor_texts[j]->contains(query_terms[i].phrase)) {
-                    matches++;
-                    break;
-                }
-            }
-        }
-        return matches;
-    }
-
-    double calc_dynamic_score(RankedPage& r) {
-        int n = query_terms.size();
+        int n = min((int)unique_query_terms.size(), (int)r.word_positions.size());
         if (n == 0) return 0.0;
 
-        // Estimate doc_len from positions if eod wasn't set
-        size_t effective_doc_len = r.doc_len;
-        if (effective_doc_len == 0) {
-            for (size_t i = 0; i < r.word_positions.size(); i++) {
-                for (size_t j = 0; j < r.word_positions[i].size(); j++) {
-                    if (r.word_positions[i][j] > effective_doc_len)
-                        effective_doc_len = r.word_positions[i][j];
-                }
-            }
-            effective_doc_len += 1;
-        }
+        vector<double> x(n);
 
-        // Build term freq vector for BM25
-        vector<uint64_t> term_freqs;
-        term_freqs.reserve(n);
         for (int i = 0; i < n; i++) {
-            term_freqs.push_back(query_terms[i].freq > 0 ? query_terms[i].freq : 1);
+            x[i] = -log(1.0 + (double)unique_query_terms[i].freq);
         }
 
-        // Factor 1: BM25 score (term frequency + IDF)
-        // Normalize to roughly [0, 1] with a sigmoid
-        double raw_bm25 = bm25_score(r.word_positions, effective_doc_len, term_freqs, DOCS_PER_INDEX_CHUNK);
-        double factor_1 = 1.0 - 1.0 / (1.0 + 0.1 * raw_bm25);
+        double xmin = min_element(x);
+        double xmax = max_element(x);
 
-        // Factor 2: Popularity (times seen during crawl)
-        double factor_2 = max(1.0 / (1.0 + double_pow(e, -k * (r.times_seen - n_0))), 0.2);
+        vector<double> w(n);
+        for (int i = 0; i < n; i++) {
+            if (xmax == xmin) {
+                w[i] = 1.0;
+            } else {
+                double z = (x[i] - xmin) / (xmax - xmin);
+                w[i] = 0.2 + 0.8 * z;
+            }
+        }
 
-        // Factor 3: Query words in title
-        double title_match_ratio = (double)r.num_unique_words_found_title / n;
-        double factor_3 = title_match_ratio;
+        double raw = 0.0, max_possible = 0.0;
 
-        // Factor 4: Query words in anchor texts
-        double factor_4 = (double)r.num_unique_words_found_anchor / n;
+        for (int i = 0; i < n; i++) {
+            double f = 1 - exp(-LAMBDA_FREQ * (double)r.word_positions[i].size());
+            raw += w[i] * f;
+            max_possible += w[i];
+        }
 
-        // Factor 5: Query words in URL
-        double factor_5 = (double)r.num_unique_words_found_url / n;
+        if (max_possible <= 0.0) return 0.0;
 
-        // Factor 6: Proximity of query terms in document
-        double prox = proximity_score(r.word_positions, n);
-        double factor_6 = 1.0 - 1.0 / (1.0 + LAMBDA_POS * prox);
+        double S = raw / max_possible;
 
-        // Factor 7: Exact phrase adjacency bonus
-        double factor_7 = phrase_bonus(r.word_positions, n);
+        if (std::isnan(S) || std::isinf(S)) return 0.0;
 
-        return ((factor_1 * factor_1_weight) +
-                (factor_2 * factor_2_weight) +
-                (factor_3 * factor_3_weight) +
-                (factor_4 * factor_4_weight) +
-                (factor_5 * factor_5_weight) +
-                (factor_6 * factor_6_weight) +
-                (factor_7 * factor_7_weight))
-               / dynamic_weight_sum;
+        return 0.1 + 0.9 * S;
     }
 
-    vector<LeanPage> rank(vector<RankedPage>& v) {
-        pq = priority_queue<LeanPage, vector<LeanPage>, RankedCompare>(
-            RankedCompare{}, vector<LeanPage>()
-        );
+    inline double early_position_score(
+        const vector<vector<size_t>>& positions,
+        size_t doc_len,
+        const vector<QueryInfo>& terms
+    ) {
+        // Safety checks
+        if (doc_len == 0 || positions.size() == 0 || terms.size() == 0)
+            return 0.0;
 
-        for (size_t i = 0; i < v.size(); i++) {
-            double r_score = calc_static_score(v[i]) * (1.0 - dynamic_weight) +
-                             calc_dynamic_score(v[i]) * dynamic_weight;
+        size_t n = positions.size();
+        if (terms.size() < n) n = terms.size();
 
-            if ((int)pq.size() < num_pages_returned) {
-                pq.push(LeanPage{std::move(v[i].url), std::move(v[i].title), r_score});
-            } else if (r_score > pq.front().score) {
-                pq.push(LeanPage{std::move(v[i].url), std::move(v[i].title), r_score});
-                pq.pop();
+        double weighted_score = 0.0;
+        double total_weight = 0.0;
+
+        for (size_t i = 0; i < n; i++) {
+            const auto& pos_list = positions[i];
+
+            if (pos_list.size() == 0)
+                continue;
+
+            // RARITY WEIGHT
+            double rarity = 1.0 / (1.0 + log(1.0 + (double)terms[i].freq));
+
+            size_t earliest = pos_list[0];
+            for (size_t j = 1; j < pos_list.size(); j++) {
+                if (pos_list[j] < earliest)
+                    earliest = pos_list[j];
+            }
+
+            if (doc_len == 0) continue;
+
+            // NORMALIZE
+            // 1.0 = very early, 0.0 = very late
+            double pos_score = 1.0 - ((double)earliest / (double)doc_len);
+
+            // Clamp safety
+            if (pos_score < 0.0) pos_score = 0.0;
+            if (pos_score > 1.0) pos_score = 1.0;
+
+            weighted_score += rarity * pos_score;
+            total_weight += rarity;
+        }
+
+        if (total_weight <= 0.0)
+            return 0.0;
+
+        double final_score = weighted_score / total_weight;
+
+        return final_score;
+    }
+
+    double calc_dynamic_score(RankedPage &r) {
+
+        if (r.word_positions.size() == 0) return 0.0;
+        if (unique_query_terms.size() == 0) return 0.0;
+
+        // This factor checks frequency of unique words and proximity scores of the unique words to other unique words in the query 
+        double factor_1 = word_pos_score(r.word_positions, r.doc_len, unique_query_terms.size()); // this score should be given extra weight in calculations
+
+        // This factor scores based on number of times the link was seen during crawling
+        double factor_2 = max(1.0 / (1.0 + exp(-k * (r.times_seen - n_0))), 0.0);
+
+        // PRE-CALCULATE RARITY WEIGHTS FOR FACTORS 3 & 5
+        double total_rarity_weight = 0.0;
+        double matched_title_weight = 0.0;
+        double matched_url_weight = 0.0;
+
+        size_t safe_n = min(unique_query_terms.size(), r.title_words_found.size());
+        safe_n = min(safe_n, r.url_words_found.size());
+
+        for (size_t i = 0; i < safe_n; ++i) {
+            // Rarer words (low freq) yield high weights. Common words (high freq) get squashed.
+            double rarity_weight = 1.0 / (1.0 + log(1.0 + (double)unique_query_terms[i].freq));
+            total_rarity_weight += rarity_weight;
+
+            if (r.title_words_found[i]) {
+                matched_title_weight += rarity_weight;
+            }
+            if (r.url_words_found[i]) {
+                matched_url_weight += rarity_weight;
             }
         }
 
-        vector<LeanPage> results;
-        int count = pq.size() < (size_t)num_pages_returned ? pq.size() : num_pages_returned;
-        for (int i = 0; i < count; i++) {
-            results.push_back(pq.pop_move());
+        // Base scores are guaranteed to be between 0.0 and 1.0
+        double title_base_score = (total_rarity_weight > 0.0) ? (matched_title_weight / total_rarity_weight) : 0.0;
+        double url_base_score   = (total_rarity_weight > 0.0) ? (matched_url_weight / total_rarity_weight) : 0.0;
+
+        // FACTOR 3: Title Rarity Match + Length Penalty (Range: 0.0 - 1.0)
+        double factor_3 = title_base_score * exp(-Gamma_title * r.title.size());
+
+        // FACTOR 4: Anchor Text Diversity + Bounded Volume (Range: 0.0 - 1.0)
+        double factor_4 = 0.0;
+        if (r.total_link_frequency_anchor > 0 && r.unique_phrases_matched_anchor > 0) {
+            
+            // 1. Bounded Volume: log(1+F) / (log(1+F) + 2.0)
+            // Even if F = 1,000,000, this curve safely asymptotes just under 1.0
+            double log_f = log(1.0 + (double)r.total_link_frequency_anchor);
+            double volume_score = log_f / (log_f + 2.0); 
+
+            // 2. Diversity Multiplier: U / (U + K)
+            const double K = 2.0; // Strictness tuning constant
+            double diversity_multiplier = (double)r.unique_phrases_matched_anchor / ((double)r.unique_phrases_matched_anchor + K);
+
+            factor_4 = volume_score * diversity_multiplier;
+        };
+
+        // FACTOR 5: URL Rarity Match + Length Penalty (Range: 0.0 - 1.0)
+        double factor_5 = url_base_score * exp(-Gamma_url * r.url.size());
+
+        // This factor scores based on the rarity of each word combined with its frequency
+        vector<int> counts(r.word_positions.size());
+        for(size_t i = 0; i < r.word_positions.size(); i++) {
+            counts[i] = r.word_positions[i].size();
         }
-        reverse(results);
-        return results;
+        double factor_6 = word_rarity_freq_score(r);
+
+        double factor_7 = phrase_bonus(r.word_positions);
+
+        double factor_8 = early_position_score(
+            r.word_positions,
+            r.doc_len,
+            unique_query_terms
+        );
+
+        double final_score = ((factor_1 * factor_1_weight) + 
+            (factor_2 * factor_2_weight) + 
+            (factor_3 * factor_3_weight) + 
+            (factor_4 * factor_4_weight) + 
+            (factor_5 * factor_5_weight) + 
+            (factor_6 * factor_6_weight) +
+            (factor_7 * factor_7_weight) +
+            (factor_8 * factor_8_weight)) 
+            / dynamic_weight_sum;
+
+        if (verbose_mode) {
+            // printf("Unique words found URL: %d", r.num_unique_words_found_url);
+            printf("\n--- DYNAMIC SCORING [%.*s] ---\n", (int)r.url.size(), r.url.data());
+            printf("F1 (Proximity)  : %.6f * %.2f = %.6f\n", factor_1, factor_1_weight, factor_1 * factor_1_weight);
+            printf("F2 (Times Seen) : %.6f * %.2f = %.6f\n", factor_2, factor_2_weight, factor_2 * factor_2_weight);
+            printf("F3 (Title Match): %.6f * %.2f = %.6f\n", factor_3, factor_3_weight, factor_3 * factor_3_weight);
+            printf("F4 (Anchor Txt) : %.6f * %.2f = %.6f\n", factor_4, factor_4_weight, factor_4 * factor_4_weight);
+            printf("F5 (URL Match)  : %.6f * %.2f = %.6f\n", factor_5, factor_5_weight, factor_5 * factor_5_weight);
+            printf("F6 (Frequency)  : %.6f * %.2f = %.6f\n", factor_6, factor_6_weight, factor_6 * factor_6_weight);
+            printf("F7 (Exact Phrase)  : %.6f * %.2f = %.6f\n", factor_7, factor_7_weight, factor_7 * factor_7_weight);
+            printf("F8 (Exact Phrase)  : %.6f * %.2f = %.6f\n", factor_8, factor_8_weight, factor_8 * factor_8_weight);
+            printf("FINAL DYNAMIC SCORE: %.6f\n", final_score);
+            printf("--------------------------------------\n");
+            fflush(stdout); // Ensures it prints
+        }
+
+        return final_score;
+    }
+    
+    void set_new_query(DocInfo &dih) {
+        if(unique_query_terms.size() != 0) {
+            logger::debug("Ranker already has had a query set");
+            return;
+        } 
+
+        for (NodeInfo& n : dih.nodeInfo) {
+            if(n.freq < rarestTerm.freq) {
+                rarestTerm = QueryInfo{string(n.phrase.data(), n.phrase.size()), n.freq, n.is_phrase};
+            }
+            unique_query_terms.push_back(QueryInfo{string(n.phrase.data(), n.phrase.size()), n.freq, n.is_phrase});
+        }
+        
+        if(verbose_mode) {
+            logger::debug("Ranker has been changed to serving an amount of %zu unique words in the query", unique_query_terms.size());
+        }
+        
+        // Reset PQ using SmallPQ
+        pq = SmallPQ(num_pages_returned);
+    }
+
+    vector<LeanPage> rank(vector<RankedPage> &v) {
+        // Initialize the pq
+        pq = SmallPQ(num_pages_returned);
+
+        for(size_t i = 0; i < v.size(); i++) {
+            // calculate the score of the page
+            double r_score = calc_static_score(v[i]) * (1-dynamic_weight) + calc_dynamic_score(v[i]) * dynamic_weight;
+
+            if(verbose_mode) {
+                logger::debug("The URL %.*s earned a score of: %.6f", (int)v[i].url.size(), v[i].url.data(), r_score);
+            }
+            
+            // Push directly to SmallPQ. It handles bounded limits and sorting automatically!
+            pq.push(LeanPage{std::move(v[i].url), std::move(v[i].title), r_score});
+        }
+        
+        if(verbose_mode) {
+            logger::debug("Ranker has finished ranking elements");
+        }
+
+        // Return the internally managed, perfectly sorted vector from SmallPQ
+        return pq.getResults();
     }
 
 public:
-    Ranker(UrlStore* url_store, int num_pages_returned_init = RANKED_ON_EACH,
-           double dynamic_weight_init = DEFAULT_DYNAMIC_WEIGHT, bool verbose_init = false)
-        : dynamic_weight(dynamic_weight_init), num_pages_returned(num_pages_returned_init),
-          url_store(url_store) {
-        (void)verbose_init;
+    // Added pq to the initializer list to ensure it's sized correctly on creation
+    Ranker(UrlStore* url_store, int num_pages_returned_init = RANKED_ON_EACH, double dynamic_weight_init = DEFAULT_DYNAMIC_WEIGHT, bool verbose_init = false) : 
+        pq(num_pages_returned_init),
+        dynamic_weight(dynamic_weight_init), num_pages_returned(num_pages_returned_init), verbose_mode(verbose_init), is_query_set(false), url_store(url_store) { 
+        
+        if(verbose_mode) {
+            logger::debug("Ranker is initialized with num pages returned of %d, and dynamic weighting of %f", 
+                num_pages_returned_init, dynamic_weight_init);
+        }
     }
 
     vector<LeanPage> processQueryResponse(ChunkQueryInfo& cqi) {
+        vector<LeanPage> result;
         vector<RankedPage> candidates;
-
-        if (cqi.pages.size() == 0) return {};
-        init_query(cqi.pages[0]);
-
+        vector<RankerNodeInfo> ranker_info; 
+        if(!is_query_set && cqi.pages.size() > 0) {
+            is_query_set = true;
+            set_new_query(cqi.pages[0]);
+        }
         for (DocInfo& di : cqi.pages) {
             const string& url = di.url;
             const vector<NodeInfo>& phrases = di.nodeInfo;
-
             RankedPage page;
             page.url = string(url.data(), url.size());
-
-            // Populate word positions from index data
-            page.word_positions.reserve(di.nodeInfo.size());
-            for (NodeInfo& n : di.nodeInfo) {
-                page.word_positions.push_back(std::move(n.pos));
-            }
-
-            UrlData* data = url_store ? url_store->getUrl(url) : nullptr;
-            s_total_count.fetch_add(1, std::memory_order_relaxed);
-            if (!data) {
-                logger::warn("[RANKER] url NOT in urlstore (len=%zu): '%.*s'",
-                        url.size(), static_cast<int>(url.size()), url.data());
-                s_miss_count.fetch_add(1, std::memory_order_relaxed);
-            }
+            auto data = url_store->getUrl(url);
             if (data) {
-                logger::warn("[RANKER] url IN urlstore (len=%zu): '%.*s'",
-                        url.size(), static_cast<int>(url.size()), url.data());
                 page.title = string(data->title.data(), data->title.size());
                 page.seed_list_dist = data->seed_distance;
                 page.domains_from_seed = data->domain_dist;
-                page.times_seen = data->num_encountered;
-                page.doc_len = data->eod;
+                // page.num_unique_words_found_anchor = data->anchor_freqs.size();
 
-                // Count query terms found in title and URL
-                for (const NodeInfo& ni : phrases) {
-                    if (data->title.size() > 0 && data->title.contains(ni.phrase))
-                        page.num_unique_words_found_title++;
-                    if (url.contains(ni.phrase))
-                        page.num_unique_words_found_url++;
-                }
+                // 1. Get the resolved anchor data for the URL
+                vector<UrlAnchorData> anchors = url_store->getUrlAnchorInfo(url);
 
-                // Count query terms found in anchor texts
-                page.num_unique_words_found_anchor = count_anchor_term_matches(data);
-            } else {
-                // No urlstore data — still rank with position-based signals
-                page.seed_list_dist = 5;
-                page.domains_from_seed = 3;
-                page.times_seen = 1;
+                page.unique_phrases_matched_anchor = 0;
+                page.total_link_frequency_anchor = 0;
 
-                // Estimate doc_len from max position
-                for (size_t i = 0; i < page.word_positions.size(); i++) {
-                    for (size_t j = 0; j < page.word_positions[i].size(); j++) {
-                        if (page.word_positions[i][j] > page.doc_len)
-                            page.doc_len = page.word_positions[i][j];
+                // 2. Loop through and check the actual text
+                for (const auto& anchor : anchors) {
+                    const string& text = *(anchor.anchor_text);
+                    
+                    // Check if the target phrase exists in this anchor text
+                    if (text.contains(rarestTerm.phrase)) {
+                        page.unique_phrases_matched_anchor++;           // Count how many unique phrases matched
+                        page.total_link_frequency_anchor += anchor.freq; // Count the total number of incoming links
                     }
                 }
-                page.doc_len += 1;
-
+                
                 for (const NodeInfo& ni : phrases) {
-                    if (url.contains(ni.phrase))
-                        page.num_unique_words_found_url++;
+                    const string& phrase = ni.phrase;
+                    // printf("%s", phrase.data());
+                    page.title_words_found.push_back(data->title.contains(phrase));
+                    page.url_words_found.push_back(url.contains(phrase));
+                    // page.num_unique_words_found_title += data->title.contains(phrase);
+                    // page.num_unique_words_found_url += url.contains(phrase);
                 }
+                
+                page.doc_len = data->eod;
+                page.times_seen = data->num_encountered; 
+
+                vector<vector<size_t>> word_positions_init;
+                for(NodeInfo &n : di.nodeInfo) {
+                    word_positions_init.push_back(n.pos);
+                }
+                page.word_positions = word_positions_init;
+
+                candidates.push_back(std::move(page));;
             }
-
-            candidates.push_back(std::move(page));
         }
-
         return rank(candidates);
     }
 
-    double getScore(DocInfo& dih) {
-        init_query(dih);
-
-        const string& url = dih.url;
-        RankedPage page;
-        page.url = string(url.data(), url.size());
-
-        page.word_positions.reserve(dih.nodeInfo.size());
-        for (NodeInfo& n : dih.nodeInfo) {
-            page.word_positions.push_back(std::move(n.pos));
+    double testScore(RankedPage &page, vector<QueryInfo> terms) {
+        if(!is_query_set) {
+            is_query_set = true;
+            for(QueryInfo &q : terms) {
+                unique_query_terms.push_back(std::move(q));
+            }
+            // Reset PQ
+            pq = SmallPQ(num_pages_returned);
         }
+        return (calc_static_score(page, verbose_mode) * (1-dynamic_weight) + 
+            calc_dynamic_score(page) * dynamic_weight);
+    }
 
-        UrlData* data = url_store ? url_store->getUrl(url) : nullptr;
+    double getScore(DocInfo &dih) {
+        const string& url = dih.url;
+        const vector<NodeInfo>& phrases = dih.nodeInfo;
+        RankedPage page;
+        if(!is_query_set) {
+            is_query_set = true;
+            set_new_query(dih);
+        }
+        page.url = string(url.data(), url.size());
+        auto data = url_store->getUrl(url);
         if (data) {
             page.title = string(data->title.data(), data->title.size());
             page.seed_list_dist = data->seed_distance;
             page.domains_from_seed = data->domain_dist;
-            page.times_seen = data->num_encountered;
-            page.doc_len = data->eod;
-            page.num_unique_words_found_anchor = count_anchor_term_matches(data);
+            // page.num_unique_words_found_anchor = data->anchor_freqs.size();
 
-            for (const NodeInfo& ni : dih.nodeInfo) {
-                if (data->title.size() > 0 && data->title.contains(ni.phrase))
-                    page.num_unique_words_found_title++;
-                if (url.contains(ni.phrase))
-                    page.num_unique_words_found_url++;
+            // 1. Get the resolved anchor data for the URL
+            vector<UrlAnchorData> anchors = url_store->getUrlAnchorInfo(url);
+
+            page.unique_phrases_matched_anchor = 0;
+            page.total_link_frequency_anchor = 0;
+
+            // 2. Loop through and check the actual text
+            for (const auto& anchor : anchors) {
+                const string& text = *(anchor.anchor_text);
+                
+                // Check if the target phrase exists in this anchor text
+                if (text.contains(rarestTerm.phrase)) {
+                    page.unique_phrases_matched_anchor++;           // Count how many unique phrases matched
+                    page.total_link_frequency_anchor += anchor.freq; // Count the total number of incoming links
+                }
             }
-        } else {
-            page.seed_list_dist = 5;
-            page.domains_from_seed = 3;
-            page.times_seen = 1;
-            for (size_t i = 0; i < page.word_positions.size(); i++)
-                for (size_t j = 0; j < page.word_positions[i].size(); j++)
-                    if (page.word_positions[i][j] > page.doc_len)
-                        page.doc_len = page.word_positions[i][j];
-            page.doc_len += 1;
-        }
 
-        return calc_static_score(page) * (1.0 - dynamic_weight) +
-               calc_dynamic_score(page) * dynamic_weight;
+            for (const NodeInfo& ni : phrases) {
+                    const string& phrase = ni.phrase;
+                    // printf("%s", phrase.data());
+                    page.title_words_found.push_back(data->title.contains(phrase));
+                    page.url_words_found.push_back(url.contains(phrase));
+                    // page.num_unique_words_found_title += data->title.contains(phrase);
+                    // page.num_unique_words_found_url += url.contains(phrase);
+            }
+            
+            page.doc_len = data->eod;
+            page.times_seen = data->num_encountered; 
+
+            vector<vector<size_t>> word_positions_init;
+            for(NodeInfo &n : dih.nodeInfo) {
+                word_positions_init.push_back(n.pos);
+            }
+            page.word_positions = word_positions_init;
+
+            double r_score = calc_static_score(page) * (1-dynamic_weight) + 
+                calc_dynamic_score(page) * dynamic_weight;
+            return r_score;
+        } else {
+            return -1.0;
+        }
     }
 };
