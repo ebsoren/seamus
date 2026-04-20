@@ -445,6 +445,25 @@ public:
 };
 
 class Ranker {
+public:
+    // Global accumulators across all chunks for a single query.
+    // Reset before fan-out, read after join.
+    static inline std::atomic<size_t> s_miss_count{0};
+    static inline std::atomic<size_t> s_total_count{0};
+
+    static void reset_stats() {
+        s_miss_count.store(0, std::memory_order_relaxed);
+        s_total_count.store(0, std::memory_order_relaxed);
+    }
+
+    static void print_stats() {
+        size_t misses = s_miss_count.load(std::memory_order_relaxed);
+        size_t total  = s_total_count.load(std::memory_order_relaxed);
+        double pct = total > 0 ? 100.0 * misses / total : 0.0;
+        logger::error("[RANKER] GLOBAL: %zu/%zu docs missed urlstore (%.1f%%)",
+                misses, total, pct);
+    }
+    
 private:
     SmallPQ pq; 
     double dynamic_weight;
