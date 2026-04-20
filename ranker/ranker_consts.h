@@ -19,7 +19,7 @@ constexpr double Gamma_desc  = 0.0005; // (Unused currently) would penalize long
 constexpr double Gamma_title = 0.01;   // Penalizes long titles
 
 
-// 🟢 DYNAMIC FACTORS (used in calc_dynamic_score)
+// DYNAMIC FACTORS (used in calc_dynamic_score)
 
 // Factor 1: WORD PROXIMITY SCORE
 // Measures how close query terms appear to each other in the document.
