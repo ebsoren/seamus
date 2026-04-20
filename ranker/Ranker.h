@@ -158,7 +158,7 @@ inline double calc_static_score(const RankedPage &p, bool verbose = false) {
     size_t start = 0;
     size_t len_ext = 0;
     
-    for(int i = start_pos; i < url.size(); i++) {
+    for(size_t i = start_pos; i < url.size(); i++) {
         if(url[i] == '/' || url[i] == '?' || url[i] == '#' || url[i] == ':') {
             while(i < url.size()) {
                 if(url[i] == '/') { 
@@ -286,7 +286,10 @@ inline double bm25_score(const vector<vector<size_t>>& pos, size_t dl, const vec
 }
 
 inline double phrase_bonus(const vector<vector<size_t>>& pos) { 
-    if (pos.size() < 2) return 0.0; int hits = 0; 
+    if (pos.size() < 2) {
+        return 0.0;
+    }
+    int hits = 0;
     
     for (size_t i = 0; i+1 < pos.size(); i++) { 
         for (auto a : pos[i]) { 
@@ -463,7 +466,7 @@ public:
         logger::error("[RANKER] GLOBAL: %zu/%zu docs missed urlstore (%.1f%%)",
                 misses, total, pct);
     }
-    
+
 private:
     SmallPQ pq; 
     double dynamic_weight;
