@@ -63,11 +63,17 @@ constexpr double factor_7_weight = 8.0;
 // with stronger weight for rare terms.
 constexpr double factor_8_weight = 6.0;
 
+// Factor 9: DOMAIN MATCH (rarity-weighted)
+// Rewards query terms appearing in the registered domain (host) of the URL,
+// not just anywhere in the URL string. Distinguishes "en.wikipedia.org/..."
+// from "toolforge.org/wikipedia-foo". Case-insensitive compare.
+constexpr double factor_9_weight = 12.0;
+
 // Total sum for normalization
 constexpr double dynamic_weight_sum =
     factor_1_weight + factor_2_weight + factor_3_weight +
     factor_4_weight + factor_5_weight + factor_6_weight +
-    factor_7_weight + factor_8_weight;
+    factor_7_weight + factor_8_weight + factor_9_weight;
 
 
 

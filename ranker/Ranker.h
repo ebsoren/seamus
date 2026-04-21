@@ -643,14 +643,67 @@ private:
             unique_query_terms
         );
 
-        double final_score = ((factor_1 * factor_1_weight) + 
-            (factor_2 * factor_2_weight) + 
-            (factor_3 * factor_3_weight) + 
-            (factor_4 * factor_4_weight) + 
-            (factor_5 * factor_5_weight) + 
+        // FACTOR 9: Domain Match (rarity-weighted, case-insensitive).
+        // Extract the host (between "://" and the first '/', '?', '#', or ':'),
+        // then count which query terms appear as substrings within it.
+        // Gives a strong, dedicated signal that rewards "wikipedia" → wikipedia.org
+        // over "wikipedia" appearing anywhere in path/body.
+        size_t dom_start = 0;
+        {
+            const char* d = r.url.data();
+            size_t sz = r.url.size();
+            size_t i = 0;
+            while (i + 2 < sz && d[i] != ':') i++;
+            if (i + 2 < sz && d[i] == ':' && d[i+1] == '/' && d[i+2] == '/') {
+                dom_start = i + 3;
+            }
+        }
+        size_t dom_end = dom_start;
+        {
+            const char* d = r.url.data();
+            size_t sz = r.url.size();
+            while (dom_end < sz) {
+                char c = d[dom_end];
+                if (c == '/' || c == '?' || c == '#' || c == ':') break;
+                dom_end++;
+            }
+        }
+        double matched_domain_weight = 0.0;
+        if (dom_end > dom_start) {
+            const char* host = r.url.data() + dom_start;
+            size_t host_len = dom_end - dom_start;
+            for (size_t i = 0; i < unique_query_terms.size(); i++) {
+                const string& term = unique_query_terms[i].phrase;
+                if (term.size() == 0 || term.size() > host_len) continue;
+                double rarity_weight = 1.0 / (1.0 + log(1.0 + (double)unique_query_terms[i].freq));
+                bool found = false;
+                const char* nd = term.data();
+                size_t nd_len = term.size();
+                for (size_t j = 0; j + nd_len <= host_len && !found; j++) {
+                    bool ok = true;
+                    for (size_t k = 0; k < nd_len; k++) {
+                        char hc = host[j+k];
+                        if (hc >= 'A' && hc <= 'Z') hc += 32;
+                        char tc = nd[k];
+                        if (tc >= 'A' && tc <= 'Z') tc += 32;
+                        if (hc != tc) { ok = false; break; }
+                    }
+                    if (ok) found = true;
+                }
+                if (found) matched_domain_weight += rarity_weight;
+            }
+        }
+        double factor_9 = (total_rarity_weight > 0.0) ? (matched_domain_weight / total_rarity_weight) : 0.0;
+
+        double final_score = ((factor_1 * factor_1_weight) +
+            (factor_2 * factor_2_weight) +
+            (factor_3 * factor_3_weight) +
+            (factor_4 * factor_4_weight) +
+            (factor_5 * factor_5_weight) +
             (factor_6 * factor_6_weight) +
             (factor_7 * factor_7_weight) +
-            (factor_8 * factor_8_weight)) 
+            (factor_8 * factor_8_weight) +
+            (factor_9 * factor_9_weight))
             / dynamic_weight_sum;
 
         if (verbose_mode) {
@@ -663,7 +716,8 @@ private:
             printf("F5 (URL Match)  : %.6f * %.2f = %.6f\n", factor_5, factor_5_weight, factor_5 * factor_5_weight);
             printf("F6 (Frequency)  : %.6f * %.2f = %.6f\n", factor_6, factor_6_weight, factor_6 * factor_6_weight);
             printf("F7 (Exact Phrase)  : %.6f * %.2f = %.6f\n", factor_7, factor_7_weight, factor_7 * factor_7_weight);
-            printf("F8 (Exact Phrase)  : %.6f * %.2f = %.6f\n", factor_8, factor_8_weight, factor_8 * factor_8_weight);
+            printf("F8 (Early Position): %.6f * %.2f = %.6f\n", factor_8, factor_8_weight, factor_8 * factor_8_weight);
+            printf("F9 (Domain Match)  : %.6f * %.2f = %.6f\n", factor_9, factor_9_weight, factor_9 * factor_9_weight);
             printf("FINAL DYNAMIC SCORE: %.6f\n", final_score);
             printf("--------------------------------------\n");
             fflush(stdout); // Ensures it prints

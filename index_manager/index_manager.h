@@ -11,10 +11,12 @@
 #include "lib/joinable_thread_pool.h"
 #include "lib/logger.h"
 #include "lib/rpc_query_handler.h"
+#include "lib/algorithm.h"
 #include "lib/string.h"
 #include "lib/utils.h"
 #include "lib/vector.h"
 #include "query/expressions.h"
+#include "ranker/ranker_consts.h"
 
 
 class IndexManager {
@@ -113,8 +115,15 @@ public:
 
         Ranker::print_stats();
 
-        resp.pages = collector.take();
-        logger::warn("[INDEX_MANAGER] query complete, collected %zu pages", resp.pages.size());
+        vector<LeanPage> all = collector.take();
+        size_t pre_cut = all.size();
+        sort<LeanPage>(all, [](const LeanPage& a, const LeanPage& b) {
+            return a.score > b.score;
+        });
+        if (all.size() > (size_t)RANKED_ON_EACH) all.resize(RANKED_ON_EACH);
+        resp.pages = std::move(all);
+        logger::warn("[INDEX_MANAGER] query complete, kept top %zu of %zu pages",
+                resp.pages.size(), pre_cut);
         return resp;
     }
 
