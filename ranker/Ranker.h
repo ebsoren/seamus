@@ -23,6 +23,37 @@
 #include <optional>
 
 
+// Case-insensitive substring check restricted to a URL's host portion
+// (between "://" and the first '/', '?', '#', or ':'). Used to gate the
+// tracked-URL log lines so they don't fire on "wikipedia" appearing in
+// a path or query string.
+inline bool url_host_contains_ci(const string& url, const char* needle) {
+    const char* d = url.data();
+    size_t sz = url.size();
+    size_t i = 0;
+    while (i + 2 < sz && d[i] != ':') i++;
+    size_t dom_start = (i + 2 < sz && d[i] == ':' && d[i+1] == '/' && d[i+2] == '/') ? i + 3 : 0;
+    size_t dom_end = dom_start;
+    while (dom_end < sz) {
+        char c = d[dom_end];
+        if (c == '/' || c == '?' || c == '#' || c == ':') break;
+        dom_end++;
+    }
+    size_t nlen = 0;
+    while (needle[nlen] != '\0') nlen++;
+    if (nlen == 0 || dom_end <= dom_start || nlen > dom_end - dom_start) return false;
+    for (size_t j = dom_start; j + nlen <= dom_end; j++) {
+        bool ok = true;
+        for (size_t k = 0; k < nlen; k++) {
+            char hc = d[j+k]; if (hc >= 'A' && hc <= 'Z') hc += 32;
+            char nc = needle[k]; if (nc >= 'A' && nc <= 'Z') nc += 32;
+            if (hc != nc) { ok = false; break; }
+        }
+        if (ok) return true;
+    }
+    return false;
+}
+
 template <typename T>
 void reverse(vector<T>& vec) {
     size_t n = vec.size();
@@ -695,6 +726,53 @@ private:
         }
         double factor_9 = (total_rarity_weight > 0.0) ? (matched_domain_weight / total_rarity_weight) : 0.0;
 
+        // FACTOR 10: Canonical Article Match (domain-gated).
+        // Slug = last path segment (between final '/' and first '?'/'#'/end).
+        // A query term "matches" the slug if it is the entire slug
+        // (case-insensitive), or a prefix followed by a URL word boundary
+        // ('-', '_', '.'). ':' is deliberately NOT a boundary so Wikipedia
+        // namespace pages ("/wiki/Wikipedia:WikiProject_Foo") don't match
+        // on "wikipedia". Multiplied by factor_9 so the bonus only fires
+        // on pages whose host already matches the query — spam sites
+        // can't earn it by stuffing the query into their path.
+        double slug_match_score = 0.0;
+        {
+            const char* d = r.url.data();
+            size_t sz = r.url.size();
+            size_t path_end = dom_end;
+            while (path_end < sz && d[path_end] != '?' && d[path_end] != '#') path_end++;
+            size_t slug_start = dom_end;
+            for (size_t i = dom_end; i < path_end; i++) {
+                if (d[i] == '/') slug_start = i + 1;
+            }
+            size_t slug_len = path_end - slug_start;
+            if (slug_len > 0) {
+                const char* slug = d + slug_start;
+                double matched_slug_weight = 0.0;
+                for (size_t i = 0; i < unique_query_terms.size(); i++) {
+                    const string& term = unique_query_terms[i].phrase;
+                    size_t tsz = term.size();
+                    if (tsz == 0 || tsz > slug_len) continue;
+                    const char* td = term.data();
+                    bool prefix = true;
+                    for (size_t k = 0; k < tsz; k++) {
+                        char sc = slug[k]; if (sc >= 'A' && sc <= 'Z') sc += 32;
+                        char tc = td[k];   if (tc >= 'A' && tc <= 'Z') tc += 32;
+                        if (sc != tc) { prefix = false; break; }
+                    }
+                    if (!prefix) continue;
+                    if (tsz != slug_len) {
+                        char next = slug[tsz];
+                        if (next != '-' && next != '_' && next != '.') continue;
+                    }
+                    double rarity_weight = 1.0 / (1.0 + log(1.0 + (double)unique_query_terms[i].freq));
+                    matched_slug_weight += rarity_weight;
+                }
+                slug_match_score = (total_rarity_weight > 0.0) ? (matched_slug_weight / total_rarity_weight) : 0.0;
+            }
+        }
+        double factor_10 = slug_match_score * factor_9;
+
         double final_score = ((factor_1 * factor_1_weight) +
             (factor_2 * factor_2_weight) +
             (factor_3 * factor_3_weight) +
@@ -703,7 +781,8 @@ private:
             (factor_6 * factor_6_weight) +
             (factor_7 * factor_7_weight) +
             (factor_8 * factor_8_weight) +
-            (factor_9 * factor_9_weight))
+            (factor_9 * factor_9_weight) +
+            (factor_10 * factor_10_weight))
             / dynamic_weight_sum;
 
         if (verbose_mode) {
@@ -718,6 +797,7 @@ private:
             printf("F7 (Exact Phrase)  : %.6f * %.2f = %.6f\n", factor_7, factor_7_weight, factor_7 * factor_7_weight);
             printf("F8 (Early Position): %.6f * %.2f = %.6f\n", factor_8, factor_8_weight, factor_8 * factor_8_weight);
             printf("F9 (Domain Match)  : %.6f * %.2f = %.6f\n", factor_9, factor_9_weight, factor_9 * factor_9_weight);
+            printf("F10 (Canon Slug)   : %.6f * %.2f = %.6f\n", factor_10, factor_10_weight, factor_10 * factor_10_weight);
             printf("FINAL DYNAMIC SCORE: %.6f\n", final_score);
             printf("--------------------------------------\n");
             fflush(stdout); // Ensures it prints
@@ -759,7 +839,7 @@ private:
                 logger::debug("The URL %.*s earned a score of: %.6f", (int)v[i].url.size(), v[i].url.data(), r_score);
             }
 
-            if (v[i].url.contains(string("wikipedia")) || v[i].url.contains(string("anduril"))) {
+            if (url_host_contains_ci(v[i].url, "wikipedia") || url_host_contains_ci(v[i].url, "anduril")) {
                 logger::instr("[RANKER] tracked url scored %.6f: %.*s",
                               r_score, (int)v[i].url.size(), v[i].url.data());
             }
@@ -805,7 +885,7 @@ public:
             s_total_count.fetch_add(1, std::memory_order_relaxed);
             if (!data) {
                 s_miss_count.fetch_add(1, std::memory_order_relaxed);
-                if (url.contains(string("wikipedia")) || url.contains(string("anduril"))) {
+                if (url_host_contains_ci(url, "wikipedia") || url_host_contains_ci(url, "anduril")) {
                     logger::instr("[RANKER] urlstore MISS for tracked url: %.*s",
                                   (int)url.size(), url.data());
                 }

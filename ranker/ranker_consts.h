@@ -69,11 +69,19 @@ constexpr double factor_8_weight = 6.0;
 // from "toolforge.org/wikipedia-foo". Case-insensitive compare.
 constexpr double factor_9_weight = 12.0;
 
+// Factor 10: CANONICAL ARTICLE MATCH (domain-gated)
+// Rewards pages whose final URL slug matches a query term (exact or
+// prefix with word-boundary). Multiplied by F9 so only pages on a
+// matching domain can earn the bonus — un-gameable by arbitrary
+// sites that stuff the query into their path.
+constexpr double factor_10_weight = 10.0;
+
 // Total sum for normalization
 constexpr double dynamic_weight_sum =
     factor_1_weight + factor_2_weight + factor_3_weight +
     factor_4_weight + factor_5_weight + factor_6_weight +
-    factor_7_weight + factor_8_weight + factor_9_weight;
+    factor_7_weight + factor_8_weight + factor_9_weight +
+    factor_10_weight;
 
 
 
