@@ -730,11 +730,12 @@ private:
         // Slug = last path segment (between final '/' and first '?'/'#'/end).
         // A query term "matches" the slug if it is the entire slug
         // (case-insensitive), or a prefix followed by a URL word boundary
-        // ('-', '_', '.'). ':' is deliberately NOT a boundary so Wikipedia
-        // namespace pages ("/wiki/Wikipedia:WikiProject_Foo") don't match
-        // on "wikipedia". Multiplied by factor_9 so the bonus only fires
-        // on pages whose host already matches the query — spam sites
-        // can't earn it by stuffing the query into their path.
+        // ('-', '_', '.'). Any slug containing ':' is rejected outright
+        // (MediaWiki namespace pages: "Wikipedia:WikiProject_Foo",
+        // "Wikipedia_talk:WikiProject_Foo", "Help:", "Category:", etc.).
+        // Multiplied by factor_9 so the bonus only fires on pages whose
+        // host already matches the query — spam sites can't earn it by
+        // stuffing the query into their path.
         double slug_match_score = 0.0;
         {
             const char* d = r.url.data();
@@ -746,7 +747,11 @@ private:
                 if (d[i] == '/') slug_start = i + 1;
             }
             size_t slug_len = path_end - slug_start;
-            if (slug_len > 0) {
+            bool slug_has_colon = false;
+            for (size_t i = slug_start; i < path_end; i++) {
+                if (d[i] == ':') { slug_has_colon = true; break; }
+            }
+            if (slug_len > 0 && !slug_has_colon) {
                 const char* slug = d + slug_start;
                 double matched_slug_weight = 0.0;
                 for (size_t i = 0; i < unique_query_terms.size(); i++) {
@@ -840,8 +845,19 @@ private:
             }
 
             if (url_host_contains_ci(v[i].url, "wikipedia") || url_host_contains_ci(v[i].url, "anduril")) {
-                logger::instr("[RANKER] tracked url scored %.6f: %.*s",
-                              r_score, (int)v[i].url.size(), v[i].url.data());
+                double f2 = max(1.0 / (1.0 + exp(-k * (v[i].times_seen - n_0))), 0.0);
+                double f4 = 0.0;
+                if (v[i].total_link_frequency_anchor > 0 && v[i].unique_phrases_matched_anchor > 0) {
+                    double log_f = log(1.0 + (double)v[i].total_link_frequency_anchor);
+                    double volume_score = log_f / (log_f + 2.0);
+                    double diversity_multiplier = (double)v[i].unique_phrases_matched_anchor
+                        / ((double)v[i].unique_phrases_matched_anchor + 2.0);
+                    f4 = volume_score * diversity_multiplier;
+                }
+                logger::instr("[RANKER] tracked url scored %.6f F2=%.4f(times_seen=%d) F4=%.4f(link_freq=%d uniq_phrases=%d): %.*s",
+                              r_score, f2, v[i].times_seen,
+                              f4, v[i].total_link_frequency_anchor, v[i].unique_phrases_matched_anchor,
+                              (int)v[i].url.size(), v[i].url.data());
             }
 
             // Push directly to SmallPQ. It handles bounded limits and sorting automatically!
