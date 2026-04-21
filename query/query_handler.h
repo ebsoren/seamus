@@ -8,6 +8,7 @@
 #include "../lib/rpc_query_handler.h"
 #include "../lib/thread_pool.h"
 #include "../lib/algorithm.h"
+#include "../lib/logger.h"
 
 #include "index_server.h"
 #include "query_helpers.h"
@@ -77,6 +78,12 @@ class QueryHandler {
                 vector<LeanPage> machine_hits = futures[fi].get();
                 fprintf(stderr, "[QUERY_HANDLER] future[%zu] returned %zu hits\n", fi, machine_hits.size());
                 fflush(stderr);
+                for (size_t j = 0; j < machine_hits.size(); ++j) {
+                    const LeanPage& lp = machine_hits[j];
+                    logger::instr("[QUERY_HANDLER] machine=%zu rank=%zu score=%.6f url=%.*s",
+                                  fi, j, lp.score,
+                                  (int)lp.url.size(), lp.url.data());
+                }
                 for (LeanPage& lp : machine_hits) final_results.push_back(std::move(lp));
             }
             fprintf(stderr, "[QUERY_HANDLER] total merged results: %zu\n", final_results.size());

@@ -705,8 +705,8 @@ private:
                 logger::debug("The URL %.*s earned a score of: %.6f", (int)v[i].url.size(), v[i].url.data(), r_score);
             }
 
-            if (v[i].url.contains(string("wikipedia"))) {
-                logger::instr("[RANKER] wikipedia url scored %.6f: %.*s",
+            if (v[i].url.contains(string("wikipedia")) || v[i].url.contains(string("anduril"))) {
+                logger::instr("[RANKER] tracked url scored %.6f: %.*s",
                               r_score, (int)v[i].url.size(), v[i].url.data());
             }
 
@@ -751,8 +751,8 @@ public:
             s_total_count.fetch_add(1, std::memory_order_relaxed);
             if (!data) {
                 s_miss_count.fetch_add(1, std::memory_order_relaxed);
-                if (url.contains(string("wikipedia"))) {
-                    logger::instr("[RANKER] urlstore MISS for wikipedia url: %.*s",
+                if (url.contains(string("wikipedia")) || url.contains(string("anduril"))) {
+                    logger::instr("[RANKER] urlstore MISS for tracked url: %.*s",
                                   (int)url.size(), url.data());
                 }
             }
