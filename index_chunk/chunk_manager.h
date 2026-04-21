@@ -446,7 +446,7 @@ public:
         if (url_store_) {
             ChunkQueryInfo cqi;
             cqi.pages = move(docs);
-            Ranker ranker(url_store_);
+            Ranker ranker(url_store_, RANKED_ON_EACH, DEFAULT_DYNAMIC_WEIGHT, /*verbose=*/true);
             vector<LeanPage> ranked = ranker.processQueryResponse(cqi);
             data_channel->append_move(move(ranked));
         } else {

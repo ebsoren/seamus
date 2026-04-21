@@ -704,7 +704,12 @@ private:
             if(verbose_mode) {
                 logger::debug("The URL %.*s earned a score of: %.6f", (int)v[i].url.size(), v[i].url.data(), r_score);
             }
-            
+
+            if (v[i].url.contains(string("wikipedia"))) {
+                logger::instr("[RANKER] wikipedia url scored %.6f: %.*s",
+                              r_score, (int)v[i].url.size(), v[i].url.data());
+            }
+
             // Push directly to SmallPQ. It handles bounded limits and sorting automatically!
             pq.push(LeanPage{std::move(v[i].url), std::move(v[i].title), r_score});
         }
@@ -732,7 +737,7 @@ public:
     vector<LeanPage> processQueryResponse(ChunkQueryInfo& cqi) {
         vector<LeanPage> result;
         vector<RankedPage> candidates;
-        vector<RankerNodeInfo> ranker_info; 
+        vector<RankerNodeInfo> ranker_info;
         if(!is_query_set && cqi.pages.size() > 0) {
             is_query_set = true;
             set_new_query(cqi.pages[0]);
@@ -743,6 +748,14 @@ public:
             RankedPage page;
             page.url = string(url.data(), url.size());
             auto data = url_store->getUrl(url);
+            s_total_count.fetch_add(1, std::memory_order_relaxed);
+            if (!data) {
+                s_miss_count.fetch_add(1, std::memory_order_relaxed);
+                if (url.contains(string("wikipedia"))) {
+                    logger::instr("[RANKER] urlstore MISS for wikipedia url: %.*s",
+                                  (int)url.size(), url.data());
+                }
+            }
             if (data) {
                 page.title = string(data->title.data(), data->title.size());
                 page.seed_list_dist = data->seed_distance;

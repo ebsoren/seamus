@@ -9,7 +9,7 @@ sudo apt install iproute2 netcat-openbsd -y
 sudo apt install -y build-essential libssl-dev git npm
 sudo npm install -g @bazel/bazelisk
 
-cd ~
+cd ~    
 git clone https://github.com/hershyz/seamus.git
 cd seamus
 
