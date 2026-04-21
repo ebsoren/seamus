@@ -292,6 +292,59 @@ inline bool has_non_english_code(const char* in, size_t host_start, size_t host_
     return false;
 }
 
+// Rejects hosts where any dot-separated label contains a run of 12+
+// consecutive non-vowels (a/e/i/o/u/y are vowels; everything else —
+// consonants, digits, hyphens — counts as non-vowel). Catches
+// random/auto-generated spam hostnames like
+// "truxddjqxnwp950mblgmvwcbe8.hjxfj.com" without touching legitimate
+// short-but-vowel-light brand labels (flickr, tumblr, twitch, etc.).
+inline bool label_has_long_nonvowel_run(const char* in, size_t start, size_t end) {
+    size_t run = 0;
+    for (size_t i = start; i < end; i++) {
+        char c = in[i];
+        if (c >= 'A' && c <= 'Z') c += 32;
+        bool is_vowel = (c == 'a' || c == 'e' || c == 'i' || c == 'o' || c == 'u' || c == 'y');
+        if (is_vowel) {
+            run = 0;
+        } else {
+            run++;
+            if (run >= 12) return true;
+        }
+    }
+    return false;
+}
+
+inline bool has_gibberish_host(const char* in, size_t host_start, size_t host_end) {
+    size_t label_start = host_start;
+    for (size_t i = host_start; i <= host_end; i++) {
+        if (i == host_end || in[i] == '.') {
+            if (i > label_start && label_has_long_nonvowel_run(in, label_start, i)) {
+                return true;
+            }
+            label_start = i + 1;
+        }
+    }
+    return false;
+}
+
+// Query-time wrapper: extract host from a full URL and run the gibberish
+// check. Used to filter already-indexed junk at query time without
+// needing a re-crawl.
+inline bool url_has_gibberish_host(const string& url) {
+    const char* d = url.data();
+    size_t sz = url.size();
+    size_t i = 0;
+    while (i + 2 < sz && d[i] != ':') i++;
+    size_t dom_start = (i + 2 < sz && d[i] == ':' && d[i+1] == '/' && d[i+2] == '/') ? i + 3 : 0;
+    size_t dom_end = dom_start;
+    while (dom_end < sz) {
+        char c = d[dom_end];
+        if (c == '/' || c == '?' || c == '#' || c == ':') break;
+        dom_end++;
+    }
+    return has_gibberish_host(d, dom_start, dom_end);
+}
+
 // Avoid dead end pages
 static constexpr const char* JUNK_PATH_SEGMENTS[] = {
     "/login", "/signin", "/logout", "/signout",
@@ -416,6 +469,9 @@ inline string normalize_url(const string& url) {
 
     // Reject non-English locale in subdomain or path prefix
     if (has_non_english_code(in, host_start, host_content_end, path_start, query_start)) return string("", 0);
+
+    // Reject hosts with gibberish labels (12+ consecutive non-vowels)
+    if (has_gibberish_host(in, host_start, host_content_end)) return string("", 0);
 
     // Reject junk path patterns
     if (has_junk_path(in + path_start, query_start - path_start)) return string("", 0);

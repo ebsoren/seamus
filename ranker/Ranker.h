@@ -19,6 +19,7 @@
 #include "../query/expressions.h"
 #include "../lib/rpc_query_handler.h"
 #include "../url_store/url_store.h"
+#include "../lib/url_filter.h"
 #include "ranker_consts.h"
 #include <optional>
 
@@ -612,13 +613,11 @@ private:
         // This factor scores based on number of times the link was seen during crawling
         double factor_2 = max(1.0 / (1.0 + exp(-k * (r.times_seen - n_0))), 0.0);
 
-        // PRE-CALCULATE RARITY WEIGHTS FOR FACTORS 3 & 5
+        // PRE-CALCULATE RARITY WEIGHTS FOR FACTOR 3 (title)
         double total_rarity_weight = 0.0;
         double matched_title_weight = 0.0;
-        double matched_url_weight = 0.0;
 
         size_t safe_n = min(unique_query_terms.size(), r.title_words_found.size());
-        safe_n = min(safe_n, r.url_words_found.size());
 
         for (size_t i = 0; i < safe_n; ++i) {
             // Rarer words (low freq) yield high weights. Common words (high freq) get squashed.
@@ -628,14 +627,16 @@ private:
             if (r.title_words_found[i]) {
                 matched_title_weight += rarity_weight;
             }
-            if (r.url_words_found[i]) {
-                matched_url_weight += rarity_weight;
-            }
+        }
+        // Include rarity for any remaining terms beyond the precomputed title_words_found
+        // so F5's denominator stays consistent across all terms.
+        for (size_t i = safe_n; i < unique_query_terms.size(); ++i) {
+            double rarity_weight = 1.0 / (1.0 + log(1.0 + (double)unique_query_terms[i].freq));
+            total_rarity_weight += rarity_weight;
         }
 
-        // Base scores are guaranteed to be between 0.0 and 1.0
+        // Base score guaranteed 0.0 - 1.0
         double title_base_score = (total_rarity_weight > 0.0) ? (matched_title_weight / total_rarity_weight) : 0.0;
-        double url_base_score   = (total_rarity_weight > 0.0) ? (matched_url_weight / total_rarity_weight) : 0.0;
 
         // FACTOR 3: Title Rarity Match + Length Penalty (Range: 0.0 - 1.0)
         double factor_3 = title_base_score * exp(-Gamma_title * r.title.size());
@@ -656,7 +657,53 @@ private:
             factor_4 = volume_score * diversity_multiplier;
         };
 
-        // FACTOR 5: URL Rarity Match + Length Penalty (Range: 0.0 - 1.0)
+        // FACTOR 5: URL Rarity Match + Length Penalty (PATH-ONLY, Range: 0.0 - 1.0)
+        // Scans only the portion of the URL after the host (path + query + fragment).
+        // F9 owns the host-match signal; keeping F5 on the host would double-count
+        // "wikipedia in host" for every wikipedia.org page, including obscure
+        // namespace/talk pages that don't actually have the query in their path.
+        double matched_path_weight = 0.0;
+        {
+            const char* d = r.url.data();
+            size_t sz = r.url.size();
+            size_t f5_dom_start = 0;
+            size_t i = 0;
+            while (i + 2 < sz && d[i] != ':') i++;
+            if (i + 2 < sz && d[i] == ':' && d[i+1] == '/' && d[i+2] == '/') {
+                f5_dom_start = i + 3;
+            }
+            size_t f5_dom_end = f5_dom_start;
+            while (f5_dom_end < sz) {
+                char c = d[f5_dom_end];
+                if (c == '/' || c == '?' || c == '#' || c == ':') break;
+                f5_dom_end++;
+            }
+            if (f5_dom_end < sz) {
+                const char* path = d + f5_dom_end;
+                size_t path_len = sz - f5_dom_end;
+                for (size_t t = 0; t < unique_query_terms.size(); t++) {
+                    const string& term = unique_query_terms[t].phrase;
+                    size_t tsz = term.size();
+                    if (tsz == 0 || tsz > path_len) continue;
+                    const char* nd = term.data();
+                    bool found = false;
+                    for (size_t j = 0; j + tsz <= path_len && !found; j++) {
+                        bool ok = true;
+                        for (size_t k = 0; k < tsz; k++) {
+                            char pc = path[j+k]; if (pc >= 'A' && pc <= 'Z') pc += 32;
+                            char tc = nd[k];     if (tc >= 'A' && tc <= 'Z') tc += 32;
+                            if (pc != tc) { ok = false; break; }
+                        }
+                        if (ok) found = true;
+                    }
+                    if (found) {
+                        double rarity_weight = 1.0 / (1.0 + log(1.0 + (double)unique_query_terms[t].freq));
+                        matched_path_weight += rarity_weight;
+                    }
+                }
+            }
+        }
+        double url_base_score = (total_rarity_weight > 0.0) ? (matched_path_weight / total_rarity_weight) : 0.0;
         double factor_5 = url_base_score * exp(-Gamma_url * r.url.size());
 
         // This factor scores based on the rarity of each word combined with its frequency
@@ -894,6 +941,7 @@ public:
         }
         for (DocInfo& di : cqi.pages) {
             const string& url = di.url;
+            if (url_has_gibberish_host(url)) continue;
             const vector<NodeInfo>& phrases = di.nodeInfo;
             RankedPage page;
             page.url = string(url.data(), url.size());
