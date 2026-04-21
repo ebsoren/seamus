@@ -43,7 +43,7 @@ EOF
 echo "Starting service..."
 sudo systemctl daemon-reload
 sudo systemctl disable htmlserver
-sudo systemctl start htmlserver
+sudo systemctl restart htmlserver
 
 echo "Checking status..."
 sudo systemctl status htmlserver
