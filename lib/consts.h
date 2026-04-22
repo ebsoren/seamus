@@ -239,6 +239,13 @@ constexpr uint16_t NUM_RESULTS_RETURN = 10;
 // disable/relax this.
 constexpr uint32_t CHUNK_MANAGER_DEADLINE_MS = 250;
 
+// Hard cap on matches collected per chunk before we bail out of the
+// scan loop. The deadline only bounds scan time; with very common
+// terms (e.g. "the") a single chunk can accumulate tens of thousands
+// of matches within 250ms and then spend seconds ranking all of them.
+// Capping scan-output bounds the ranking cost too.
+constexpr size_t CHUNK_MANAGER_MAX_MATCHES = 2000;
+
 typedef uint32_t Unicode;
 typedef uint8_t  Utf8;
 typedef uint16_t Utf16;

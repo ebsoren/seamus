@@ -420,6 +420,10 @@ public:
                              deadline_ms, docs.size());
                 break;
             }
+            if (docs.size() >= CHUNK_MANAGER_MAX_MATCHES) {
+                logger::warn("chunk_manager::query hit max-matches cap (%zu)", docs.size());
+                break;
+            }
 
             vector<NodeInfo> word_infos;
             word_infos.reserve(unique_words.size());
