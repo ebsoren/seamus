@@ -9,25 +9,13 @@
 
 
 // Logging (0=DEBUG, 1=INFO, 2=WARN, 3=ERROR, 4=INSTR, 5=NONE)
-constexpr uint8_t LOG_LEVEL = 5;
+constexpr uint8_t LOG_LEVEL = 3;
 constexpr const char* USER_AGENT = "Seamus the Search Engine (web crawler for university course)";
 
 // Global
-constexpr size_t NUM_MACHINES = 18;
-// MACHINE_IDS PER PERSON
-// Hershey - 0,1,2
-// David - 3,4,5
-// Charlie - 6,7,8
-// Esben - 9,10,11
-// Aiden - 12,13,14
-// Erik - 15,16,17
+constexpr size_t NUM_MACHINES = 1;
 constexpr const char* MACHINES[NUM_MACHINES] = {
-    "136.119.122.181", "34.41.200.76", "34.122.197.142",
-    "34.16.67.187", "136.112.229.222", "136.114.229.124",
-    "35.238.21.122", "34.9.161.79", "34.136.74.60",
-    "34.55.208.73", "34.44.13.147", "34.30.238.129",
-    "34.55.179.213", "34.44.148.113", "136.111.182.222",
-    "34.70.54.47", "136.119.91.226", "35.223.96.82"
+    "127.0.0.1"
 };
 inline const char* get_machine_addr(size_t machine_id) {
     assert(machine_id < NUM_MACHINES);
@@ -35,16 +23,17 @@ inline const char* get_machine_addr(size_t machine_id) {
 }
 
 inline size_t my_machine_id() {
-    const char* env = std::getenv("MACHINE_ID");
-    assert(env != nullptr && "MACHINE_ID environment variable is not set");
-    return std::strtoul(env, nullptr, 10);
+    // const char* env = std::getenv("MACHINE_ID");
+    // assert(env != nullptr && "MACHINE_ID environment variable is not set");
+    // return std::strtoul(env, nullptr, 10);
+    return 0;
 }
 
 
 // Crawler
 constexpr uint16_t CRAWLER_LISTENER_PORT = 8000;
-constexpr size_t CRAWLER_LISTENER_THREADS = 16;
-constexpr size_t CRAWLER_THREADPOOL_SIZE = 1<<11;
+constexpr size_t CRAWLER_LISTENER_THREADS = 2;
+constexpr size_t CRAWLER_THREADPOOL_SIZE = 256;
 constexpr size_t CRAWLER_CAROUSEL_SIZE = CRAWLER_THREADPOOL_SIZE*16;
 static constexpr size_t CRAWLER_CAROUSEL_QUEUE_SIZE = 32;
 constexpr size_t CRAWLER_MAX_QUEUE_SIZE = 32;
@@ -58,7 +47,7 @@ constexpr size_t CRAWLER_WORKER_SLEEP_MS = 10;              // Time (millisecond
 constexpr size_t CRAWLER_INSTRUMENTATION_INTERVAL_SEC = 20; // Time (seconds) between instrumentation drain cycles
 constexpr size_t CRAWLER_INSTRUMENTATION_BATCH_SIZE = 64;    // Number of successful crawls before submitting a batched metric update
 
-constexpr size_t CRAWLER_OUTBOUND_BATCH_SIZE = 4096;         // Number of crawl targets to buffer per machine before sending
+constexpr size_t CRAWLER_OUTBOUND_BATCH_SIZE = 4096;       // Number of crawl targets to buffer per machine before sending
 constexpr size_t CRAWLER_STARTUP_OUTBOUND_BATCH_SIZE = 16; // Slow start
 constexpr size_t PRIORITY_BUCKETS = 8;
 constexpr size_t NUM_PARSERS = CRAWLER_THREADPOOL_SIZE;
@@ -66,7 +55,7 @@ static_assert(NUM_PARSERS == CRAWLER_THREADPOOL_SIZE);      // TODO(hershey): ma
 
 
 // Seed URLs (loaded into priority bucket 0 on startup)
-constexpr size_t SEED_LIST_SIZE = 108; 
+constexpr size_t SEED_LIST_SIZE = 102; 
 constexpr const char* SEED_LIST[SEED_LIST_SIZE] = {
     "https://www.ed.gov/",
     "https://www.energy.gov/national-laboratories",
@@ -83,7 +72,7 @@ constexpr const char* SEED_LIST[SEED_LIST_SIZE] = {
     "https://www.duke.edu/",
     "https://www.harvard.edu/",
     "https://www.jhu.edu/",
-    "https://umich.edu/",
+    "https://www.umich.edu/",
     "https://www.mit.edu/",
     "https://www.northwestern.edu/",
     "https://www.ox.ac.uk/",
@@ -138,7 +127,6 @@ constexpr const char* SEED_LIST[SEED_LIST_SIZE] = {
     "https://www.economist.com",
     "https://www.nbcnews.com",
     "https://www.npr.org",
-    "https://www.nytimes.com",
     "https://www.newyorker.com",
     "https://www.pbs.org/newshour",
     "https://www.reuters.com",
@@ -150,9 +138,7 @@ constexpr const char* SEED_LIST[SEED_LIST_SIZE] = {
     "https://www.factcheck.org",
     "https://www.politifact.com",
     "https://www.snopes.com",
-    "https://thehill.com",
     "https://www.foreignaffairs.com",
-    "https://www.politico.com",
     "https://www.wired.com",
     "https://www.theverge.com",
     "https://www.wired.com",
@@ -164,23 +150,21 @@ constexpr const char* SEED_LIST[SEED_LIST_SIZE] = {
     "https://www.wikimedia.org",
     "https://www.fandom.com",
     "https://www.w3schools.com",
-    "https://wikisource.org",
-    "https://lithub.com/",
+    "https://www.wikisource.org",
+    "https://www.lithub.com/",
     "https://www.poetryfoundation.org/",
     "https://www.gutenberg.org/",
     "https://www.rollingstone.com/",
     "https://www.ssrn.com/",
     "https://www.researchgate.net/",
-    "https://www.janestreet.com",
     "https://www.mlp.com/",
-    "https://www.imc.com/us",
-    "https://www.anduril.com/",
     "https://www.databricks.com/",
 };
 
 
 // Parser
-static constexpr size_t MAX_PARSED_PAGES = (3*1e8)/18; // 300M/18
+static constexpr size_t TOTAL_PAGES = 1000000;
+static constexpr size_t MAX_PARSED_PAGES = TOTAL_PAGES/NUM_MACHINES;
 static constexpr const char* PARSER_OUTPUT_DIR = "/var/seamus/parser_output";
 static constexpr int MAX_CONSECUTIVE_NON_ALNUM = 100;
 static constexpr int MAX_CONSECUTIVE_NON_ENGLISH = 20;
@@ -194,7 +178,7 @@ static constexpr size_t MAX_BASE_LEN = 256;
 static constexpr size_t MAX_HTML_SIZE = 100 * 1024; // 100 KB
 
 // URL Store
-static constexpr uint32_t MAX_STORE_URLS = (9*1e8)/18; // 900M/18
+static constexpr uint32_t MAX_STORE_URLS = static_cast<uint32_t>(TOTAL_PAGES * 10); // cap ~10x parsed-page target
 static constexpr const char* URL_STORE_OUTPUT_DIR = "/var/seamus/urlstore_output";
 static const string URL_STORE_OUTPUT_DIR_STR = string(URL_STORE_OUTPUT_DIR);
 constexpr bool URL_FROM_SCRATCH = false; // whether to read from file or start from scratch on url_store bottup
@@ -221,11 +205,11 @@ constexpr size_t DOCS_PER_INDEX_CHUNK = 500000;
 constexpr size_t CHUNK_MEM_BUDGET = 1 << 30; 
 constexpr uint32_t INDEX_SKIP_SIZE = 500;
 static constexpr const char* INDEX_OUTPUT_DIR = "/var/seamus/index_output";
-constexpr size_t NUM_INDEXER_THREADS = 16; // Should be the number of cores     // todo(Aiden): change depending on number of cores we end up renting per machine
+constexpr size_t NUM_INDEXER_THREADS = 8; // Should be the number of cores
 constexpr size_t POSTING_LIST_BUFFER_SIZE = 1e9;
 constexpr size_t INDEX_DICTIONARY_TOC_SIZE = (1 + 8 + 2) * 36; // char, uint64_t, 2 delims — 26 letters + 10 digits
 // Index Server to handle outbound word requests from other machines' query handlers
-constexpr size_t INDEX_SERVER_NUM_THREADS = 16; // Should be then number of cores     // todo(Charlie): change depending on number of cores we end up renting per machine
+constexpr size_t INDEX_SERVER_NUM_THREADS = 8; // Should be the number of cores
 constexpr uint32_t INDEX_SERVER_PORT = 9100;
 
 // Query Handler
