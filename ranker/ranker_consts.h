@@ -34,7 +34,7 @@ constexpr double factor_2_weight = 8.0;
 // Factor 3: TITLE MATCH (RARITY-WEIGHTED)
 // Measures how many query terms (especially rare ones) appear in the title.
 // Penalized for long titles.
-constexpr double factor_3_weight = 10.0;
+constexpr double factor_3_weight = 15.0;
 
 // Factor 4: ANCHOR TEXT SIGNAL
 // Combines:
@@ -76,12 +76,20 @@ constexpr double factor_9_weight = 12.0;
 // sites that stuff the query into their path.
 constexpr double factor_10_weight = 10.0;
 
+// Factor 11: HOMEPAGE BONUS (domain-gated)
+// Rewards the root page of a matching domain. Fires when the URL's
+// path is empty or "/" AND F9 is non-zero. Multiplied by F9 so
+// random sites can't game it by having an empty path — the host
+// must already contain a query term. Strong signal for navigational
+// queries (e.g. "mosharaf chowdhury" → mosharaf.com/).
+constexpr double factor_11_weight = 10.0;
+
 // Total sum for normalization
 constexpr double dynamic_weight_sum =
     factor_1_weight + factor_2_weight + factor_3_weight +
     factor_4_weight + factor_5_weight + factor_6_weight +
     factor_7_weight + factor_8_weight + factor_9_weight +
-    factor_10_weight;
+    factor_10_weight + factor_11_weight;
 
 
 

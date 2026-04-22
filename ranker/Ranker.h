@@ -24,6 +24,28 @@
 #include <optional>
 
 
+// Case-insensitive substring check: does `haystack` contain `needle`?
+// Used for title matching because titles are stored case-preserving
+// (parser never lowercases them) but query terms arrive lowercased.
+inline bool string_contains_ci(const string& haystack, const string& needle) {
+    size_t h = haystack.size();
+    size_t n = needle.size();
+    if (n == 0) return true;
+    if (n > h) return false;
+    const char* hd = haystack.data();
+    const char* nd = needle.data();
+    for (size_t j = 0; j + n <= h; j++) {
+        bool ok = true;
+        for (size_t k = 0; k < n; k++) {
+            char hc = hd[j+k]; if (hc >= 'A' && hc <= 'Z') hc += 32;
+            char nc = nd[k];   if (nc >= 'A' && nc <= 'Z') nc += 32;
+            if (hc != nc) { ok = false; break; }
+        }
+        if (ok) return true;
+    }
+    return false;
+}
+
 // Case-insensitive substring check restricted to a URL's host portion
 // (between "://" and the first '/', '?', '#', or ':'). Used to gate the
 // tracked-URL log lines so they don't fire on "wikipedia" appearing in
@@ -825,6 +847,25 @@ private:
         }
         double factor_10 = slug_match_score * factor_9;
 
+        // FACTOR 11: Homepage Bonus (domain-gated).
+        // Fires when the URL's path is empty or "/" (before any query/fragment)
+        // AND the host matches a query term. Strong navigational signal —
+        // identifies the root page of a domain whose name matches the query.
+        // Multiplied by factor_9 so arbitrary sites with empty paths can't
+        // earn the bonus; the host must already match.
+        bool is_homepage = false;
+        {
+            const char* d = r.url.data();
+            size_t sz = r.url.size();
+            size_t p = dom_end;
+            while (p < sz && d[p] != '?' && d[p] != '#') p++;
+            size_t path_len = p - dom_end;
+            if (path_len == 0 || (path_len == 1 && d[dom_end] == '/')) {
+                is_homepage = true;
+            }
+        }
+        double factor_11 = (is_homepage ? 1.0 : 0.0) * factor_9;
+
         double final_score = ((factor_1 * factor_1_weight) +
             (factor_2 * factor_2_weight) +
             (factor_3 * factor_3_weight) +
@@ -834,7 +875,8 @@ private:
             (factor_7 * factor_7_weight) +
             (factor_8 * factor_8_weight) +
             (factor_9 * factor_9_weight) +
-            (factor_10 * factor_10_weight))
+            (factor_10 * factor_10_weight) +
+            (factor_11 * factor_11_weight))
             / dynamic_weight_sum;
 
         if (verbose_mode) {
@@ -850,6 +892,7 @@ private:
             printf("F8 (Early Position): %.6f * %.2f = %.6f\n", factor_8, factor_8_weight, factor_8 * factor_8_weight);
             printf("F9 (Domain Match)  : %.6f * %.2f = %.6f\n", factor_9, factor_9_weight, factor_9 * factor_9_weight);
             printf("F10 (Canon Slug)   : %.6f * %.2f = %.6f\n", factor_10, factor_10_weight, factor_10 * factor_10_weight);
+            printf("F11 (Homepage)     : %.6f * %.2f = %.6f\n", factor_11, factor_11_weight, factor_11 * factor_11_weight);
             printf("FINAL DYNAMIC SCORE: %.6f\n", final_score);
             printf("--------------------------------------\n");
             fflush(stdout); // Ensures it prints
@@ -980,10 +1023,7 @@ public:
                 for (const NodeInfo& ni : phrases) {
                     const string& phrase = ni.phrase;
                     // printf("%s", phrase.data());
-                    page.title_words_found.push_back(data->title.contains(phrase));
-                    page.url_words_found.push_back(url.contains(phrase));
-                    // page.num_unique_words_found_title += data->title.contains(phrase);
-                    // page.num_unique_words_found_url += url.contains(phrase);
+                    page.title_words_found.push_back(string_contains_ci(data->title, phrase));
                 }
                 
                 page.doc_len = data->eod;
@@ -1050,10 +1090,7 @@ public:
             for (const NodeInfo& ni : phrases) {
                     const string& phrase = ni.phrase;
                     // printf("%s", phrase.data());
-                    page.title_words_found.push_back(data->title.contains(phrase));
-                    page.url_words_found.push_back(url.contains(phrase));
-                    // page.num_unique_words_found_title += data->title.contains(phrase);
-                    // page.num_unique_words_found_url += url.contains(phrase);
+                    page.title_words_found.push_back(string_contains_ci(data->title, phrase));
             }
             
             page.doc_len = data->eod;
