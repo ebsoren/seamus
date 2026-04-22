@@ -682,9 +682,6 @@ private:
 
         // FACTOR 5: URL Rarity Match + Length Penalty (PATH-ONLY, Range: 0.0 - 1.0)
         // Scans only the portion of the URL after the host (path + query + fragment).
-        // F9 owns the host-match signal; keeping F5 on the host would double-count
-        // "wikipedia in host" for every wikipedia.org page, including obscure
-        // namespace/talk pages that don't actually have the query in their path.
         double matched_path_weight = 0.0;
         {
             const char* d = r.url.data();
@@ -744,11 +741,9 @@ private:
             unique_query_terms
         );
 
-        // FACTOR 9: Domain Match (rarity-weighted, case-insensitive).
+        // FACTOR 9: Domain Match
         // Extract the host (between "://" and the first '/', '?', '#', or ':'),
         // then count which query terms appear as substrings within it.
-        // Gives a strong, dedicated signal that rewards "wikipedia" → wikipedia.org
-        // over "wikipedia" appearing anywhere in path/body.
         size_t dom_start = 0;
         {
             const char* d = r.url.data();
@@ -796,16 +791,10 @@ private:
         }
         double factor_9 = (total_rarity_weight > 0.0) ? (matched_domain_weight / total_rarity_weight) : 0.0;
 
-        // FACTOR 10: Canonical Article Match (domain-gated).
+        // FACTOR 10: Canonical Article Match
         // Slug = last path segment (between final '/' and first '?'/'#'/end).
-        // A query term "matches" the slug if it is the entire slug
-        // (case-insensitive), or a prefix followed by a URL word boundary
-        // ('-', '_', '.'). Any slug containing ':' is rejected outright
-        // (MediaWiki namespace pages: "Wikipedia:WikiProject_Foo",
-        // "Wikipedia_talk:WikiProject_Foo", "Help:", "Category:", etc.).
         // Multiplied by factor_9 so the bonus only fires on pages whose
-        // host already matches the query — spam sites can't earn it by
-        // stuffing the query into their path.
+        // host already matches the query
         double slug_match_score = 0.0;
         {
             const char* d = r.url.data();
@@ -850,10 +839,8 @@ private:
 
         // FACTOR 11: Homepage Bonus (domain-gated).
         // Fires when the URL's path is empty or "/" (before any query/fragment)
-        // AND the host matches a query term. Strong navigational signal —
-        // identifies the root page of a domain whose name matches the query.
-        // Multiplied by factor_9 so arbitrary sites with empty paths can't
-        // earn the bonus; the host must already match.
+        // AND the host matches a query term. Multiplied by factor_9 so arbitrary 
+        // sites with empty paths can't earn the bonus
         bool is_homepage = false;
         {
             const char* d = r.url.data();
@@ -867,12 +854,9 @@ private:
         }
         double factor_11 = (is_homepage ? 1.0 : 0.0) * factor_9;
 
-        // FACTOR 12: Exact Label Match (rarity-weighted, case-insensitive).
-        // Walk the host in dot-delimited labels; a term "matches" when the
-        // label length equals the term length AND all characters match
-        // case-insensitively. Captures brand ownership — chess.com's
-        // "chess" label matches "chess"; chesspower.co.nz's "chesspower"
-        // label does not. Rarity-weighted so rare terms dominate.
+        // FACTOR 12: Exact Label Match
+        // Mainly used for brand ownership - want "chess.com" for "chess",
+        // "databricks.com" for "databricks", etc.
         double matched_label_weight = 0.0;
         if (dom_end > dom_start) {
             const char* host = r.url.data() + dom_start;
