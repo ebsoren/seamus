@@ -32,7 +32,13 @@ class QueryHandler {
                     static_cast<int>(input.size()), input.data(), NUM_MACHINES, my_machine_id());
             fflush(stderr);
 
-            ParseResult result = parse_query_tree(input.str_view(0, input.size()));
+            try {
+                (void)parse_query_tree(input.str_view(0, input.size()));
+            } catch (const ParseError &e) {
+                fprintf(stderr, "[QUERY_HANDLER] parse error, aborting query: %s\n", e.message);
+                fflush(stderr);
+                return vector<LeanPage>();
+            }
             vector<std::future<vector<LeanPage>>> futures;
 
             // - batch the WHOLE string query to each machine instead of 18 rpcs per word
