@@ -10,7 +10,7 @@ sudo apt install -y build-essential libssl-dev git npm
 sudo npm install -g @bazel/bazelisk
 
 cd ~    
-git clone https://github.com/hershyz/seamus.git
+git clone https://github.com/ebsoren/seamus.git
 cd seamus
 
 bazelisk build //crawler:crawler
