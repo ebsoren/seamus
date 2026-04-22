@@ -33,7 +33,7 @@ inline size_t my_machine_id() {
 // Crawler
 constexpr uint16_t CRAWLER_LISTENER_PORT = 8000;
 constexpr size_t CRAWLER_LISTENER_THREADS = 2;
-constexpr size_t CRAWLER_THREADPOOL_SIZE = 256;
+constexpr size_t CRAWLER_THREADPOOL_SIZE = 128;
 constexpr size_t CRAWLER_CAROUSEL_SIZE = CRAWLER_THREADPOOL_SIZE*16;
 static constexpr size_t CRAWLER_CAROUSEL_QUEUE_SIZE = 32;
 constexpr size_t CRAWLER_MAX_QUEUE_SIZE = 32;
@@ -182,7 +182,7 @@ static constexpr uint32_t MAX_STORE_URLS = static_cast<uint32_t>(TOTAL_PAGES * 1
 static constexpr const char* URL_STORE_OUTPUT_DIR = "/var/seamus/urlstore_output";
 static const string URL_STORE_OUTPUT_DIR_STR = string(URL_STORE_OUTPUT_DIR);
 constexpr bool URL_FROM_SCRATCH = false; // whether to read from file or start from scratch on url_store bottup
-constexpr uint32_t URL_STORE_NUM_THREADS = 16;
+constexpr uint32_t URL_STORE_NUM_THREADS = 4;
                                                             // We cannot have multiple client listeners running concurrently calling read and update methods without locks
                                                             // At the same time, we do want multiple listeners, so we should add some locking mechanism better than a global one
 constexpr uint32_t URL_STORE_PORT = 9000;
@@ -197,24 +197,24 @@ constexpr size_t ROBOTS_CACHE_SIZE = 1024;
 
 // HTML Server
 constexpr uint16_t HTMLSERVER_PORT = 8080;
-constexpr size_t HTMLSERVER_THREADS = 8;
+constexpr size_t HTMLSERVER_THREADS = 4;
 
 
 // Index
 constexpr size_t DOCS_PER_INDEX_CHUNK = 500000;
-constexpr size_t CHUNK_MEM_BUDGET = 1 << 30; 
+constexpr size_t CHUNK_MEM_BUDGET = 1 << 29; // 512 MB
 constexpr uint32_t INDEX_SKIP_SIZE = 500;
 static constexpr const char* INDEX_OUTPUT_DIR = "/var/seamus/index_output";
-constexpr size_t NUM_INDEXER_THREADS = 8; // Should be the number of cores
-constexpr size_t POSTING_LIST_BUFFER_SIZE = 1e9;
+constexpr size_t NUM_INDEXER_THREADS = 4; // Should be the number of cores
+constexpr size_t POSTING_LIST_BUFFER_SIZE = 5e8; // 500 MB
 constexpr size_t INDEX_DICTIONARY_TOC_SIZE = (1 + 8 + 2) * 36; // char, uint64_t, 2 delims — 26 letters + 10 digits
 // Index Server to handle outbound word requests from other machines' query handlers
-constexpr size_t INDEX_SERVER_NUM_THREADS = 8; // Should be the number of cores
+constexpr size_t INDEX_SERVER_NUM_THREADS = 4; // Should be the number of cores
 constexpr uint32_t INDEX_SERVER_PORT = 9100;
 
 // Query Handler
 constexpr uint32_t QUERY_HANDLER_PORT = 9200;
-constexpr size_t QUERY_NUM_LISTENING_THREADS = 16;
+constexpr size_t QUERY_NUM_LISTENING_THREADS = 4;
 constexpr uint16_t NUM_RESULTS_RETURN = 10;
 
 // Wall-clock budget for a single chunk_manager::get_docIDs call. If the
