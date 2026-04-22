@@ -3,7 +3,7 @@ set -e
 
 if [ -z "$1" ]; then
     echo "Usage: curl ... | bash -s -- <machine_id>"
-    echo "  e.g. curl -sSL https://raw.githubusercontent.com/hershyz/seamus/main/scripts/fresh_crawl.sh | bash -s -- 9"
+    echo "  e.g. curl -sSL https://raw.githubusercontent.com/ebsoren/seamus/main/scripts/fresh_crawl.sh | bash -s -- 0"
     exit 1
 fi
 
@@ -32,15 +32,11 @@ echo "Clearing all data directories..."
 sudo rm -rf /var/seamus/parser_output/*
 sudo rm -rf /var/seamus/index_output/*
 sudo rm -rf /var/seamus/urlstore_output/*
-sudo rm -rf /var/index/parser_output/* 2>/dev/null || true
-sudo rm -rf /var/index/urlstore_output/* 2>/dev/null || true
 echo "Data directories cleared."
 
 # ---- Expand root partition ----
 echo "Expanding root partition..."
 sudo apt install -y cloud-guest-utils 2>/dev/null
-sudo growpart /dev/nvme0n1 1 || true
-sudo resize2fs /dev/nvme0n1p1 || true
 
 # ---- Create directories ----
 sudo mkdir -p /var/seamus/parser_output /var/seamus/index_output /var/seamus/urlstore_output
@@ -72,7 +68,7 @@ if [ -d seamus ]; then
     git reset --hard origin/main
 else
     echo "Cloning repo..."
-    git clone https://github.com/hershyz/seamus.git
+    git clone https://github.com/ebsoren/seamus.git
     cd seamus
 fi
 

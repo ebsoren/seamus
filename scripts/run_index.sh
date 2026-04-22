@@ -1,8 +1,8 @@
 #!/bin/bash
 set -e
 
-if [ ! -d /var/index/parser_output ]; then
-    echo "Error: /var/index/parser_output not found. Run scripts/copy_data.sh first." >&2
+if [ ! -d /var/seamus/parser_output ] || [ -z "$(ls -A /var/seamus/parser_output 2>/dev/null)" ]; then
+    echo "Error: /var/seamus/parser_output is empty. Run the crawler first." >&2
     exit 1
 fi
 

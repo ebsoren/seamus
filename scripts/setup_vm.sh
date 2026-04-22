@@ -14,11 +14,6 @@ echo "Setting up VM for user=$USER, machine_id=$MACHINE_ID"
 
 echo "$MACHINE_ID" > .machine_id
 
-echo "Expanding root partition to use full disk..."
-sudo apt install -y cloud-guest-utils
-sudo growpart /dev/nvme0n1 1 || true
-sudo resize2fs /dev/nvme0n1p1 || true
-
 sudo mkdir -p /var/seamus/parser_output /var/seamus/index_output /var/seamus/urlstore_output
 sudo chown -R $(whoami):$(whoami) /var/seamus
 sudo chmod -R 755 /var/seamus
