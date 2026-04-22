@@ -339,23 +339,24 @@ inline double bm25_score(const vector<vector<size_t>>& pos, size_t dl, const vec
     return score; 
 }
 
-inline double phrase_bonus(const vector<vector<size_t>>& pos) { 
+inline double phrase_bonus(const vector<vector<size_t>>& pos) {
     if (pos.size() < 2) {
         return 0.0;
     }
     int hits = 0;
-    
-    for (size_t i = 0; i+1 < pos.size(); i++) { 
-        for (auto a : pos[i]) { 
-            for (auto b : pos[i+1]) { 
-                if (b == a+1) { 
-                    hits++; 
-                    break; 
-                } 
-            } 
-        } 
-    } 
-    return (double)hits / (pos.size()-1); 
+
+    for (size_t i = 0; i+1 < pos.size(); i++) {
+        for (auto a : pos[i]) {
+            for (auto b : pos[i+1]) {
+                if (b == a+1) {
+                    hits++;
+                    break;
+                }
+            }
+        }
+    }
+    double avg_hits = (double)hits / (pos.size()-1);
+    return 1.0 - exp(-LAMBDA_PHRASE * avg_hits);
 }
 
 
@@ -866,6 +867,43 @@ private:
         }
         double factor_11 = (is_homepage ? 1.0 : 0.0) * factor_9;
 
+        // FACTOR 12: Exact Label Match (rarity-weighted, case-insensitive).
+        // Walk the host in dot-delimited labels; a term "matches" when the
+        // label length equals the term length AND all characters match
+        // case-insensitively. Captures brand ownership — chess.com's
+        // "chess" label matches "chess"; chesspower.co.nz's "chesspower"
+        // label does not. Rarity-weighted so rare terms dominate.
+        double matched_label_weight = 0.0;
+        if (dom_end > dom_start) {
+            const char* host = r.url.data() + dom_start;
+            size_t host_len = dom_end - dom_start;
+            size_t label_start = 0;
+            for (size_t j = 0; j <= host_len; j++) {
+                if (j == host_len || host[j] == '.') {
+                    size_t label_len = j - label_start;
+                    if (label_len > 0) {
+                        for (size_t i = 0; i < unique_query_terms.size(); i++) {
+                            const string& term = unique_query_terms[i].phrase;
+                            if (term.size() != label_len) continue;
+                            double rarity_weight = 1.0 / (1.0 + log(1.0 + (double)unique_query_terms[i].freq));
+                            bool ok = true;
+                            const char* nd = term.data();
+                            for (size_t k = 0; k < label_len; k++) {
+                                char hc = host[label_start + k];
+                                if (hc >= 'A' && hc <= 'Z') hc += 32;
+                                char tc = nd[k];
+                                if (tc >= 'A' && tc <= 'Z') tc += 32;
+                                if (hc != tc) { ok = false; break; }
+                            }
+                            if (ok) { matched_label_weight += rarity_weight; break; }
+                        }
+                    }
+                    label_start = j + 1;
+                }
+            }
+        }
+        double factor_12 = (total_rarity_weight > 0.0) ? (matched_label_weight / total_rarity_weight) : 0.0;
+
         double final_score = ((factor_1 * factor_1_weight) +
             (factor_2 * factor_2_weight) +
             (factor_3 * factor_3_weight) +
@@ -876,7 +914,8 @@ private:
             (factor_8 * factor_8_weight) +
             (factor_9 * factor_9_weight) +
             (factor_10 * factor_10_weight) +
-            (factor_11 * factor_11_weight))
+            (factor_11 * factor_11_weight) +
+            (factor_12 * factor_12_weight))
             / dynamic_weight_sum;
 
         if (verbose_mode) {
@@ -893,6 +932,7 @@ private:
             printf("F9 (Domain Match)  : %.6f * %.2f = %.6f\n", factor_9, factor_9_weight, factor_9 * factor_9_weight);
             printf("F10 (Canon Slug)   : %.6f * %.2f = %.6f\n", factor_10, factor_10_weight, factor_10 * factor_10_weight);
             printf("F11 (Homepage)     : %.6f * %.2f = %.6f\n", factor_11, factor_11_weight, factor_11 * factor_11_weight);
+            printf("F12 (Exact Label)  : %.6f * %.2f = %.6f\n", factor_12, factor_12_weight, factor_12 * factor_12_weight);
             printf("FINAL DYNAMIC SCORE: %.6f\n", final_score);
             printf("--------------------------------------\n");
             fflush(stdout); // Ensures it prints

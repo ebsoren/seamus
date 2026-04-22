@@ -84,12 +84,20 @@ constexpr double factor_10_weight = 10.0;
 // queries (e.g. "mosharaf chowdhury" → mosharaf.com/).
 constexpr double factor_11_weight = 10.0;
 
+// Factor 12: EXACT LABEL MATCH (rarity-weighted)
+// Rewards query terms that EXACTLY equal a dot-delimited host label
+// (case-insensitive). Captures brand ownership — "chess" matches
+// chess.com's "chess" label but not chesspower.co.nz's "chesspower".
+// Different from F9 (substring) in that it's categorical: either the
+// domain is named exactly this thing, or it isn't.
+constexpr double factor_12_weight = 10.0;
+
 // Total sum for normalization
 constexpr double dynamic_weight_sum =
     factor_1_weight + factor_2_weight + factor_3_weight +
     factor_4_weight + factor_5_weight + factor_6_weight +
     factor_7_weight + factor_8_weight + factor_9_weight +
-    factor_10_weight + factor_11_weight;
+    factor_10_weight + factor_11_weight + factor_12_weight;
 
 
 
@@ -151,6 +159,12 @@ constexpr double LAMBDA_POS = 1.0;
 // Controls saturation of term frequency contribution
 // Higher means frequency saturates faster
 constexpr double LAMBDA_FREQ = 0.2;
+
+// Controls saturation of exact-phrase hit contribution (F7).
+// Higher means phrase hits saturate faster — prevents keyword
+// stuffing where a page repeats the exact query phrase dozens of
+// times. At 0.5: 3 hits → 0.78, 5 hits → 0.92, 78 hits → 1.0.
+constexpr double LAMBDA_PHRASE = 0.5;
 
 
 // FINAL SCORING BLEND

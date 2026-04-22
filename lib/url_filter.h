@@ -292,7 +292,7 @@ inline bool has_non_english_code(const char* in, size_t host_start, size_t host_
     return false;
 }
 
-// Rejects hosts where any dot-separated label contains a run of 12+
+// Rejects hosts where any dot-separated label contains a run of 10+
 // consecutive non-vowels (a/e/i/o/u/y are vowels; everything else —
 // consonants, digits, hyphens — counts as non-vowel). Catches
 // random/auto-generated spam hostnames like
@@ -308,7 +308,7 @@ inline bool label_has_long_nonvowel_run(const char* in, size_t start, size_t end
             run = 0;
         } else {
             run++;
-            if (run >= 12) return true;
+            if (run >= 10) return true;
         }
     }
     return false;
@@ -470,7 +470,7 @@ inline string normalize_url(const string& url) {
     // Reject non-English locale in subdomain or path prefix
     if (has_non_english_code(in, host_start, host_content_end, path_start, query_start)) return string("", 0);
 
-    // Reject hosts with gibberish labels (12+ consecutive non-vowels)
+    // Reject hosts with gibberish labels (10+ consecutive non-vowels)
     if (has_gibberish_host(in, host_start, host_content_end)) return string("", 0);
 
     // Reject junk path patterns
