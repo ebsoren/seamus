@@ -134,9 +134,10 @@ private:
             long hrs = elapsed / 3600;
             long mins = (elapsed % 3600) / 60;
             long secs = elapsed % 60;
+            double avg_docs_per_sec = elapsed > 0 ? static_cast<double>(current) / static_cast<double>(elapsed) : 0.0;
 
-            logger::instr("%02ld:%02ld:%02ld | total docs: %llu | docs/sec: %.1f | avg page len: %.1f bytes | avg priority: %.2f",
-                hrs, mins, secs, current, docs_per_sec, get_avg_page_length(), get_avg_page_priority());
+            logger::instr("%02ld:%02ld:%02ld | total docs: %llu | docs/sec: %.1f | avg docs/sec: %.1f | avg page len: %.1f bytes | avg priority: %.2f",
+                hrs, mins, secs, current, docs_per_sec, avg_docs_per_sec, get_avg_page_length(), get_avg_page_priority());
 
             uint64_t cur_local = urls_from_local.load(std::memory_order_relaxed);
             uint64_t cur_rpc = urls_from_rpc.load(std::memory_order_relaxed);
