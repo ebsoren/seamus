@@ -175,7 +175,7 @@ static constexpr int MAX_LINK_MEMORY = 8 * 1024;
 static constexpr int MAX_TITLELEN_MEMORY = 8 * 1024;   // Just copying value for link memory -- no logic behind this
 static constexpr int MAX_WORD_MEMORY = 32 * 1024;
 static constexpr size_t MAX_BASE_LEN = 256;
-static constexpr size_t MAX_HTML_SIZE = 100 * 1024; // 100 KB
+static constexpr size_t MAX_HTML_SIZE = 50 * 1024; // 50 KB
 
 // URL Store
 static constexpr uint32_t MAX_STORE_URLS = static_cast<uint32_t>(TOTAL_PAGES * 10); // cap ~10x parsed-page target

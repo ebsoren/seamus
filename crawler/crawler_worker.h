@@ -94,6 +94,14 @@ inline void crawler_worker(DomainCarousel& dc, size_t carousel_left, size_t caro
                 continue;
             }
             url_store->markCrawled(target->url);
+            // Thin-page floor: pages under 3 KB are almost always parked domains,
+            // 200-returning 404s, or boilerplate-only placeholders. Skip parsing
+            // and indexing them — they contribute noise to the index and waste budget.
+            if (body_len > 0 && body_len < 3 * 1024) {
+                logger::debug("Worker [%zu-%zu] skipping thin page (%zd bytes) at %s",
+                              carousel_left, carousel_right, body_len, target->url.data());
+                continue;
+            }
             if (body_len > 0) {
                 logger::debug("Worker [%zu-%zu] received %zd bytes from %s", carousel_left, carousel_right, body_len, target->url.data());
                 parser->parse_page(body.get(), static_cast<size_t>(body_len), target->seed_distance, target->domain_dist, target->url.data());
