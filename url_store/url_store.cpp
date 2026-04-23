@@ -18,8 +18,8 @@ UrlStore::UrlStore(DomainCarousel* dc, const int worker_num) : dc(dc) {
         rpc_listener->listener_loop([this](int fd) { client_handler(fd); });
     });
 
-    // mkdir(URL_STORE_OUTPUT_DIR, 0755);   // no-op if already exists
-    // persist_thread = std::thread(&UrlStore::persist_store_thread, this);
+    mkdir(URL_STORE_OUTPUT_DIR, 0755);   // no-op if already exists
+    persist_thread = std::thread(&UrlStore::persist_store_thread, this);
 }
 
 UrlStore::~UrlStore() {
@@ -30,7 +30,7 @@ UrlStore::~UrlStore() {
     // if (persist_thread.joinable()) persist_thread.join();
     delete rpc_listener;
 
-    // persist(true); // only persist dirty urls (parsed)
+    persist(true); // only persist dirty urls (parsed)
 }
 
 void UrlStore::flush_local_urls() {
