@@ -13,6 +13,8 @@
 
 #include "../url_store/url_store.h"
 #include "crawler_metrics.h"
+#include "domain_carousel.h"
+#include "bucket_manager.h"
 #include <dirent.h>
 
 
@@ -22,6 +24,8 @@ public:
         : drain_interval_sec(drain_interval_sec), queues(num_workers), locks(num_workers), start_time(std::chrono::steady_clock::now()) {}
 
     void set_url_store(UrlStore* us) { url_store = us; }
+    void set_carousel(DomainCarousel* dc) { carousel = dc; }
+    void set_bucket_manager(BucketManager* bm) { bucket_manager = bm; }
 
     ~CrawlerInstrumentation() {
         running.store(false, std::memory_order_relaxed);
@@ -71,6 +75,8 @@ private:
     std::thread drain_thread;
     std::chrono::steady_clock::time_point start_time;
     UrlStore* url_store = nullptr;
+    DomainCarousel* carousel = nullptr;
+    BucketManager* bucket_manager = nullptr;
 
     void process_metric_updates() {
         for (size_t i = 0; i < queues.size(); i++) {
@@ -163,6 +169,53 @@ private:
                 double load = ms.total_slots > 0 ? static_cast<double>(ms.total_entries) / ms.total_slots : 0;
                 logger::instr("mem | urlstore total: %.1f MB | shard slots: %.1f MB | entry heap: %.1f MB | anchor dict: %.1f MB | load: %.2f (%zu/%zu)\n",
                     total_mb, slots_mb, entry_mb, anchor_mb, load, ms.total_entries, ms.total_slots);
+            }
+
+            // Frontier health: carousel fill, per-priority bucket sizes, backoff queue.
+            // Try-locks throughout so drain never blocks production threads. Slots
+            // that are locked are counted as non-empty (a worker is servicing them).
+            if (carousel) {
+                size_t nonempty_slots = 0;
+                size_t locked_slots = 0;
+                size_t total_targets = 0;
+                size_t max_slot_depth = 0;
+                for (size_t i = 0; i < CRAWLER_CAROUSEL_SIZE; ++i) {
+                    std::unique_lock<std::mutex> lk(carousel->carousel[i].domain_queue_lock, std::try_to_lock);
+                    if (!lk.owns_lock()) { locked_slots++; nonempty_slots++; continue; }
+                    size_t sz = carousel->carousel[i].targets.size();
+                    if (sz > 0) {
+                        nonempty_slots++;
+                        total_targets += sz;
+                        if (sz > max_slot_depth) max_slot_depth = sz;
+                    }
+                }
+                double fill_pct = 100.0 * static_cast<double>(nonempty_slots) / static_cast<double>(CRAWLER_CAROUSEL_SIZE);
+                logger::instr("carousel | slots used: %zu/%zu (%.1f%%) | locked: %zu | targets queued: %zu | max/slot: %zu",
+                    nonempty_slots, CRAWLER_CAROUSEL_SIZE, fill_pct,
+                    locked_slots, total_targets, max_slot_depth);
+
+                char bbuf[256];
+                int off = snprintf(bbuf, sizeof(bbuf), "priority buckets |");
+                for (size_t p = 0; p < PRIORITY_BUCKETS && off < static_cast<int>(sizeof(bbuf)); ++p) {
+                    std::unique_lock<std::mutex> lk(carousel->buckets[p].bucket_lock, std::try_to_lock);
+                    size_t sz = lk.owns_lock() ? carousel->buckets[p].urls.size() : 0;
+                    const char* tag = lk.owns_lock() ? "" : "?";
+                    off += snprintf(bbuf + off, sizeof(bbuf) - static_cast<size_t>(off), " p%zu=%zu%s", p, sz, tag);
+                }
+                logger::instr("%s", bbuf);
+            }
+            if (bucket_manager) {
+                size_t backoff_size = 0;
+                bool backoff_observed = false;
+                {
+                    std::unique_lock<std::mutex> lk(bucket_manager->backoff_lock, std::try_to_lock);
+                    if (lk.owns_lock()) {
+                        backoff_size = bucket_manager->backoff_queue.size();
+                        backoff_observed = true;
+                    }
+                }
+                logger::instr("backoff queue: %zu%s",
+                    backoff_size, backoff_observed ? "" : " (lock busy)");
             }
 
             size_t fd_count = 0;

@@ -50,6 +50,8 @@ int main() {
     logger::info("URL store listener started on port %u with %u threads", URL_STORE_PORT, URL_STORE_NUM_THREADS);
 
     CrawlerInstrumentation instrumentation(CRAWLER_THREADPOOL_SIZE);
+    instrumentation.set_carousel(&dc);
+    instrumentation.set_bucket_manager(&bm);
     instrumentation.start();
     logger::info("Crawler instrumentation started (drain interval: %zu sec)", CRAWLER_INSTRUMENTATION_INTERVAL_SEC);
 

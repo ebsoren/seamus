@@ -77,11 +77,10 @@ public:
     // This 1) tries to move crawl targets from priority buckets into the carousel and 2) tries to move crawl targets from the backoff queue into the carousel
     void feed_carousel_worker() {
         while (running) {
-            // Move crawl targets from priority buckets into the carousel
-            int16_t domain_carousel_res = dc->feed_carousel_from_highest_priority_bucket(backoff_lock, backoff_queue);
-            if (domain_carousel_res == -1) {
-                logger::warn("feed_carousel_worker found no CrawlTargets in all priority buckets");
-            }
+            // Move crawl targets from priority buckets into the carousel.
+            // Empty buckets are expected (early startup, tail of crawl) — the
+            // instrumentation drain reports frontier health separately.
+            (void)dc->feed_carousel_from_highest_priority_bucket(backoff_lock, backoff_queue);
 
             // Move crawl targets from the backoff queue into the carousel, breaks once we encounter an item that has not been on the backoff queue for long enough (FIFO order)
             {

@@ -226,10 +226,9 @@ For each URL:
         For each list: <anchor_text id (32 bits)> <times seen (32 bits)>\n
 */
 void UrlStore::persist(bool final_persist) {
-    logger::error("[URL_STORE] persist(final=%d) starting, unique_url_count=%zu",
+    logger::info("[URL_STORE] persist(final=%d) starting, unique_url_count=%zu",
             final_persist ? 1 : 0,
             unique_url_count.load(std::memory_order_relaxed));
-    logger::info("Persisting UrlStore to disk...");
     string fileName = string::join("", URL_STORE_OUTPUT_DIR_STR, "/urlstore_tmp.txt");
     string write_mode("wb");
     FILE* fd = fopen(fileName.data(), write_mode.data());
@@ -301,7 +300,7 @@ void UrlStore::persist(bool final_persist) {
         }
     }
 
-    logger::error("[URL_STORE] persist(final=%d) done: total=%zu crawled=%zu written=%zu skipped_not_crawled=%zu skipped_oversized=%zu file_size=%ld",
+    logger::info("[URL_STORE] persist(final=%d) done: total=%zu crawled=%zu written=%zu skipped_not_crawled=%zu skipped_oversized=%zu file_size=%ld",
             final_persist ? 1 : 0, urls_total, crawled_count, urls_written,
             urls_skipped_not_crawled, urls_skipped_oversized, ftell(fd));
     fclose(fd);
@@ -346,7 +345,7 @@ void UrlStore::readFromFile() {
         delete[] buf;
         return;
     }
-    logger::error("[URL_STORE] read %zu bytes into memory from %s", file_size, fileName.data());
+    logger::info("[URL_STORE] read %zu bytes into memory from %s", file_size, fileName.data());
 
     const uint8_t* p = buf;
     const uint8_t* end = buf + file_size;
@@ -355,7 +354,7 @@ void UrlStore::readFromFile() {
     if (p + sizeof(uint32_t) > end) { delete[] buf; return; }
     uint32_t num_anchor_texts;
     memcpy(&num_anchor_texts, p, sizeof(uint32_t)); p += sizeof(uint32_t);
-    logger::error("[URL_STORE] reading %u anchor texts", num_anchor_texts);
+    logger::info("[URL_STORE] reading %u anchor texts", num_anchor_texts);
 
     size_t oversized_anchors = 0;
     for (uint32_t i = 0; i < num_anchor_texts; i++) {
@@ -373,7 +372,7 @@ void UrlStore::readFromFile() {
         anchor_to_id[string((const char*)p, actual_len)] = id_to_anchor.size() - 1;
         p += anchor_len;
     }
-    logger::error("[URL_STORE] anchors loaded: %zu total, %zu oversized", id_to_anchor.size(), oversized_anchors);
+    logger::info("[URL_STORE] anchors loaded: %zu total, %zu oversized", id_to_anchor.size(), oversized_anchors);
 
     // --- Parse URL records into per-shard buckets (sequential scan) ---
     std::vector<std::vector<UrlRecord>> shard_buckets(URL_NUM_SHARDS);
@@ -431,10 +430,10 @@ void UrlStore::readFromFile() {
         shard_buckets[shard_id].push_back(rec);
         url_count++;
         if (url_count % 1000000 == 0) {
-            logger::error("[URL_STORE] parsed %zu URLs so far...", url_count);
+            logger::info("[URL_STORE] parsed %zu URLs so far...", url_count);
         }
     }
-    logger::error("[URL_STORE] parsed %zu URL records, inserting into shards with %u threads",
+    logger::info("[URL_STORE] parsed %zu URL records, inserting into shards with %u threads",
             url_count, URL_STORE_NUM_THREADS);
 
     // --- Parallel shard insertion: each thread owns exclusive shards ---
@@ -474,14 +473,14 @@ void UrlStore::readFromFile() {
                     }
                 }
             }
-            logger::error("[URL_STORE] thread %zu done: shards %zu-%zu, %zu URLs inserted",
+            logger::info("[URL_STORE] thread %zu done: shards %zu-%zu, %zu URLs inserted",
                     t, shard_start, shard_end - 1, thread_total);
         });
     }
     for (auto& t : threads) t.join();
 
     unique_url_count.store(url_count, std::memory_order_relaxed);
-    logger::error("[URL_STORE] readFromFile complete: loaded %zu URLs, %zu anchors from %s",
+    logger::info("[URL_STORE] readFromFile complete: loaded %zu URLs, %zu anchors from %s",
             url_count, id_to_anchor.size(), fileName.data());
 
     delete[] buf;
