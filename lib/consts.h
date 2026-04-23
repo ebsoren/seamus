@@ -44,7 +44,7 @@ constexpr size_t CRAWLER_BACKOFF_SEC = 2;                   // Time (seconds) to
 constexpr size_t CRAWLER_PERSIST_INTERVAL_SEC = 60;         // Time (seconds) to wait between persists of in-memory priority buckets -> disk priority bucket files
 constexpr size_t CRAWLER_FEED_INTERVAL_SEC = 1;             // Time (seconds) to wait between feeding in-memory priority buckets -> domain carousel
 constexpr size_t CRAWLER_WORKER_SLEEP_MS = 10;              // Time (milliseconds) for the crawler worker to sleep before moving to a new slot
-constexpr size_t CRAWLER_INSTRUMENTATION_INTERVAL_SEC = 20; // Time (seconds) between instrumentation drain cycles
+constexpr size_t INSTRUMENTATION_INTERVAL_SEC = 20;         // Time (seconds) between instrumentation drain cycles
 constexpr size_t CRAWLER_INSTRUMENTATION_BATCH_SIZE = 64;    // Number of successful crawls before submitting a batched metric update
 
 constexpr size_t CRAWLER_OUTBOUND_BATCH_SIZE = 4096;       // Number of crawl targets to buffer per machine before sending

@@ -20,7 +20,7 @@
 
 class CrawlerInstrumentation {
 public:
-    CrawlerInstrumentation(size_t num_workers, size_t drain_interval_sec = CRAWLER_INSTRUMENTATION_INTERVAL_SEC)
+    CrawlerInstrumentation(size_t num_workers, size_t drain_interval_sec = INSTRUMENTATION_INTERVAL_SEC)
         : drain_interval_sec(drain_interval_sec), queues(num_workers), locks(num_workers), start_time(std::chrono::steady_clock::now()) {}
 
     void set_url_store(UrlStore* us) { url_store = us; }

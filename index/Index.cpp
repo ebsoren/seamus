@@ -7,6 +7,8 @@
 #include "lib/logger.h"
 #include <sys/stat.h>
 
+std::atomic<uint64_t> g_indexed_docs{0};
+
 string IndexChunk::get_index_chunk_path() const {
     return string::join("", string(INDEX_OUTPUT_DIR), "/index_chunk_", string(WORKER_NUMBER), "_", string(chunk), ".txt");
 }
@@ -465,6 +467,7 @@ bool IndexChunk::index_file(const string &path) {
             return false;
         }
 
+        g_indexed_docs.fetch_add(1, std::memory_order_relaxed);
         if (++docs_in_chunk_ >= DOCS_PER_INDEX_CHUNK || posts_bytes_ >= CHUNK_MEM_BUDGET) {
             flush();
         }

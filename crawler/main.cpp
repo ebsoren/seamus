@@ -53,7 +53,7 @@ int main() {
     instrumentation.set_carousel(&dc);
     instrumentation.set_bucket_manager(&bm);
     instrumentation.start();
-    logger::info("Crawler instrumentation started (drain interval: %zu sec)", CRAWLER_INSTRUMENTATION_INTERVAL_SEC);
+    logger::info("Crawler instrumentation started (drain interval: %zu sec)", INSTRUMENTATION_INTERVAL_SEC);
 
     // Crawler workers (multiplexing domain carousel)
     std::atomic<bool> workers_running{true};

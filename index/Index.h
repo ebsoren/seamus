@@ -1,10 +1,15 @@
 #pragma once
 
+#include <atomic>
 #include <mutex>
 #include "lib/deque.h"
 #include "lib/string.h"
 #include "lib/unordered_map.h"
 #include "lib/vector.h"
+
+// Global running count of docs indexed across all worker threads.
+// Bumped in IndexChunk::index_file after each successfully-parsed doc.
+extern std::atomic<uint64_t> g_indexed_docs;
 
 // Note that both documents and locations are 1-indexed (so that 0 can be used as a flag)
 
