@@ -163,7 +163,7 @@ constexpr const char* SEED_LIST[SEED_LIST_SIZE] = {
 
 
 // Parser
-static constexpr size_t TOTAL_PAGES = 1000000;
+static constexpr size_t TOTAL_PAGES = 1048576;
 static constexpr size_t MAX_PARSED_PAGES = TOTAL_PAGES/NUM_MACHINES;
 static constexpr const char* PARSER_OUTPUT_DIR = "/var/seamus/parser_output";
 static constexpr int MAX_CONSECUTIVE_NON_ALNUM = 100;
@@ -178,7 +178,7 @@ static constexpr size_t MAX_BASE_LEN = 256;
 static constexpr size_t MAX_HTML_SIZE = 50 * 1024; // 50 KB
 
 // URL Store
-static constexpr uint32_t MAX_STORE_URLS = static_cast<uint32_t>(TOTAL_PAGES * 3); // cap ~3x parsed-page target
+static constexpr uint32_t MAX_STORE_URLS = static_cast<uint32_t>(TOTAL_PAGES * 4); // cap ~4x parsed-page target
 static constexpr const char* URL_STORE_OUTPUT_DIR = "/var/seamus/urlstore_output";
 static const string URL_STORE_OUTPUT_DIR_STR = string(URL_STORE_OUTPUT_DIR);
 constexpr bool URL_FROM_SCRATCH = false; // whether to read from file or start from scratch on url_store bottup

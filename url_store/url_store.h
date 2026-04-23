@@ -19,6 +19,8 @@ struct UrlAnchorData {
 };
 
 struct UrlShard {
+    // Aim for 50% map use. Might consider reducing this.
+    static constexpr size_t SHARD_SIZE = 2 * MAX_STORE_URLS / URL_NUM_SHARDS;
     mutable std::mutex mtx;
     unordered_map<string, UrlData> url_data;
 
@@ -29,6 +31,10 @@ struct UrlShard {
     UrlData* findUrlData(const string& url) {
         auto slot = url_data.find(url);
         return slot != url_data.end() ? &(*slot).value : nullptr;
+    }
+
+    UrlShard() {
+        url_data.reserve(SHARD_SIZE);
     }
 };
 
